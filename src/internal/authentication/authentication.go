@@ -27,8 +27,8 @@ var database string
 
 var databaseFile = "authentication.json"
 
-var data = make(map[string]interface{})
-var tokens = make(map[string]interface{})
+var data = make(map[string]any)
+var tokens = make(map[string]any)
 
 var initAuthentication = false
 
@@ -133,10 +133,10 @@ func Init(databasePath string, validity int) (err error) {
 	// Check if the database already exists
 	if _, err = os.Stat(database); os.IsNotExist(err) {
 		// Create an empty database
-		var defaults = make(map[string]interface{})
+		var defaults = make(map[string]any)
 		defaults["dbVersion"] = "1.0"
 		defaults["hash"] = "sha256"
-		defaults["users"] = make(map[string]interface{})
+		defaults["users"] = make(map[string]any)
 
 		if saveDatabase(defaults) != nil {
 			return
@@ -160,7 +160,7 @@ func CreateDefaultUser(username, password string) (err error) {
 		return
 	}
 
-	var users = data["users"].(map[string]interface{})
+	var users = data["users"].(map[string]any)
 	// Check if the default user exists
 	if len(users) > 0 {
 		err = createError(001)
@@ -182,7 +182,7 @@ func CreateNewUser(username, password string) (userID string, err error) {
 		return
 	}
 
-	var checkIfTheUserAlreadyExists = func(username string, userData map[string]interface{}) (err error) {
+	var checkIfTheUserAlreadyExists = func(username string, userData map[string]any) (err error) {
 		var salt = userData["_salt"].(string)
 		var loginUsername = userData["_username"].(string)
 
@@ -193,9 +193,9 @@ func CreateNewUser(username, password string) (userID string, err error) {
 		return
 	}
 
-	var users = data["users"].(map[string]interface{})
+	var users = data["users"].(map[string]any)
 	for _, userData := range users {
-		err = checkIfTheUserAlreadyExists(username, userData.(map[string]interface{}))
+		err = checkIfTheUserAlreadyExists(username, userData.(map[string]any))
 		if err != nil {
 			return
 		}
@@ -218,7 +218,7 @@ func UserAuthentication(username, password string) (token string, err error) {
 		return
 	}
 
-	var login = func(username, password string, loginData map[string]interface{}) (err error) {
+	var login = func(username, password string, loginData map[string]any) (err error) {
 		err = createError(010)
 
 		var salt = loginData["_salt"].(string)
@@ -234,9 +234,9 @@ func UserAuthentication(username, password string) (token string, err error) {
 		return
 	}
 
-	var users = data["users"].(map[string]interface{})
+	var users = data["users"].(map[string]any)
 	for id, loginData := range users {
-		err = login(username, password, loginData.(map[string]interface{}))
+		err = login(username, password, loginData.(map[string]any))
 		if err == nil {
 			token = setToken(id, "-")
 			return
@@ -257,8 +257,8 @@ func CheckTheValidityOfTheToken(token string) (newToken string, err error) {
 	err = createError(011)
 
 	if v, ok := tokens[token]; ok {
-		var expires = v.(map[string]interface{})["expires"].(time.Time)
-		var userID = v.(map[string]interface{})["id"].(string)
+		var expires = v.(map[string]any)["expires"].(time.Time)
+		var userID = v.(map[string]any)["id"].(string)
 
 		if expires.Sub(time.Now().Local()) < 0 {
 			return
@@ -286,8 +286,8 @@ func GetUserID(token string) (userID string, err error) {
 	err = createError(002)
 
 	if v, ok := tokens[token]; ok {
-		var expires = v.(map[string]interface{})["expires"].(time.Time)
-		userID = v.(map[string]interface{})["id"].(string)
+		var expires = v.(map[string]any)["expires"].(time.Time)
+		userID = v.(map[string]any)["id"].(string)
 
 		if expires.Sub(time.Now().Local()) < 0 {
 			return
@@ -300,7 +300,7 @@ func GetUserID(token string) (userID string, err error) {
 }
 
 // WriteUserData : save user date
-func WriteUserData(userID string, userData map[string]interface{}) (err error) {
+func WriteUserData(userID string, userData map[string]any) (err error) {
 
 	err = checkInit()
 	if err != nil {
@@ -309,7 +309,7 @@ func WriteUserData(userID string, userData map[string]interface{}) (err error) {
 
 	err = createError(030)
 
-	if v, ok := data["users"].(map[string]interface{})[userID].(map[string]interface{}); ok {
+	if v, ok := data["users"].(map[string]any)[userID].(map[string]any); ok {
 
 		v["data"] = userData
 		err = saveDatabase(data)
@@ -322,7 +322,7 @@ func WriteUserData(userID string, userData map[string]interface{}) (err error) {
 }
 
 // ReadUserData : load user date
-func ReadUserData(userID string) (userData map[string]interface{}, err error) {
+func ReadUserData(userID string) (userData map[string]any, err error) {
 
 	err = checkInit()
 	if err != nil {
@@ -331,8 +331,8 @@ func ReadUserData(userID string) (userData map[string]interface{}, err error) {
 
 	err = createError(031)
 
-	if v, ok := data["users"].(map[string]interface{})[userID].(map[string]interface{}); ok {
-		userData = v["data"].(map[string]interface{})
+	if v, ok := data["users"].(map[string]any)[userID].(map[string]any); ok {
+		userData = v["data"].(map[string]any)
 		err = nil
 
 		return
@@ -351,9 +351,9 @@ func RemoveUser(userID string) (err error) {
 
 	err = createError(032)
 
-	if _, ok := data["users"].(map[string]interface{})[userID]; ok {
+	if _, ok := data["users"].(map[string]any)[userID]; ok {
 
-		delete(data["users"].(map[string]interface{}), userID)
+		delete(data["users"].(map[string]any), userID)
 		err = saveDatabase(data)
 
 		return
@@ -363,13 +363,13 @@ func RemoveUser(userID string) (err error) {
 }
 
 // SetDefaultUserData : set default user data
-func SetDefaultUserData(defaults map[string]interface{}) (err error) {
+func SetDefaultUserData(defaults map[string]any) (err error) {
 
 	allUserData, err := GetAllUserData()
 
 	for _, d := range allUserData {
-		var data = d.(map[string]interface{})["data"].(map[string]interface{})
-		var userID = d.(map[string]interface{})["_id"].(string)
+		var data = d.(map[string]any)["data"].(map[string]any)
+		var userID = d.(map[string]any)["_id"].(string)
 
 		for k, v := range defaults {
 			if _, ok := data[k]; ok {
@@ -392,16 +392,16 @@ func ChangeCredentials(userID, username, password string) (err error) {
 
 	err = createError(032)
 
-	if userData, ok := data["users"].(map[string]interface{})[userID]; ok {
+	if userData, ok := data["users"].(map[string]any)[userID]; ok {
 		//var userData = tmp.(map[string]interface{})
-		var salt = userData.(map[string]interface{})["_salt"].(string)
+		var salt = userData.(map[string]any)["_salt"].(string)
 
 		if len(username) > 0 {
-			userData.(map[string]interface{})["_username"] = SHA256(username, salt)
+			userData.(map[string]any)["_username"] = SHA256(username, salt)
 		}
 
 		if len(password) > 0 {
-			userData.(map[string]interface{})["_password"] = SHA256(password, salt)
+			userData.(map[string]any)["_password"] = SHA256(password, salt)
 		}
 
 		err = saveDatabase(data)
@@ -411,7 +411,7 @@ func ChangeCredentials(userID, username, password string) (err error) {
 }
 
 // GetAllUserData : get all user data
-func GetAllUserData() (allUserData map[string]interface{}, err error) {
+func GetAllUserData() (allUserData map[string]any, err error) {
 
 	err = checkInit()
 	if err != nil {
@@ -419,15 +419,15 @@ func GetAllUserData() (allUserData map[string]interface{}, err error) {
 	}
 
 	if len(data) == 0 {
-		var defaults = make(map[string]interface{})
+		var defaults = make(map[string]any)
 		defaults["dbVersion"] = "1.0"
 		defaults["hash"] = "sha256"
-		defaults["users"] = make(map[string]interface{})
+		defaults["users"] = make(map[string]any)
 		saveDatabase(defaults)
 		data = defaults
 	}
 
-	allUserData = data["users"].(map[string]interface{})
+	allUserData = data["users"].(map[string]any)
 	return
 }
 
@@ -457,7 +457,7 @@ func checkInit() (err error) {
 	return
 }
 
-func saveDatabase(tmpMap interface{}) (err error) {
+func saveDatabase(tmpMap any) (err error) {
 
 	jsonString, err := json.MarshalIndent(tmpMap, "", "  ")
 
@@ -544,15 +544,15 @@ func createError(errCode int) (err error) {
 	return
 }
 
-func defaultsForNewUser(username, password string) map[string]interface{} {
-	var defaults = make(map[string]interface{})
+func defaultsForNewUser(username, password string) map[string]any {
+	var defaults = make(map[string]any)
 	var salt = randomString(saltLength)
 	defaults["_username"] = SHA256(username, salt)
 	defaults["_password"] = SHA256(password, salt)
 	defaults["_salt"] = salt
 	defaults["_id"] = "id-" + randomID(idLength)
 	//defaults["_one.time.token"] = randomString(tokenLength)
-	defaults["data"] = make(map[string]interface{})
+	defaults["data"] = make(map[string]any)
 
 	return defaults
 }
@@ -566,7 +566,7 @@ loopToken:
 		goto loopToken
 	}
 
-	var tmp = make(map[string]interface{})
+	var tmp = make(map[string]any)
 	tmp["id"] = id
 	tmp["expires"] = time.Now().Local().Add(time.Minute * time.Duration(tokenValidity))
 

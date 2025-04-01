@@ -6,11 +6,11 @@ type RequestStruct struct {
 	Cmd string `json:"cmd"`
 
 	// User
-	DeleteUser bool                   `json:"deleteUser,omitempty"`
-	UserData   map[string]interface{} `json:"userData,omitempty"`
+	DeleteUser bool           `json:"deleteUser,omitempty"`
+	UserData   map[string]any `json:"userData,omitempty"`
 
 	// Mapping
-	EpgMapping map[string]interface{} `json:"epgMapping,omitempty"`
+	EpgMapping map[string]any `json:"epgMapping,omitempty"`
 
 	// Restore
 	Base64 string `json:"base64,omitempty"`
@@ -58,13 +58,13 @@ type RequestStruct struct {
 	Filename string `json:"filename,omitempty"`
 
 	// Filter
-	Filter map[int64]interface{} `json:"filter,omitempty"`
+	Filter map[int64]any `json:"filter,omitempty"`
 
 	// Files (M3U, HDHR, XMLTV)
 	Files struct {
-		HDHR  map[string]interface{} `json:"hdhr,omitempty"`
-		M3U   map[string]interface{} `json:"m3u,omitempty"`
-		XMLTV map[string]interface{} `json:"xmltv,omitempty"`
+		HDHR  map[string]any `json:"hdhr,omitempty"`
+		M3U   map[string]any `json:"m3u,omitempty"`
+		XMLTV map[string]any `json:"xmltv,omitempty"`
 	} `json:"files,omitempty"`
 
 	// Wizard
@@ -110,21 +110,21 @@ type ResponseStruct struct {
 		}
 	} `json:"data"`
 
-	Alert               string                 `json:"alert,omitempty"`
-	ConfigurationWizard bool                   `json:"configurationWizard"`
-	Error               string                 `json:"err,omitempty"`
-	IPAddressesV4Host   []string               `json:"ipAddressesV4Host"` // Every IPv4 address to display in web client
-	Log                 WebScreenLogStruct     `json:"log"`
-	LogoURL             string                 `json:"logoURL,omitempty"`
-	OpenLink            string                 `json:"openLink,omitempty"`
-	OpenMenu            string                 `json:"openMenu,omitempty"`
-	Reload              bool                   `json:"reload,omitempty"`
-	Settings            SettingsStruct         `json:"settings"`
-	Status              bool                   `json:"status"`
-	Token               string                 `json:"token,omitempty"`
-	Users               map[string]interface{} `json:"users,omitempty"`
-	Wizard              int                    `json:"wizard,omitempty"`
-	XEPG                map[string]interface{} `json:"xepg"`
+	Alert               string             `json:"alert,omitempty"`
+	ConfigurationWizard bool               `json:"configurationWizard"`
+	Error               string             `json:"err,omitempty"`
+	IPAddressesV4Host   []string           `json:"ipAddressesV4Host"` // Every IPv4 address to display in web client
+	Log                 WebScreenLogStruct `json:"log"`
+	LogoURL             string             `json:"logoURL,omitempty"`
+	OpenLink            string             `json:"openLink,omitempty"`
+	OpenMenu            string             `json:"openMenu,omitempty"`
+	Reload              bool               `json:"reload,omitempty"`
+	Settings            SettingsStruct     `json:"settings"`
+	Status              bool               `json:"status"`
+	Token               string             `json:"token,omitempty"`
+	Users               map[string]any     `json:"users,omitempty"`
+	Wizard              int                `json:"wizard,omitempty"`
+	XEPG                map[string]any     `json:"xepg"`
 
 	Notification map[string]Notification `json:"notification,omitempty"`
 }

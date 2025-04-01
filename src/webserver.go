@@ -644,7 +644,7 @@ func WS(w http.ResponseWriter, r *http.Request) {
 		default:
 			fmt.Println("+ + + + + + + + + + +", request.Cmd)
 
-			var requestMap = make(map[string]interface{}) // Debug
+			var requestMap = make(map[string]any) // Debug
 			_ = requestMap
 			if System.Dev {
 				fmt.Println(mapToJSON(requestMap))
@@ -676,7 +676,7 @@ func WS(w http.ResponseWriter, r *http.Request) {
 // Web : Web Server /web/
 func Web(w http.ResponseWriter, r *http.Request) {
 
-	var lang = make(map[string]interface{})
+	var lang = make(map[string]any)
 	var err error
 
 	var requestFile = strings.Replace(r.URL.Path, "/web", "html", -1)
@@ -1009,7 +1009,7 @@ func API(w http.ResponseWriter, r *http.Request) {
 		response.URLM3U = System.ServerProtocol.M3U + "://" + System.Domain + "/m3u/xteve.m3u"
 		response.URLXepg = System.ServerProtocol.XML + "://" + System.Domain + "/xmltv/xteve.xml"
 
-		BufferInformation.Range(func(k, v interface{}) bool {
+		BufferInformation.Range(func(k, v any) bool {
 			playlist := v.(Playlist)
 			response.TunerActive += int64(len(playlist.Streams))
 			response.TunerAll += int64(playlist.Tuner)
@@ -1119,7 +1119,7 @@ func setDefaultResponseData(response ResponseStruct, data bool) (defaults Respon
 
 			defaults.ClientInfo.XEPGCount = Data.XEPG.XEPGCount
 
-			var XEPG = make(map[string]interface{})
+			var XEPG = make(map[string]any)
 
 			if len(Data.Streams.Active) > 0 {
 
@@ -1128,8 +1128,8 @@ func setDefaultResponseData(response ResponseStruct, data bool) (defaults Respon
 
 			} else {
 
-				XEPG["epgMapping"] = make(map[string]interface{})
-				XEPG["xmltvMap"] = make(map[string]interface{})
+				XEPG["epgMapping"] = make(map[string]any)
+				XEPG["xmltvMap"] = make(map[string]any)
 
 			}
 

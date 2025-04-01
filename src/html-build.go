@@ -16,7 +16,7 @@ var goFile string
 var mapName string
 var packageName string
 
-var blankMap = make(map[string]interface{})
+var blankMap = make(map[string]any)
 
 // HTMLInit : Define file paths
 // mapName = Name of the map to be created

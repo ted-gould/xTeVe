@@ -24,6 +24,7 @@ import (
 	"github.com/avfs/avfs/vfs/memfs"
 	"github.com/avfs/avfs/vfs/osfs"
 	"github.com/samber/lo"
+	"slices"
 )
 
 func createStreamID(stream map[int]ThisStream) (streamID int) {
@@ -372,7 +373,7 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 							if err = bufferVFS.RemoveAll(getPlatformFile(fileToRemove)); err != nil {
 								ShowError(err, 4007)
 							}
-							oldSegments = append(oldSegments[:0], oldSegments[0+1:]...)
+							oldSegments = slices.Delete(oldSegments, 0, 0+1)
 						}
 					}
 
@@ -979,11 +980,7 @@ func connectToStreamingServer(streamID int, playlistID string) {
 					stream.TimeEnd = time.Now()
 					stream.TimeDiff = stream.TimeEnd.Sub(stream.TimeStart).Seconds()
 
-					sleep = (segment.Duration - stream.TimeDiff) - (segment.Duration * 0.25)
-
-					if sleep < 0 {
-						sleep = 0
-					}
+					sleep = max((segment.Duration-stream.TimeDiff)-(segment.Duration*0.25), 0)
 
 					debug = fmt.Sprintf("HLS Status:Download time: %f s | Segment duration: %f s | Sleep: %f s Sequence: %d", stream.TimeDiff, segment.Duration, sleep, segment.Sequence)
 					showDebug(debug, 1)

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/samber/lo"
+	"slices"
 )
 
 var exceptForParameterRx = regexp.MustCompile(`[a-z-A-Z=]*(".*?")`)
@@ -16,7 +17,7 @@ var exceptForChannelNameRx = regexp.MustCompile(`,([^\n]*|,[^\r]*)`)
 var extGrpRx = regexp.MustCompile(`#EXTGRP: *(.*)`)
 
 // MakeInterfaceFromM3U :
-func MakeInterfaceFromM3U(byteStream []byte) (allChannels []interface{}, err error) {
+func MakeInterfaceFromM3U(byteStream []byte) (allChannels []any, err error) {
 
 	var content = string(byteStream)
 	var channelName string
@@ -32,7 +33,7 @@ func MakeInterfaceFromM3U(byteStream []byte) (allChannels []interface{}, err err
 		for i := len(lines) - 1; i >= 0; i-- {
 
 			if len(lines[i]) == 0 || lines[i][0:1] == "#" {
-				lines = append(lines[:i], lines[i+1:]...)
+				lines = slices.Delete(lines, i, i+1)
 			}
 
 		}
@@ -154,7 +155,7 @@ func MakeInterfaceFromM3U(byteStream []byte) (allChannels []interface{}, err err
 
 		var channels = strings.Split(content, "#EXTINF")
 
-		channels = append(channels[:0], channels[1:]...)
+		channels = slices.Delete(channels, 0, 1)
 
 		var lastExtGrp string
 

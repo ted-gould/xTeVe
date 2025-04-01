@@ -155,18 +155,18 @@ type DataStruct struct {
 	}
 
 	Streams struct {
-		Active   []interface{}
-		All      []interface{}
-		Inactive []interface{}
+		Active   []any
+		All      []any
+		Inactive []any
 	}
 
 	XMLTV struct {
 		Files   []string
-		Mapping map[string]interface{}
+		Mapping map[string]any
 	}
 
 	XEPG struct {
-		Channels  map[string]interface{}
+		Channels  map[string]any
 		XEPGCount int64
 	}
 }
@@ -297,34 +297,34 @@ type SettingsStruct struct {
 	FileXMLTV             []string `json:"xmltv,omitempty"` // Old Storage System of the provider XML File Slice (Required for the conversion to the new one)
 
 	Files struct {
-		HDHR  map[string]interface{} `json:"hdhr"`
-		M3U   map[string]interface{} `json:"m3u"`
-		XMLTV map[string]interface{} `json:"xmltv"`
+		HDHR  map[string]any `json:"hdhr"`
+		M3U   map[string]any `json:"m3u"`
+		XMLTV map[string]any `json:"xmltv"`
 	} `json:"files"`
 
-	FilesUpdate               bool                  `json:"files.update"`
-	Filter                    map[int64]interface{} `json:"filter"`
-	HostIP                    string                `json:"hostIP"`   // IP chosen in web client. Used to form m3u and xml files.
-	HostName                  string                `json:"hostName"` // Hostname chosen in web client. Used to form m3u and xml files.
-	Key                       string                `json:"key,omitempty"`
-	Language                  string                `json:"language"`
-	LogEntriesRAM             int                   `json:"log.entries.ram"`
-	M3U8AdaptiveBandwidthMBPS int                   `json:"m3u8.adaptive.bandwidth.mbps"`
-	MappingFirstChannel       float64               `json:"mapping.first.channel"`
-	Port                      string                `json:"port"`
-	SSDP                      bool                  `json:"ssdp"`
-	StoreBufferInRAM          bool                  `json:"storeBufferInRAM"`
-	TempPath                  string                `json:"temp.path"`
-	TLSMode                   bool                  `json:"tlsMode"`
-	Tuner                     int                   `json:"tuner"`
-	Update                    []string              `json:"update"`
-	UpdateURL                 string                `json:"update.url,omitempty"`
-	UserAgent                 string                `json:"user.agent"`
-	UUID                      string                `json:"uuid"`
-	UDPxy                     string                `json:"udpxy"`
-	Version                   string                `json:"version"`
-	XepgReplaceMissingImages  bool                  `json:"xepg.replace.missing.images"`
-	XteveAutoUpdate           bool                  `json:"xteveAutoUpdate"`
+	FilesUpdate               bool          `json:"files.update"`
+	Filter                    map[int64]any `json:"filter"`
+	HostIP                    string        `json:"hostIP"`   // IP chosen in web client. Used to form m3u and xml files.
+	HostName                  string        `json:"hostName"` // Hostname chosen in web client. Used to form m3u and xml files.
+	Key                       string        `json:"key,omitempty"`
+	Language                  string        `json:"language"`
+	LogEntriesRAM             int           `json:"log.entries.ram"`
+	M3U8AdaptiveBandwidthMBPS int           `json:"m3u8.adaptive.bandwidth.mbps"`
+	MappingFirstChannel       float64       `json:"mapping.first.channel"`
+	Port                      string        `json:"port"`
+	SSDP                      bool          `json:"ssdp"`
+	StoreBufferInRAM          bool          `json:"storeBufferInRAM"`
+	TempPath                  string        `json:"temp.path"`
+	TLSMode                   bool          `json:"tlsMode"`
+	Tuner                     int           `json:"tuner"`
+	Update                    []string      `json:"update"`
+	UpdateURL                 string        `json:"update.url,omitempty"`
+	UserAgent                 string        `json:"user.agent"`
+	UUID                      string        `json:"uuid"`
+	UDPxy                     string        `json:"udpxy"`
+	Version                   string        `json:"version"`
+	XepgReplaceMissingImages  bool          `json:"xepg.replace.missing.images"`
+	XteveAutoUpdate           bool          `json:"xteveAutoUpdate"`
 }
 
 // LanguageUI : Language for the WebUI

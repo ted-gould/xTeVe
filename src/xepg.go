@@ -159,9 +159,9 @@ func buildXEPG(background bool) {
 func createXEPGMapping() {
 
 	Data.XMLTV.Files = getLocalProviderFiles("xmltv")
-	Data.XMLTV.Mapping = make(map[string]interface{})
+	Data.XMLTV.Mapping = make(map[string]any)
 
-	var tmpMap = make(map[string]interface{})
+	var tmpMap = make(map[string]any)
 
 	if len(Data.XMLTV.Files) > 0 {
 
@@ -187,10 +187,10 @@ func createXEPGMapping() {
 			if err == nil {
 
 				// Write Data from the XML File to a temporary Map
-				var xmltvMap = make(map[string]interface{})
+				var xmltvMap = make(map[string]any)
 
 				for _, c := range xmltv.Channel {
-					var channel = make(map[string]interface{})
+					var channel = make(map[string]any)
 
 					channel["id"] = c.ID
 					channel["display-names"] = c.DisplayNames
@@ -218,12 +218,12 @@ func createXEPGMapping() {
 	}
 
 	// Create selection for the Dummy
-	var dummy = make(map[string]interface{})
+	var dummy = make(map[string]any)
 	var times = []string{"30", "60", "90", "120", "180", "240", "360"}
 
 	for _, i := range times {
 
-		var dummyChannel = make(map[string]interface{})
+		var dummyChannel = make(map[string]any)
 		dummyChannel["display-names"] = []DisplayName{{Value: i + " Minutes"}}
 		dummyChannel["id"] = i + "_Minutes"
 		dummyChannel["icon"] = ""
@@ -241,7 +241,7 @@ func createXEPGDatabase() (err error) {
 
 	var allChannelNumbers = make([]float64, 0)
 	Data.Cache.Streams.Active = make([]string, 0)
-	Data.XEPG.Channels = make(map[string]interface{})
+	Data.XEPG.Channels = make(map[string]any)
 
 	Data.XEPG.Channels, err = loadJSONFileToMap(System.File.XEPG)
 	if err != nil {
@@ -550,15 +550,15 @@ func mapping() (err error) {
 			xmltvMapLoop:
 				for file, xmltvChannels := range Data.XMLTV.Mapping {
 
-					if channel, ok := xmltvChannels.(map[string]interface{})[tvgID]; ok {
+					if channel, ok := xmltvChannels.(map[string]any)[tvgID]; ok {
 
-						if channelID, ok := channel.(map[string]interface{})["id"].(string); ok {
+						if channelID, ok := channel.(map[string]any)["id"].(string); ok {
 
 							xepgChannel.XmltvFile = file
 							xepgChannel.XMapping = channelID
 
 							// If there is a Logo in the XMLTV file, this will be used. If not, then the Logo from the M3U file
-							if icon, ok := channel.(map[string]interface{})["icon"].(string); ok {
+							if icon, ok := channel.(map[string]any)["icon"].(string); ok {
 								if len(icon) > 0 {
 									xepgChannel.TvgLogo = icon
 								}
@@ -572,8 +572,8 @@ func mapping() (err error) {
 					} else {
 
 						// Search for the proper XEPG channel ID by comparing it's name with every alias in XML file
-						for _, xmltvChannel := range xmltvChannels.(map[string]interface{}) {
-							xmltvNames := xmltvChannel.(map[string]interface{})["display-names"].([]DisplayName)
+						for _, xmltvChannel := range xmltvChannels.(map[string]any) {
+							xmltvNames := xmltvChannel.(map[string]any)["display-names"].([]DisplayName)
 
 							for _, xmltvName := range xmltvNames {
 								xmltvNameSolid := strings.ReplaceAll(xmltvName.Value, " ", "")
@@ -584,11 +584,11 @@ func mapping() (err error) {
 								}
 
 								xepgChannel.XmltvFile = file
-								xepgChannel.XMapping = xmltvChannel.(map[string]interface{})["id"].(string)
+								xepgChannel.XMapping = xmltvChannel.(map[string]any)["id"].(string)
 
 								// If there is a Logo in the XMLTV file, this will be used.
 								// If not, then the Logo from the M3U file.
-								if icon, ok := xmltvChannel.(map[string]interface{})["icon"].(string); ok {
+								if icon, ok := xmltvChannel.(map[string]any)["icon"].(string); ok {
 									if len(icon) > 0 {
 										xepgChannel.TvgLogo = icon
 									}
@@ -619,9 +619,9 @@ func mapping() (err error) {
 
 			if file != "xTeVe Dummy" {
 
-				if value, ok := Data.XMLTV.Mapping[file].(map[string]interface{}); ok {
+				if value, ok := Data.XMLTV.Mapping[file].(map[string]any); ok {
 
-					if channel, ok := value[mapping].(map[string]interface{}); ok {
+					if channel, ok := value[mapping].(map[string]any); ok {
 
 						// Update Channel Logo
 						if logo, ok := channel["icon"].(string); ok {
@@ -692,7 +692,7 @@ func createXMLTVFile() (err error) {
 	}
 
 	if len(Data.XMLTV.Files) == 0 && len(Data.Streams.Active) == 0 {
-		Data.XEPG.Channels = make(map[string]interface{})
+		Data.XEPG.Channels = make(map[string]any)
 		return
 	}
 
@@ -871,7 +871,7 @@ func createDummyProgram(xepgChannel XEPGChannelStruct) (dummyXMLTV XMLTV) {
 		return
 	}
 
-	for d := 0; d < 4; d++ {
+	for d := range 4 {
 
 		var epgStartTime = startTime.Add(time.Hour * time.Duration(d*24))
 

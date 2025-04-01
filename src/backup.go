@@ -48,7 +48,7 @@ func xTeVeAutoBackup() (err error) {
 			end = Settings.BackupKeep - 1
 		}
 
-		for i := 0; i < len(oldBackupFiles)-end; i++ {
+		for i := range len(oldBackupFiles) - end {
 			os.RemoveAll(System.Folder.Backup + oldBackupFiles[i])
 			debug = fmt.Sprintf("Delete backup file:%s", oldBackupFiles[i])
 			showDebug(debug, 1)
