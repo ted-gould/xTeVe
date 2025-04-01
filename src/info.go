@@ -7,7 +7,7 @@ import (
 
 // ShowSystemVersion basic version info
 func ShowSystemVersion() {
-  fmt.Println(fmt.Sprintf("%s.%s", System.Version, System.Build))
+	fmt.Printf("%s.%s\n", System.Version, System.Build)
 }
 
 // ShowSystemInfo : View System Information

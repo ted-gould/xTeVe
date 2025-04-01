@@ -5,7 +5,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path"
 	"regexp"
 	"runtime"
@@ -631,15 +631,11 @@ func mapping() (err error) {
 							}
 
 						}
-
 					} else {
-
-						ShowError(fmt.Errorf(fmt.Sprintf("Missing EPG data: %s", xepgChannel.Name)), 0)
+						ShowError(fmt.Errorf("missing EPG data: %s", xepgChannel.Name), 0)
 						showWarning(2302)
 						xepgChannel.XActive = false
-
 					}
-
 				} else {
 
 					var fileID = strings.TrimSuffix(getFilenameFromPath(file), path.Ext(getFilenameFromPath(file)))
@@ -686,17 +682,13 @@ func createXMLTVFile() (err error) {
 	Data.Cache.ImagesURLS = []string{}
 	Data.Cache.ImagesCache = []string{}
 
-	files, err := ioutil.ReadDir(System.Folder.ImagesCache)
+	files, err := os.ReadDir(System.Folder.ImagesCache)
 	if err == nil {
-
 		for _, file := range files {
-
 			if lo.IndexOf(Data.Cache.ImagesCache, file.Name()) == -1 {
 				Data.Cache.ImagesCache = append(Data.Cache.ImagesCache, file.Name())
 			}
-
 		}
-
 	}
 
 	if len(Data.XMLTV.Files) == 0 && len(Data.Streams.Active) == 0 {
@@ -825,7 +817,7 @@ func getProgramData(xepgChannel XEPGChannelStruct) (xepgXML XMLTV, err error) {
 			program.Country = xmltvProgram.Country
 
 			// Program icon
-			getPoster(program, xmltvProgram, xepgChannel)
+			getPoster(program, xmltvProgram)
 
 			// Language
 			program.Language = xmltvProgram.Language
@@ -946,8 +938,7 @@ func getCategory(program *Program, xmltvProgram *Program, xepgChannel XEPGChanne
 }
 
 // Load the Poster Cover Program from the XMLTV File
-func getPoster(program *Program, xmltvProgram *Program, xepgChannel XEPGChannelStruct) {
-
+func getPoster(program *Program, xmltvProgram *Program) {
 	var imgc = Data.Cache.Images
 
 	for _, poster := range xmltvProgram.Poster {

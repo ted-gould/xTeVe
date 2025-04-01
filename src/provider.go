@@ -2,7 +2,7 @@ package src
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -290,7 +290,7 @@ func downloadFileFromServer(providerURL string) (filename string, body []byte, e
 	resp.Header.Set("User-Agent", Settings.UserAgent)
 
 	if resp.StatusCode != http.StatusOK {
-		err = fmt.Errorf(fmt.Sprintf("%d: %s "+http.StatusText(resp.StatusCode), resp.StatusCode, providerURL))
+		err = fmt.Errorf("%d: %s "+http.StatusText(resp.StatusCode), resp.StatusCode, providerURL)
 		return
 	}
 
@@ -314,7 +314,7 @@ func downloadFileFromServer(providerURL string) (filename string, body []byte, e
 
 	}
 
-	body, err = ioutil.ReadAll(resp.Body)
+	body, err = io.ReadAll(resp.Body)
 	if err != nil {
 		return
 	}

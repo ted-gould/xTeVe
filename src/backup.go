@@ -4,7 +4,6 @@ import (
 	b64 "encoding/base64"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,7 +11,6 @@ import (
 )
 
 func xTeVeAutoBackup() (err error) {
-
 	var archive = "xteve_auto_backup_" + time.Now().Format("20060102_1504") + ".zip"
 	var target string
 	var sourceFiles = make([]string, 0)
@@ -32,16 +30,13 @@ func xTeVeAutoBackup() (err error) {
 	}
 
 	// Delete Old Backups
-	files, err := ioutil.ReadDir(System.Folder.Backup)
+	files, err := os.ReadDir(System.Folder.Backup)
 
 	if err == nil {
-
 		for _, file := range files {
-
 			if filepath.Ext(file.Name()) == ".zip" && strings.Contains(file.Name(), "xteve_auto_backup") {
 				oldBackupFiles = append(oldBackupFiles, file.Name())
 			}
-
 		}
 
 		// Delete All Backups
@@ -54,48 +49,37 @@ func xTeVeAutoBackup() (err error) {
 		}
 
 		for i := 0; i < len(oldBackupFiles)-end; i++ {
-
 			os.RemoveAll(System.Folder.Backup + oldBackupFiles[i])
 			debug = fmt.Sprintf("Delete backup file:%s", oldBackupFiles[i])
 			showDebug(debug, 1)
-
 		}
 
 		if Settings.BackupKeep == 0 {
 			return
 		}
-
 	} else {
-
 		return
-
 	}
 
 	// Create a Backup
+	target = System.Folder.Backup + archive
+
+	for _, i := range SystemFiles {
+		sourceFiles = append(sourceFiles, System.Folder.Config+i)
+	}
+
+	sourceFiles = append(sourceFiles, System.Folder.ImagesUpload)
+	if Settings.TLSMode {
+		sourceFiles = append(sourceFiles, System.Folder.Certificates)
+	}
+
+	err = zipFiles(sourceFiles, target)
+
 	if err == nil {
+		debug = fmt.Sprintf("Create backup file:%s", target)
+		showDebug(debug, 1)
 
-		target = System.Folder.Backup + archive
-
-		for _, i := range SystemFiles {
-			sourceFiles = append(sourceFiles, System.Folder.Config+i)
-		}
-
-		sourceFiles = append(sourceFiles, System.Folder.ImagesUpload)
-		if Settings.TLSMode {
-			sourceFiles = append(sourceFiles, System.Folder.Certificates)
-		}
-
-		err = zipFiles(sourceFiles, target)
-
-		if err == nil {
-
-			debug = fmt.Sprintf("Create backup file:%s", target)
-			showDebug(debug, 1)
-
-			showInfo("Backup file:" + target)
-
-		}
-
+		showInfo("Backup file:" + target)
 	}
 
 	return

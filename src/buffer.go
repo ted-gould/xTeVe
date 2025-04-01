@@ -11,7 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -325,93 +324,70 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 
 						defer file.Close()
 
+						l, err := file.Stat()
 						if err == nil {
+							debug = fmt.Sprintf("Buffer Status:Send to client (%s)", fileName)
+							showDebug(debug, 2)
 
-							l, err := file.Stat()
+							var buffer = make([]byte, int(l.Size()))
+							_, err = file.Read(buffer)
+
 							if err == nil {
+								file.Seek(0, 0)
 
-								debug = fmt.Sprintf("Buffer Status:Send to client (%s)", fileName)
-								showDebug(debug, 2)
+								if !streaming {
+									contentType := http.DetectContentType(buffer)
+									_ = contentType
+									//w.Header().Set("Content-type", "video/mpeg")
+									w.Header().Set("Content-type", contentType)
+									w.Header().Set("Content-Length", "0")
+									w.Header().Set("Connection", "close")
+								}
 
-								var buffer = make([]byte, int(l.Size()))
-								_, err = file.Read(buffer)
+								/*
+								   // HDHR Header
+								   w.Header().Set("Cache-Control", "no-cache")
+								   w.Header().Set("Pragma", "no-cache")
+								   w.Header().Set("transferMode.dlna.org", "Streaming")
+								*/
 
-								if err == nil {
+								_, err := w.Write(buffer)
 
-									file.Seek(0, 0)
-
-									if !streaming {
-
-										contentType := http.DetectContentType(buffer)
-										_ = contentType
-										//w.Header().Set("Content-type", "video/mpeg")
-										w.Header().Set("Content-type", contentType)
-										w.Header().Set("Content-Length", "0")
-										w.Header().Set("Connection", "close")
-
-									}
-
-									/*
-									   // HDHR Header
-									   w.Header().Set("Cache-Control", "no-cache")
-									   w.Header().Set("Pragma", "no-cache")
-									   w.Header().Set("transferMode.dlna.org", "Streaming")
-									*/
-
-									_, err := w.Write(buffer)
-
-									if err != nil {
-										file.Close()
-										killClientConnection(streamID, playlistID, false)
-										return
-									}
-
+								if err != nil {
 									file.Close()
-									streaming = true
-
+									killClientConnection(streamID, playlistID, false)
+									return
 								}
 
 								file.Close()
-
+								streaming = true
 							}
 
-							var n = lo.IndexOf(oldSegments, f)
-
-							if n > 20 {
-
-								var fileToRemove = stream.Folder + oldSegments[0]
-								if err = bufferVFS.RemoveAll(getPlatformFile(fileToRemove)); err != nil {
-									ShowError(err, 4007)
-								}
-								oldSegments = append(oldSegments[:0], oldSegments[0+1:]...)
-
-							}
-
+							file.Close()
 						}
 
-						file.Close()
-
+						var n = lo.IndexOf(oldSegments, f)
+						if n > 20 {
+							var fileToRemove = stream.Folder + oldSegments[0]
+							if err = bufferVFS.RemoveAll(getPlatformFile(fileToRemove)); err != nil {
+								ShowError(err, 4007)
+							}
+							oldSegments = append(oldSegments[:0], oldSegments[0+1:]...)
+						}
 					}
 
 					if len(tmpFiles) == 0 {
 						time.Sleep(time.Duration(100) * time.Millisecond)
 					}
-
 				} // End of Loop 2
-
 			} else {
-
 				// Stream not available
 				killClientConnection(streamID, stream.PlaylistID, false)
 				showInfo(fmt.Sprintf("Streaming Status:Playlist: %s - Tuner: %d / %d", playlist.PlaylistName, len(playlist.Streams), playlist.Tuner))
 				return
-
 			}
-
 		} // End of Buffer Information
-
 	} // End of Loop 1
-
 }
 
 func getBufTmpFiles(stream *ThisStream) (tmpFiles []string) {
@@ -821,7 +797,7 @@ func connectToStreamingServer(streamID int, playlistID string) {
 
 			// M3U8 Playlist
 			case "application/x-mpegurl", "application/vnd.apple.mpegurl", "audio/mpegurl", "audio/x-mpegurl":
-				body, err := ioutil.ReadAll(resp.Body)
+				body, err := io.ReadAll(resp.Body)
 				if err != nil {
 					ShowError(err, 0)
 					addErrorToStream(err)
@@ -931,7 +907,6 @@ func connectToStreamingServer(streamID int, playlistID string) {
 						networkBandwidth = int(float64(bandwidth.Size) / bandwidth.TimeDiff * 1000)
 
 						stream.NetworkBandwidth = networkBandwidth
-						bandwidth.NetworkBandwidth = stream.NetworkBandwidth
 
 						debug = fmt.Sprintf("Buffer Status:Done (%s)", tmpFile)
 						showDebug(debug, 2)

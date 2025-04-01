@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"strconv"
@@ -318,11 +318,7 @@ func xTeVe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", contentType)
-
-	if err == nil {
-		w.Write([]byte(content))
-	}
-
+	w.Write([]byte(content))
 }
 
 // Images : Image Cache /images/
@@ -943,7 +939,7 @@ func API(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	b, err := ioutil.ReadAll(r.Body)
+	b, err := io.ReadAll(r.Body)
 	defer r.Body.Close()
 	if err != nil {
 		httpStatusError(w, r, 400)
@@ -1153,7 +1149,7 @@ func setDefaultResponseData(response ResponseStruct, data bool) (defaults Respon
 	return
 }
 
-func httpStatusError(w http.ResponseWriter, r *http.Request, httpStatusCode int) {
+func httpStatusError(w http.ResponseWriter, _ *http.Request, httpStatusCode int) {
 	http.Error(w, fmt.Sprintf("%s [%d]", http.StatusText(httpStatusCode), httpStatusCode), httpStatusCode)
 
 }
