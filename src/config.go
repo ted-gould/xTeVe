@@ -61,11 +61,6 @@ func Init() (err error) {
 	// Default Log Entries, which will later be overwritten by those from settings.json. Needed so that the first entries are also displayed in the Log (webUI are displayed)
 	Settings.LogEntriesRAM = 500
 
-	// Variables for the Update Process
-	//System.Update.Git = "https://github.com/xteve-project/xTeVe-Downloads/blob"
-	System.Update.Git = fmt.Sprintf("https://github.com/%s/%s/blob", System.GitHub.User, System.GitHub.Repo)
-	System.Update.Name = "xteve_2"
-
 	// Define folder paths
 	if len(System.Folder.Config) == 0 {
 		System.Folder.Config = GetUserHomeDirectory() + string(os.PathSeparator) + "." + System.AppName + string(os.PathSeparator)
@@ -180,19 +175,8 @@ func Init() (err error) {
 		return
 	}
 
-	// Set Branch
-	System.Branch = Settings.Branch
-
-	if System.Dev {
-		System.Branch = "Development"
-	}
-
-	if len(System.Branch) == 0 {
-		System.Branch = "master"
-	}
-
-	showInfo(fmt.Sprintf("GitHub:https://github.com/%s", System.GitHub.User))
-	showInfo(fmt.Sprintf("Git Branch:%s [%s]", System.Branch, System.GitHub.User))
+	// showInfo(fmt.Sprintf("GitHub:https://github.com/%s", System.GitHub.User)) // System.GitHub.User removed
+	// showInfo(fmt.Sprintf("Git Branch:%s", System.Branch)) // System.GitHub.User removed & System.Branch removed
 
 	if len(strings.TrimSpace(Settings.HostName)) > 0 {
 		Settings.HostIP = strings.TrimSpace(Settings.HostName)
