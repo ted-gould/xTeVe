@@ -302,7 +302,7 @@ func saveMapToJSONFile(file string, tmpMap any) error {
 func loadJSONFileToMap(file string) (tmpMap map[string]any, err error) {
 	f, err := os.Open(getPlatformFile(file))
 	if err != nil {
-		panic(err)
+		return nil, err // Return error instead of panic
 	}
 	defer f.Close()
 
@@ -321,7 +321,7 @@ func loadJSONFileToMap(file string) (tmpMap map[string]any, err error) {
 func readByteFromFile(file string) (content []byte, err error) {
 	f, err := os.Open(getPlatformFile(file))
 	if err != nil {
-		panic(err)
+		return nil, err // Return error instead of panic
 	}
 	defer f.Close()
 

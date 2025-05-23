@@ -1,0 +1,11 @@
+
+	<tv>
+		<channel id="dummy.ch1">
+			<display-name>Dummy Channel 1</display-name>
+		</channel>
+		<programme channel="dummy.ch1" start="20240101000000 +0000" stop="20240101010000 +0000">
+			<title>Dummy Program 1</title>
+			<desc>Description for Dummy Program 1</desc>
+		</programme>
+	</tv>
+	
