@@ -103,7 +103,6 @@ func loadSettings() (settings SettingsStruct, err error) {
 	dataMap["m3u"] = make(map[string]any)
 	dataMap["hdhr"] = make(map[string]any)
 
-	defaults["api"] = false
 	defaults["authentication.api"] = false
 	defaults["authentication.m3u"] = false
 	defaults["authentication.pms"] = false
