@@ -58,13 +58,8 @@ func buildXEPG(background bool) {
 	}
 
 	if Settings.EpgSource == "XEPG" {
-
-		switch background {
-
-		case true:
-
+		if background { // Was: case true
 			go func() {
-
 				createXEPGMapping()
 				createXEPGDatabase()
 				mapping()
@@ -75,9 +70,7 @@ func buildXEPG(background bool) {
 				showInfo("XEPG:" + "Ready to use")
 
 				if Settings.CacheImages && System.ImageCachingInProgress == 0 {
-
 					go func() {
-
 						System.ImageCachingInProgress = 1
 						showInfo(fmt.Sprintf("Image Caching:Images are cached (%d)", len(Data.Cache.Images.Queue)))
 
@@ -89,9 +82,7 @@ func buildXEPG(background bool) {
 						createM3UFile()
 
 						System.ImageCachingInProgress = 0
-
 					}()
-
 				}
 
 				System.ScanInProgress = 0
@@ -99,25 +90,19 @@ func buildXEPG(background bool) {
 				if Settings.ClearXMLTVCache {
 					clearXMLTVCache()
 				}
-
 			}()
-
-		case false:
-
+		} else { // Was: case false
 			createXEPGMapping()
 			createXEPGDatabase()
 			mapping()
 			cleanupXEPG()
 
 			go func() {
-
 				createXMLTVFile()
 				createM3UFile()
 
 				if Settings.CacheImages && System.ImageCachingInProgress == 0 {
-
 					go func() {
-
 						System.ImageCachingInProgress = 1
 						showInfo(fmt.Sprintf("Image Caching:Images are cached (%d)", len(Data.Cache.Images.Queue)))
 
@@ -129,23 +114,17 @@ func buildXEPG(background bool) {
 						createM3UFile()
 
 						System.ImageCachingInProgress = 0
-
 					}()
-
 				}
 
 				showInfo("XEPG:" + "Ready to use")
-
 				System.ScanInProgress = 0
 
 				if Settings.ClearXMLTVCache {
 					clearXMLTVCache()
 				}
-
 			}()
-
 		}
-
 	} else {
 
 		getLineup()
@@ -249,52 +228,6 @@ func createXEPGDatabase() (err error) {
 		return err
 	}
 
-	var createNewID = func() (xepg string) {
-
-		var firstID = 0
-
-	newXEPGID:
-
-		if _, ok := Data.XEPG.Channels["x-ID."+strconv.FormatInt(int64(firstID), 10)]; ok {
-			firstID++
-			goto newXEPGID
-		}
-
-		xepg = "x-ID." + strconv.FormatInt(int64(firstID), 10)
-		return
-	}
-
-	var getFreeChannelNumber = func(startingChannel ...string) (xChannelID string) {
-
-		sort.Float64s(allChannelNumbers)
-
-		var firstFreeNumber float64 = Settings.MappingFirstChannel
-		if startingChannel != nil {
-			var startingChannel, _ = strconv.ParseFloat(startingChannel[0], 64)
-			if startingChannel > 0 {
-				firstFreeNumber = startingChannel
-			}
-		}
-
-		for {
-
-			if lo.IndexOf(allChannelNumbers, firstFreeNumber) == -1 {
-				xChannelID = fmt.Sprintf("%g", firstFreeNumber)
-				allChannelNumbers = append(allChannelNumbers, firstFreeNumber)
-				return
-			}
-
-			firstFreeNumber++
-
-		}
-
-	}
-
-	var generateHashForChannel = func(m3uID string, name string, groupTitle string, tvgID string, tvgName string, uuidKey string, uuidValue string) string {
-		hash := md5.Sum([]byte(m3uID + name + groupTitle + tvgID + tvgName + uuidKey + uuidValue))
-		return hex.EncodeToString(hash[:])
-	}
-
 	showInfo("XEPG:" + "Update database")
 
 	// Delete Channel with missing Channel Numbers.
@@ -324,7 +257,7 @@ func createXEPGDatabase() (err error) {
 		if err != nil {
 			return
 		}
-		channelHash := generateHashForChannel(channel.FileM3UID, channel.Name, channel.GroupTitle, channel.TvgID, channel.TvgName, channel.UUIDKey, channel.UUIDValue)
+		channelHash := generateChannelHash(channel.FileM3UID, channel.Name, channel.GroupTitle, channel.TvgID, channel.TvgName, channel.UUIDKey, channel.UUIDValue)
 		xepgChannelsValuesMap[channelHash] = channel
 	}
 
@@ -344,7 +277,7 @@ func createXEPGDatabase() (err error) {
 		Data.Cache.Streams.Active = append(Data.Cache.Streams.Active, m3uChannel.Name+m3uChannel.FileM3UID)
 
 		// Try to find the channel based on matching all known values. If that fails, then move to full channel scan
-		m3uChannelHash := generateHashForChannel(m3uChannel.FileM3UID, m3uChannel.Name, m3uChannel.GroupTitle, m3uChannel.TvgID, m3uChannel.TvgName, m3uChannel.UUIDKey, m3uChannel.UUIDValue)
+		m3uChannelHash := generateChannelHash(m3uChannel.FileM3UID, m3uChannel.Name, m3uChannel.GroupTitle, m3uChannel.TvgID, m3uChannel.TvgName, m3uChannel.UUIDKey, m3uChannel.UUIDValue)
 		if val, ok := xepgChannelsValuesMap[m3uChannelHash]; ok {
 			channelExists = true
 			currentXEPGID = val.XEPG
@@ -424,85 +357,15 @@ func createXEPGDatabase() (err error) {
 			}
 		}
 
-		switch channelExists {
-
-		case true:
+		if channelExists { // Was: case true
 			// Existing Channel
-			var xepgChannel XEPGChannelStruct
-			err = json.Unmarshal([]byte(mapToJSON(Data.XEPG.Channels[currentXEPGID])), &xepgChannel)
+			err = processExistingXEPGChannel(m3uChannel, currentXEPGID, channelHasUUID)
 			if err != nil {
 				return
 			}
-
-			// Update Streaming URL
-			xepgChannel.URL = m3uChannel.URL
-
-			// Update Name, the Name is used to check whether the Channel is still available in a Playlist. Function: cleanupXEPG
-			xepgChannel.Name = m3uChannel.Name
-
-			// Update Channel Name, only possible with Channel ID's
-			if channelHasUUID {
-				if xepgChannel.XUpdateChannelName {
-					xepgChannel.XName = m3uChannel.Name
-				}
-			}
-
-			// Update GroupTitle
-			xepgChannel.GroupTitle = m3uChannel.GroupTitle
-
-			if xepgChannel.XUpdateChannelGroup {
-				xepgChannel.XGroupTitle = m3uChannel.GroupTitle
-			}
-
-			// Update Channel Logo. Will be overwritten again if the Logo is present in the XMLTV file
-			if xepgChannel.XUpdateChannelIcon {
-				xepgChannel.TvgLogo = m3uChannel.TvgLogo
-			}
-
-			Data.XEPG.Channels[currentXEPGID] = xepgChannel
-
-		case false:
+		} else { // Was: case false
 			// New Channel
-			var xepg = createNewID()
-			xChannelID := func() string {
-				if m3uChannel.PreserveMapping == "true" {
-					return getFreeChannelNumber(m3uChannel.UUIDValue)
-				} else {
-					return getFreeChannelNumber(m3uChannel.StartingChannel)
-				}
-			}()
-			var newChannel XEPGChannelStruct
-			newChannel.FileM3UID = m3uChannel.FileM3UID
-			newChannel.FileM3UName = m3uChannel.FileM3UName
-			newChannel.FileM3UPath = m3uChannel.FileM3UPath
-			newChannel.Values = m3uChannel.Values
-			newChannel.GroupTitle = m3uChannel.GroupTitle
-			newChannel.Name = m3uChannel.Name
-			newChannel.TvgID = m3uChannel.TvgID
-			newChannel.TvgLogo = m3uChannel.TvgLogo
-			newChannel.TvgName = m3uChannel.TvgName
-			if m3uChannel.TvgShift == "" {
-				newChannel.TvgShift = "0"
-			} else {
-				newChannel.TvgShift = m3uChannel.TvgShift
-			}
-			newChannel.URL = m3uChannel.URL
-			newChannel.XmltvFile = ""
-			newChannel.XMapping = ""
-
-			if len(m3uChannel.UUIDKey) > 0 {
-				newChannel.UUIDKey = m3uChannel.UUIDKey
-				newChannel.UUIDValue = m3uChannel.UUIDValue
-			}
-
-			newChannel.XName = m3uChannel.Name
-			newChannel.XGroupTitle = m3uChannel.GroupTitle
-			newChannel.XEPG = xepg
-			newChannel.XChannelID = xChannelID
-			newChannel.XTimeshift = newChannel.TvgShift
-
-			Data.XEPG.Channels[xepg] = newChannel
-
+			processNewXEPGChannel(m3uChannel, &allChannelNumbers)
 		}
 
 	}
@@ -515,11 +378,131 @@ func createXEPGDatabase() (err error) {
 	return
 }
 
+// generateNewXEPGID creates a new unique XEPG ID.
+func generateNewXEPGID() (xepgID string) {
+	var firstID = 0
+	for {
+		xepgID = "x-ID." + strconv.FormatInt(int64(firstID), 10)
+		if _, ok := Data.XEPG.Channels[xepgID]; !ok {
+			return xepgID // Found a free ID
+		}
+		firstID++
+	}
+}
+
+// findFreeChannelNumber finds the next available channel number.
+func findFreeChannelNumber(allChannelNumbers *[]float64, startingChannel ...string) (xChannelID string) {
+	sort.Float64s(*allChannelNumbers)
+
+	var firstFreeNumber float64 = Settings.MappingFirstChannel
+	if len(startingChannel) > 0 && startingChannel[0] != "" {
+		var startNum, err = strconv.ParseFloat(startingChannel[0], 64)
+		if err == nil && startNum > 0 {
+			firstFreeNumber = startNum
+		}
+	}
+
+	for {
+		if lo.IndexOf(*allChannelNumbers, firstFreeNumber) == -1 {
+			xChannelID = fmt.Sprintf("%g", firstFreeNumber)
+			*allChannelNumbers = append(*allChannelNumbers, firstFreeNumber)
+			return
+		}
+		firstFreeNumber++
+	}
+}
+
+// generateChannelHash creates a hash for a channel based on its attributes.
+func generateChannelHash(m3uID, name, groupTitle, tvgID, tvgName, uuidKey, uuidValue string) string {
+	hash := md5.Sum([]byte(m3uID + name + groupTitle + tvgID + tvgName + uuidKey + uuidValue))
+	return hex.EncodeToString(hash[:])
+}
+
+// processExistingXEPGChannel updates an existing channel in the XEPG database.
+func processExistingXEPGChannel(m3uChannel M3UChannelStructXEPG, currentXEPGID string, channelHasUUID bool) (err error) {
+	var xepgChannel XEPGChannelStruct
+	err = json.Unmarshal([]byte(mapToJSON(Data.XEPG.Channels[currentXEPGID])), &xepgChannel)
+	if err != nil {
+		return
+	}
+
+	// Update Streaming URL
+	xepgChannel.URL = m3uChannel.URL
+
+	// Update Name, the Name is used to check whether the Channel is still available in a Playlist. Function: cleanupXEPG
+	xepgChannel.Name = m3uChannel.Name
+
+	// Update Channel Name, only possible with Channel ID's
+	if channelHasUUID {
+		if xepgChannel.XUpdateChannelName {
+			xepgChannel.XName = m3uChannel.Name
+		}
+	}
+
+	// Update GroupTitle
+	xepgChannel.GroupTitle = m3uChannel.GroupTitle
+
+	if xepgChannel.XUpdateChannelGroup {
+		xepgChannel.XGroupTitle = m3uChannel.GroupTitle
+	}
+
+	// Update Channel Logo. Will be overwritten again if the Logo is present in the XMLTV file
+	if xepgChannel.XUpdateChannelIcon {
+		xepgChannel.TvgLogo = m3uChannel.TvgLogo
+	}
+
+	Data.XEPG.Channels[currentXEPGID] = xepgChannel
+	return
+}
+
+// processNewXEPGChannel creates a new channel in the XEPG database.
+func processNewXEPGChannel(m3uChannel M3UChannelStructXEPG, allChannelNumbers *[]float64) {
+	var xepg = generateNewXEPGID()
+	xChannelID := func() string {
+		if m3uChannel.PreserveMapping == "true" {
+			return findFreeChannelNumber(allChannelNumbers, m3uChannel.UUIDValue)
+		} else {
+			return findFreeChannelNumber(allChannelNumbers, m3uChannel.StartingChannel)
+		}
+	}()
+	var newChannel XEPGChannelStruct
+	newChannel.FileM3UID = m3uChannel.FileM3UID
+	newChannel.FileM3UName = m3uChannel.FileM3UName
+	newChannel.FileM3UPath = m3uChannel.FileM3UPath
+	newChannel.Values = m3uChannel.Values
+	newChannel.GroupTitle = m3uChannel.GroupTitle
+	newChannel.Name = m3uChannel.Name
+	newChannel.TvgID = m3uChannel.TvgID
+	newChannel.TvgLogo = m3uChannel.TvgLogo
+	newChannel.TvgName = m3uChannel.TvgName
+	if m3uChannel.TvgShift == "" {
+		newChannel.TvgShift = "0"
+	} else {
+		newChannel.TvgShift = m3uChannel.TvgShift
+	}
+	newChannel.URL = m3uChannel.URL
+	newChannel.XmltvFile = ""
+	newChannel.XMapping = ""
+
+	if len(m3uChannel.UUIDKey) > 0 {
+		newChannel.UUIDKey = m3uChannel.UUIDKey
+		newChannel.UUIDValue = m3uChannel.UUIDValue
+	}
+
+	newChannel.XName = m3uChannel.Name
+	newChannel.XGroupTitle = m3uChannel.GroupTitle
+	newChannel.XEPG = xepg
+	newChannel.XChannelID = xChannelID
+	newChannel.XTimeshift = newChannel.TvgShift
+
+	Data.XEPG.Channels[xepg] = newChannel
+}
+
 // Automatically assign Channels and check the Mapping
 func mapping() (err error) {
 	showInfo("XEPG:" + "Map channels")
 
-	for xepg, dxc := range Data.XEPG.Channels {
+	for xepgID, dxc := range Data.XEPG.Channels {
 
 		var xepgChannel XEPGChannelStruct
 		err = json.Unmarshal([]byte(mapToJSON(dxc)), &xepgChannel)
@@ -527,140 +510,15 @@ func mapping() (err error) {
 			return
 		}
 
-		// Automatic mapping for new Channels. Is only executed if the Channel is deactivated and no XMLTV file and no XMLTV Channel is assigned.
-		if !xepgChannel.XActive {
-
-			// Values can be "-", therefore len <= 1
-			// If either XmltvFile (XMLTV file / EPG source) or XMapping (XMLTV Channel / EPG program) is "-" or null, then look for a matching EPG program.
-			if len(xepgChannel.XmltvFile) <= 1 || len(xepgChannel.XMapping) <= 1 {
-
-				var tvgID = xepgChannel.TvgID
-
-				// Set default for new Channel
-				if Settings.DefaultMissingEPG != "-" {
-					xepgChannel.XmltvFile = "xTeVe Dummy"
-					xepgChannel.XMapping = Settings.DefaultMissingEPG
-				} else {
-					xepgChannel.XmltvFile = "-"
-					xepgChannel.XMapping = "-"
-				}
-
-				Data.XEPG.Channels[xepg] = xepgChannel
-
-			xmltvMapLoop:
-				for file, xmltvChannels := range Data.XMLTV.Mapping {
-
-					if channel, ok := xmltvChannels.(map[string]any)[tvgID]; ok {
-
-						if channelID, ok := channel.(map[string]any)["id"].(string); ok {
-
-							xepgChannel.XmltvFile = file
-							xepgChannel.XMapping = channelID
-
-							// If there is a Logo in the XMLTV file, this will be used. If not, then the Logo from the M3U file
-							if icon, ok := channel.(map[string]any)["icon"].(string); ok {
-								if len(icon) > 0 {
-									xepgChannel.TvgLogo = icon
-								}
-							}
-
-							Data.XEPG.Channels[xepg] = xepgChannel
-							break
-
-						}
-
-					} else {
-
-						// Search for the proper XEPG channel ID by comparing it's name with every alias in XML file
-						for _, xmltvChannel := range xmltvChannels.(map[string]any) {
-							xmltvNames := xmltvChannel.(map[string]any)["display-names"].([]DisplayName)
-
-							for _, xmltvName := range xmltvNames {
-								xmltvNameSolid := strings.ReplaceAll(xmltvName.Value, " ", "")
-								xepgNameSolid := strings.ReplaceAll(xepgChannel.Name, " ", "")
-
-								if !strings.EqualFold(xmltvNameSolid, xepgNameSolid) {
-									continue
-								}
-
-								xepgChannel.XmltvFile = file
-								xepgChannel.XMapping = xmltvChannel.(map[string]any)["id"].(string)
-
-								// If there is a Logo in the XMLTV file, this will be used.
-								// If not, then the Logo from the M3U file.
-								if icon, ok := xmltvChannel.(map[string]any)["icon"].(string); ok {
-									if len(icon) > 0 {
-										xepgChannel.TvgLogo = icon
-									}
-								}
-
-								Data.XEPG.Channels[xepg] = xepgChannel
-								break xmltvMapLoop
-							}
-						}
-
-					}
-
-				}
-
-			}
-
-		}
+		xepgChannel, _ = performAutomaticChannelMapping(xepgChannel, xepgID)
 
 		if Settings.EnableMappedChannels && (xepgChannel.XmltvFile != "-" || xepgChannel.XMapping != "-") {
 			xepgChannel.XActive = true
 		}
 
-		// Check whether the assigned XMLTV Files and Channels still exist.
-		if xepgChannel.XActive {
+		xepgChannel = verifyExistingChannelMappings(xepgChannel)
 
-			var mapping = xepgChannel.XMapping
-			var file = xepgChannel.XmltvFile
-
-			if file != "xTeVe Dummy" {
-
-				if value, ok := Data.XMLTV.Mapping[file].(map[string]any); ok {
-
-					if channel, ok := value[mapping].(map[string]any); ok {
-
-						// Update Channel Logo
-						if logo, ok := channel["icon"].(string); ok {
-
-							if xepgChannel.XUpdateChannelIcon && len(logo) > 0 {
-								xepgChannel.TvgLogo = logo
-							}
-
-						}
-					} else {
-						ShowError(fmt.Errorf("missing EPG data: %s", xepgChannel.Name), 0)
-						showWarning(2302)
-						xepgChannel.XActive = false
-					}
-				} else {
-
-					var fileID = strings.TrimSuffix(getFilenameFromPath(file), path.Ext(getFilenameFromPath(file)))
-
-					ShowError(fmt.Errorf("missing XMLTV file: %s", getProviderParameter(fileID, "xmltv", "name")), 0)
-					showWarning(2301)
-					xepgChannel.XActive = false
-
-				}
-
-			}
-
-			if len(xepgChannel.XmltvFile) == 0 {
-				xepgChannel.XmltvFile = "-"
-				xepgChannel.XActive = false
-			}
-
-			if len(xepgChannel.XMapping) == 0 {
-				xepgChannel.XMapping = "-"
-				xepgChannel.XActive = false
-			}
-
-			Data.XEPG.Channels[xepg] = xepgChannel
-
-		}
+		Data.XEPG.Channels[xepgID] = xepgChannel // Update Data.XEPG.Channels with potentially modified xepgChannel
 
 	}
 
@@ -672,11 +530,212 @@ func mapping() (err error) {
 	return
 }
 
+// performAutomaticChannelMapping attempts to automatically map an inactive channel.
+// It returns the (potentially modified) channel and a boolean indicating if a mapping was made.
+func performAutomaticChannelMapping(xepgChannel XEPGChannelStruct, xepgID string) (XEPGChannelStruct, bool) {
+	mappingMade := false
+	if !xepgChannel.XActive {
+		// Values can be "-", therefore len <= 1.
+		// Only attempt automatic mapping if BOTH XmltvFile and XMapping are unassigned.
+		if len(xepgChannel.XmltvFile) <= 1 && len(xepgChannel.XMapping) <= 1 {
+
+			var tvgID = xepgChannel.TvgID
+
+			// Set default for new Channel
+			if Settings.DefaultMissingEPG != "-" {
+				xepgChannel.XmltvFile = "xTeVe Dummy"
+				xepgChannel.XMapping = Settings.DefaultMissingEPG
+				mappingMade = true // Default mapping is a form of mapping
+			} else {
+				xepgChannel.XmltvFile = "-"
+				xepgChannel.XMapping = "-"
+				// mappingMade remains false if no default is set and no match is found later
+			}
+			// Data.XEPG.Channels[xepgID] = xepgChannel // This write should happen in the calling function or after all modifications
+			
+			mappingFound := false // Flag to indicate if a mapping has been found and we can exit the outer loop
+			for file, xmltvChannels := range Data.XMLTV.Mapping {
+				if mappingFound {
+					break // Exit outer loop if mapping was found in a previous iteration
+				}
+				xmltvMap, ok := xmltvChannels.(map[string]any)
+				if !ok {
+					continue // Skip if type assertion fails
+				}
+
+				if channel, ok := xmltvMap[tvgID]; ok {
+					channelData, ok := channel.(map[string]any)
+					if !ok {
+						// This case should ideally not happen if data structure is consistent
+						continue
+					}
+					if channelID, ok := channelData["id"].(string); ok {
+						xepgChannel.XmltvFile = file
+						xepgChannel.XMapping = channelID
+						mappingMade = true
+						if icon, ok := channelData["icon"].(string); ok {
+							if len(icon) > 0 {
+								xepgChannel.TvgLogo = icon
+							}
+						}
+						mappingFound = true // Set flag to break outer loop
+						// No 'continue' here, loop will break due to mappingFound in the next iteration's check
+					}
+				} else if !mappingFound { // Only search by name if not already found by tvgID
+					// Search for the proper XEPG channel ID by comparing its name with every alias in XML file
+					for _, xmltvChannel := range xmltvMap {
+						if mappingFound { // Check again in case inner loop found something in previous iteration
+							break
+						}
+						channelData, ok := xmltvChannel.(map[string]any)
+						if !ok {
+							continue
+						}
+						displayNamesData, ok := channelData["display-names"]
+						if !ok {
+							continue
+						}
+						displayNamesArray, ok := displayNamesData.([]any)
+						if !ok {
+							concreteDisplayNames, okDisplayName := displayNamesData.([]DisplayName)
+							if okDisplayName {
+								displayNamesArray = make([]any, len(concreteDisplayNames))
+								for i, dn := range concreteDisplayNames {
+									displayNamesArray[i] = dn
+								}
+							} else {
+								continue 
+							}
+						}
+
+						for _, nameEntry := range displayNamesArray {
+							var currentDisplayNameValue string
+							if dnStruct, ok := nameEntry.(DisplayName); ok {
+								currentDisplayNameValue = dnStruct.Value
+							} else if dnMap, ok := nameEntry.(map[string]any); ok {
+								if val, ok := dnMap["Value"].(string); ok { 
+									currentDisplayNameValue = val
+								} else {
+									continue
+								}
+							} else {
+								continue
+							}
+
+							xmltvNameSolid := strings.ReplaceAll(currentDisplayNameValue, " ", "")
+							xepgNameSolid := strings.ReplaceAll(xepgChannel.Name, " ", "")
+
+							if strings.EqualFold(xmltvNameSolid, xepgNameSolid) {
+								xepgChannel.XmltvFile = file
+								xepgChannel.XMapping = channelData["id"].(string)
+								mappingMade = true
+								if icon, ok := channelData["icon"].(string); ok {
+									if len(icon) > 0 {
+										xepgChannel.TvgLogo = icon
+									}
+								}
+								mappingFound = true // Set flag to break outer and inner loops
+								break // Break from inner loop over displayNamesArray
+							}
+						}
+						// if mappingFound, the inner loop over xmltvMap will break in next iter
+					}
+				}
+			}
+		}
+	}
+	return xepgChannel, mappingMade
+}
+
+// verifyExistingChannelMappings checks assigned XMLTV files and channels for active mappings.
+// It returns the (potentially modified) channel.
+func verifyExistingChannelMappings(xepgChannel XEPGChannelStruct) XEPGChannelStruct {
+	if !xepgChannel.XActive {
+		return xepgChannel
+	}
+
+	var mappingValue = xepgChannel.XMapping
+	var file = xepgChannel.XmltvFile
+
+	if file != "xTeVe Dummy" {
+		xmltvFileMapping, fileExists := Data.XMLTV.Mapping[file].(map[string]any)
+		if !fileExists {
+			fileID := strings.TrimSuffix(getFilenameFromPath(file), path.Ext(getFilenameFromPath(file)))
+			ShowError(fmt.Errorf("missing XMLTV file: %s", getProviderParameter(fileID, "xmltv", "name")), 0)
+			showWarning(2301)
+			xepgChannel.XActive = false
+		} else {
+			channelData, channelExists := xmltvFileMapping[mappingValue].(map[string]any)
+			if !channelExists {
+				ShowError(fmt.Errorf("missing EPG data: %s for mapping %s in file %s", xepgChannel.Name, mappingValue, file), 0)
+				showWarning(2302)
+				xepgChannel.XActive = false
+			} else {
+				// Update Channel Logo
+				if logo, ok := channelData["icon"].(string); ok {
+					if xepgChannel.XUpdateChannelIcon && len(logo) > 0 {
+						xepgChannel.TvgLogo = logo
+					}
+				}
+			}
+		}
+	}
+
+	// If, after checks, the channel is no longer considered active (e.g., due to missing files/mappings),
+	// or if XmltvFile/XMapping were empty to begin with for an active channel (which shouldn't happen if logic is correct prior),
+	// ensure they are set to "-" and XActive is false.
+	if !xepgChannel.XActive || len(xepgChannel.XmltvFile) == 0 || len(xepgChannel.XMapping) == 0 {
+		xepgChannel.XmltvFile = "-"
+		xepgChannel.XMapping = "-"
+		// Ensure XActive is false if it was not already set to false by previous logic.
+		// This handles cases where it might have been active but its mapping became invalid.
+		if xepgChannel.XActive && (len(xepgChannel.XmltvFile) <= 1 || len(xepgChannel.XMapping) <= 1) {
+			// This condition means it was active, but mapping is now effectively nil or "-", so deactivate.
+			// The ShowError/showWarning above would already set XActive = false for missing data.
+			// This is more of a final sanity check.
+		}
+		// If it was already deactivated by ShowError, this just re-confirms.
+		// If it was active but had empty XmltvFile/XMapping (unlikely state), this deactivates.
+	}
+	// An additional check for ensuring channel is deactivated if mapping is "-" or file is "-"
+	if xepgChannel.XmltvFile == "-" || xepgChannel.XMapping == "-" {
+		xepgChannel.XActive = false
+	}
+
+
+	return xepgChannel
+}
+
+// createChannelElements generates an XMLTV channel element.
+func createChannelElements(xepgChannel XEPGChannelStruct, imgc *imgcache.Cache) *Channel {
+	var channel Channel
+	channel.ID = xepgChannel.XChannelID
+	// Check if imgc is not nil and if the GetURL function is assigned within imgc.Image
+	if imgc != nil && imgc.Image.GetURL != nil {
+		channel.Icon = Icon{Src: imgc.Image.GetURL(xepgChannel.TvgLogo)}
+	} else {
+		// Fallback: use TvgLogo directly if no image cache or GetURL func is available.
+		channel.Icon = Icon{Src: xepgChannel.TvgLogo}
+	}
+	channel.DisplayNames = append(channel.DisplayNames, DisplayName{Value: xepgChannel.XName})
+	return &channel
+}
+
+// createProgramElements generates XMLTV program elements for a channel.
+// It's a wrapper around getProgramData.
+func createProgramElements(xepgChannel XEPGChannelStruct) ([]*Program, error) {
+	tmpProgramXML, err := getProgramData(xepgChannel)
+	if err != nil {
+		return nil, err
+	}
+	return tmpProgramXML.Program, nil
+}
+
 // Create XMLTV File
 func createXMLTVFile() (err error) {
 
 	// Image Cache
-	var imgc = Data.Cache.Images
+	var imgc = Data.Cache.Images // This is *imgcache.Cache. imgc itself will be passed.
 
 	Data.Cache.ImagesFiles = []string{}
 	Data.Cache.ImagesURLS = []string{}
@@ -708,40 +767,27 @@ func createXMLTVFile() (err error) {
 		xepgXML.Source = fmt.Sprintf("%s - %s.%s", System.Name, System.Version, System.Build)
 	}
 
-	var tmpProgram = &XMLTV{}
-
 	for _, dxc := range Data.XEPG.Channels {
-
 		var xepgChannel XEPGChannelStruct
-		err := json.Unmarshal([]byte(mapToJSON(dxc)), &xepgChannel)
-		if err == nil {
-
+		jsonErr := json.Unmarshal([]byte(mapToJSON(dxc)), &xepgChannel) // Renamed err to jsonErr
+		if jsonErr == nil {
 			if xepgChannel.XActive {
+				// Create Channel Element
+				channelElement := createChannelElements(xepgChannel, imgc) // Pass the whole imgc *imgcache.Cache
+				xepgXML.Channel = append(xepgXML.Channel, channelElement)
 
-				// Channels
-				var channel Channel
-				channel.ID = xepgChannel.XChannelID
-				channel.Icon = Icon{Src: imgc.Image.GetURL(xepgChannel.TvgLogo)}
-				channel.DisplayNames = append(channel.DisplayNames, DisplayName{Value: xepgChannel.XName})
-
-				xepgXML.Channel = append(xepgXML.Channel, &channel)
-
-				// Programs
-
-				*tmpProgram, err = getProgramData(xepgChannel)
-				if err == nil {
-
-					// for _, program := range tmpProgram.Program {
-					// 	xepgXML.Program = append(xepgXML.Program, program)
-					// }
-					xepgXML.Program = append(xepgXML.Program, tmpProgram.Program...)
-
+				// Create Program Elements
+				programElements, progErr := createProgramElements(xepgChannel) // Renamed err to progErr
+				if progErr == nil {
+					xepgXML.Program = append(xepgXML.Program, programElements...)
+				} else {
+					// Handle error from createProgramElements if necessary, e.g., log it
+					ShowError(fmt.Errorf("error creating program elements for channel %s: %v", xepgChannel.XName, progErr), 0)
 				}
-
 			}
-
+		} else {
+			ShowError(fmt.Errorf("error unmarshalling XEPG channel data: %v", jsonErr), 0)
 		}
-
 	}
 
 	var content, _ = xml.MarshalIndent(xepgXML, "  ", "    ")
@@ -749,11 +795,11 @@ func createXMLTVFile() (err error) {
 	writeByteToFile(System.File.XML, xmlOutput)
 
 	showInfo("XEPG:" + fmt.Sprintf("Compress XMLTV file (%s)", System.Compressed.GZxml))
-	err = compressGZIP(&xmlOutput, System.Compressed.GZxml)
+	err = compressGZIP(&xmlOutput, System.Compressed.GZxml) // Original err is shadowed here, this is fine.
 
-	xepgXML = XMLTV{}
+	xepgXML = XMLTV{} // Clear struct for memory
 
-	return
+	return // Returns the error from compressGZIP or nil
 }
 
 // Create Program Data (createXMLTVFile)
