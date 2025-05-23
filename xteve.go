@@ -17,23 +17,6 @@ import (
 	"xteve/src"
 )
 
-// GitHubStruct : GitHub Account. The Updates are published via this Account
-type GitHubStruct struct {
-	Branch string
-	Repo   string
-	Update bool
-	User   string
-}
-
-// GitHub : GitHub Account
-// If you want to fork this project, enter your Github account here. This prevents a newer version of xTeVe from updating your version.
-var GitHub = GitHubStruct{Branch: "main", User: "SenexCrenshaw", Repo: "xTeVe", Update: false}
-
-// Branch:	GitHub Branch
-// User: 	GitHub Username
-// Repo: 	GitHub Repository
-// Update:	Automatic updates from the GitHub repository [true|false]
-
 // Name : Program Name
 const Name = "xTeVe"
 
@@ -51,8 +34,6 @@ var configFolder = flag.String("config", "", ": Config Folder        ["+samplePa
 var port = flag.String("port", "", ": Server port          [34400] (default: 34400)")
 var restore = flag.String("restore", "", ": Restore from backup  ["+sampleRestore+"xteve_backup.zip]")
 
-var gitBranch = flag.String("branch", "", ": Git Branch           [master|beta] (default: master)")
-var noUpdates = flag.Bool("no-updates", false, ": Disable updates")
 var debug = flag.Int("debug", 0, ": Debug level          [0 - 3] (default: 0)")
 var info = flag.Bool("info", false, ": Show system info")
 var version = flag.Bool("version", false, ": Show system version")
@@ -69,10 +50,10 @@ func main() {
 
 	var system = &src.System
 	system.APIVersion = APIVersion
-	system.Branch = GitHub.Branch
+	// system.Branch = GitHub.Branch // Removed as GitHub global is removed
 	system.Build = build[len(build)-1:][0]
 	system.DBVersion = DBVersion
-	system.GitHub = GitHub
+	// system.GitHub = GitHub // Removed as GitHub global is removed
 	system.Name = Name
 	system.Version = strings.Join(build[0:len(build)-1], ".")
 
@@ -158,17 +139,6 @@ func main() {
 		system.Flag.Port = *port
 	}
 
-	// Branch
-	system.Flag.Branch = *gitBranch
-	if len(system.Flag.Branch) > 0 {
-		fmt.Println("Git Branch is now:", system.Flag.Branch)
-	}
-
-	// Updates
-	if noUpdates != nil {
-		system.GitHub.Update = false
-	}
-
 	// Debug Level
 	system.Flag.Debug = *debug
 	if system.Flag.Debug > 3 {
@@ -204,11 +174,6 @@ func main() {
 	if err != nil {
 		src.ShowError(err, 0)
 		os.Exit(0)
-	}
-
-	err = src.BinaryUpdate()
-	if err != nil {
-		src.ShowError(err, 0)
 	}
 
 	err = src.StartSystem(false)
