@@ -25,8 +25,6 @@ func ShowSystemInfo() {
 	println()
 
 	fmt.Printf("Version:             %s %s.%s\n", System.Name, System.Version, System.Build)
-	fmt.Printf("Branch:              %s\n", System.Branch)
-	fmt.Printf("GitHub:              %s/%s | Git update = %t\n", System.GitHub.User, System.GitHub.Repo, System.GitHub.Update)
 	fmt.Printf("Folder (config):     %s\n", System.Folder.Config)
 
 	fmt.Printf("Streams:             %d / %d\n", len(Data.Streams.Active), len(Data.Streams.All))
@@ -60,7 +58,6 @@ func ShowSystemInfo() {
 	println("---")
 
 	fmt.Println("Settings [General]")
-	fmt.Printf("xTeVe Update:        %t\n", Settings.XteveAutoUpdate)
 	fmt.Printf("UUID:                %s\n", Settings.UUID)
 	fmt.Printf("Tuner (Plex / Emby): %d\n", Settings.Tuner)
 	fmt.Printf("EPG Source:          %s\n", Settings.EpgSource)

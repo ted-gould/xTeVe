@@ -1,5 +1,13 @@
 package src
 
+import (
+	"fmt"
+	"os"
+	"strconv"
+	"strings"
+	"time"
+)
+
 var webUI = make(map[string]any)
 
 func loadHTMLMap() {
@@ -124,6 +132,8 @@ func getErrMsg(errCode int) (errMsg string) {
 		errMsg = "VLC binary was not found. Check the VLC path binary in the xTeVe settings."
 	case 2022:
 		errMsg = "Loaded database had broken XEPG mapping (version <= 2.1.1). It was cleared."
+	case 2023:
+		errMsg = "API: Denied access from non-localhost address."
 	case 2099:
 		errMsg = "Updates have been disabled by the developer"
 

@@ -6,7 +6,7 @@ import (
 	"path"
 	"strings"
 	"testing"
-	"xteve/src/internal/imgcache" 
+	"xteve/src/internal/imgcache"
 
 	"github.com/google/go-cmp/cmp"
 )
@@ -49,11 +49,10 @@ var testXMLTVSystem = SystemStruct{
 	}{
 		WEB: "http", API: "http", DVR: "http", M3U: "http", XML: "http", // Provide all fields
 	},
-	Domain: "localhost:34400", // Used by imgcache.New for default cacheURL
-	Name:   "xTeVe Test",
+	Domain:  "localhost:34400", // Used by imgcache.New for default cacheURL
+	Name:    "xTeVe Test",
 	Version: "test.v",
-	Build: "test.b",
-	Branch: "test",
+	Build:   "test.b",
 }
 
 var testXMLTVSettings = SettingsStruct{
@@ -75,11 +74,11 @@ func setupXMLTVTestGlobals() func() {
 	// The cacheURL for imgcache.New is formed using System.ServerProtocol.WEB and System.Domain
 	cachePath := System.Folder.ImagesCache
 	os.MkdirAll(cachePath, os.ModePerm) // Ensure cache path exists for New()
-	
+
 	// The cacheURL for imgcache.New is not critical if caching is false for GetURL behavior.
 	// However, to fully initialize, use values from testXMLTVSystem.
-	imgCacheInstance, err := imgcache.New(cachePath, 
-		testXMLTVSystem.ServerProtocol.WEB+"://"+testXMLTVSystem.Domain+"/images/", 
+	imgCacheInstance, err := imgcache.New(cachePath,
+		testXMLTVSystem.ServerProtocol.WEB+"://"+testXMLTVSystem.Domain+"/images/",
 		false) // IMPORTANT: caching = false
 	if err != nil {
 		panic(fmt.Sprintf("Failed to initialize imgcache for tests: %v", err))
@@ -115,7 +114,7 @@ func setupXMLTVTestGlobals() func() {
 		},
 	}
 
-	os.MkdirAll(System.Folder.Data, os.ModePerm) 
+	os.MkdirAll(System.Folder.Data, os.ModePerm)
 	// Create a dummy provider XMLTV file for getLocalXMLTV to read
 	dummyXMLContent := `
 	<tv>
@@ -151,7 +150,7 @@ func TestCreateChannelElements(t *testing.T) {
 	imgCacheForTests := Data.Cache.Images
 
 	nilImgCacheForTests := (*imgcache.Cache)(nil) // A nil *imgcache.Cache
-	
+
 	// The case for imgCacheWithNilFunc (where Image.GetURL is nil) is removed
 	// because imgcache.New() always sets Image.GetURL to a valid function.
 	// It's not possible to have a nil Image.GetURL with a normally constructed *imgcache.Cache.
@@ -244,7 +243,7 @@ func TestCreateProgramElements(t *testing.T) {
 		name          string
 		xepgChannel   XEPGChannelStruct
 		wantErr       bool
-		expectedCount int // Number of programs expected
+		expectedCount int    // Number of programs expected
 		expectedTitle string // Title of the first program if count > 0
 	}{
 		{
@@ -252,8 +251,8 @@ func TestCreateProgramElements(t *testing.T) {
 			xepgChannel: XEPGChannelStruct{
 				XChannelID: "x.1", // This will be the program's channel ID in output
 				XName:      "My Test Channel",
-				XmltvFile:  "provider.xml",    // Matches the dummy file created in setup
-				XMapping:   "dummy.ch1",       // Channel ID within provider.xml
+				XmltvFile:  "provider.xml", // Matches the dummy file created in setup
+				XMapping:   "dummy.ch1",    // Channel ID within provider.xml
 				XTimeshift: "0",
 			},
 			wantErr:       false,

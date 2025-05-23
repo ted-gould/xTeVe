@@ -44,17 +44,15 @@ var testSettings = SettingsStruct{ // src.SettingsStruct
 	MappingFirstChannel: 1000, // Used by findFreeChannelNumber
 }
 
-var testData = DataStruct{} // Will be properly initialized in setupGlobalStateForTest
-
 // Helper function to set up global state for a test
 func setupGlobalStateForTest() func() {
 	originalSystem := System
 	originalSettings := Settings
-	originalData := Data 
+	originalData := Data
 
 	System = testSystem
 	Settings = testSettings
-	
+
 	// Initialize Data with a fresh DataStruct structure for each test.
 	var freshData DataStruct
 	freshData.XEPG.Channels = make(map[string]any)
@@ -150,10 +148,10 @@ func TestFindFreeChannelNumber(t *testing.T) {
 	if !lo.Contains(allChannelNumbers, 1004.0) {
 		t.Errorf("Expected 1004 to be added to allChannelNumbers. Got: %v", allChannelNumbers)
 	}
-	
+
 	// Test 5: Starting channel hint is empty string
 	allChannelNumbers = []float64{1000, 1001, 1002, 1003, 1004, 1005}
-	Settings.MappingFirstChannel = 1000 
+	Settings.MappingFirstChannel = 1000
 	ch5 := findFreeChannelNumber(&allChannelNumbers, "")
 	if ch5 != "1006" {
 		t.Errorf("Expected channel number 1006 when starting hint is empty, got %s. Numbers: %v", ch5, allChannelNumbers)
@@ -196,7 +194,7 @@ func TestGenerateChannelHash(t *testing.T) {
 		t.Errorf("Expected hash1 and hash3 to be the same, got %s and %s", hash1, hash3)
 	}
 	// md5("m3u1Channel1Group1tvg1TvgName1uuidKey1uuidValue1") is 8b783b0689c25221d4988c8066f4a3a7
-	expectedHash := "8b783b0689c25221d4988c8066f4a3a7" 
+	expectedHash := "8b783b0689c25221d4988c8066f4a3a7"
 	if hash1 != expectedHash {
 		t.Errorf("Expected hash %s, got %s", expectedHash, hash1)
 	}
@@ -208,16 +206,16 @@ func TestProcessExistingXEPGChannel(t *testing.T) {
 
 	xepgID := "x-ID.0" // A known ID that will be used for the test channel
 	initialChannel := XEPGChannelStruct{
-		XEPG:                 xepgID,
-		Name:                 "Old Name",
-		URL:                  "http://old.url",
-		GroupTitle:           "Old Group",
-		TvgLogo:              "old_logo.png",
-		XUpdateChannelName:   true,
-		XUpdateChannelGroup:  true,
-		XUpdateChannelIcon:   true,
-		XName:                "Old XName",
-		XGroupTitle:          "Old XGroupTitle",
+		XEPG:                xepgID,
+		Name:                "Old Name",
+		URL:                 "http://old.url",
+		GroupTitle:          "Old Group",
+		TvgLogo:             "old_logo.png",
+		XUpdateChannelName:  true,
+		XUpdateChannelGroup: true,
+		XUpdateChannelIcon:  true,
+		XName:               "Old XName",
+		XGroupTitle:         "Old XGroupTitle",
 	}
 	Data.XEPG.Channels[xepgID] = initialChannel
 
@@ -264,9 +262,9 @@ func TestProcessExistingXEPGChannel(t *testing.T) {
 
 	// Test Case 2: channelHasUUID = false, XUpdateChannelName should not update XName
 	initialChannel.XName = "NoChangeXName"
-	initialChannel.XGroupTitle = "Old XGroupTitle" 
-	initialChannel.TvgLogo = "old_logo.png"      
-	initialChannel.XUpdateChannelName = true 
+	initialChannel.XGroupTitle = "Old XGroupTitle"
+	initialChannel.TvgLogo = "old_logo.png"
+	initialChannel.XUpdateChannelName = true
 	Data.XEPG.Channels[xepgID] = initialChannel
 
 	m3uChannel.Name = "NameNoUUID"
@@ -277,7 +275,7 @@ func TestProcessExistingXEPGChannel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("processExistingXEPGChannel failed: %v", err)
 	}
-	
+
 	updatedChannelData2, ok2 := Data.XEPG.Channels[xepgID]
 	if !ok2 {
 		t.Fatalf("Channel with ID %s not found after update (Test Case 2)", xepgID)
@@ -289,13 +287,13 @@ func TestProcessExistingXEPGChannel(t *testing.T) {
 	if updatedChannel2.Name != "NameNoUUID" {
 		t.Errorf("Expected Name to be 'NameNoUUID', got '%s'", updatedChannel2.Name)
 	}
-	if updatedChannel2.XName != "NoChangeXName" { 
+	if updatedChannel2.XName != "NoChangeXName" {
 		t.Errorf("Expected XName to be 'NoChangeXName', got '%s'", updatedChannel2.XName)
 	}
-	if updatedChannel2.XGroupTitle != "GroupNoUUID" { 
+	if updatedChannel2.XGroupTitle != "GroupNoUUID" {
 		t.Errorf("Expected XGroupTitle to be 'GroupNoUUID', got '%s'", updatedChannel2.XGroupTitle)
 	}
-	if updatedChannel2.TvgLogo != "LogoNoUUID" { 
+	if updatedChannel2.TvgLogo != "LogoNoUUID" {
 		t.Errorf("Expected TvgLogo to be 'LogoNoUUID', got '%s'", updatedChannel2.TvgLogo)
 	}
 
@@ -316,7 +314,7 @@ func TestProcessExistingXEPGChannel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("processExistingXEPGChannel failed: %v", err)
 	}
-	updatedChannelData3, _ := Data.XEPG.Channels[xepgID]
+	updatedChannelData3 := Data.XEPG.Channels[xepgID]
 	updatedChannelBytes3, _ := json.Marshal(updatedChannelData3)
 	var updatedChannel3 XEPGChannelStruct
 	json.Unmarshal(updatedChannelBytes3, &updatedChannel3)
@@ -343,19 +341,19 @@ func TestProcessNewXEPGChannel(t *testing.T) {
 	valuesJSON, _ := json.Marshal(valuesMap)
 
 	m3uChannel := M3UChannelStructXEPG{
-		FileM3UID:     "test_m3u_id_1",
-		FileM3UName:   "TestM3U",
-		FileM3UPath:   "/path/to/m3u",
-		Values:        string(valuesJSON), // Store as JSON string
-		GroupTitle:    "Test Group",
-		Name:          "Test Channel 1",
-		TvgID:         "tvgId1",
-		TvgLogo:       "logo1.png",
-		TvgName:       "Tvg Name 1",
-		TvgShift:      "1",
-		URL:           "http://stream.url/1",
-		UUIDKey:       "channel-id",
-		UUIDValue:     "2005", // Changed from "uniqueId1" to a numeric string
+		FileM3UID:       "test_m3u_id_1",
+		FileM3UName:     "TestM3U",
+		FileM3UPath:     "/path/to/m3u",
+		Values:          string(valuesJSON), // Store as JSON string
+		GroupTitle:      "Test Group",
+		Name:            "Test Channel 1",
+		TvgID:           "tvgId1",
+		TvgLogo:         "logo1.png",
+		TvgName:         "Tvg Name 1",
+		TvgShift:        "1",
+		URL:             "http://stream.url/1",
+		UUIDKey:         "channel-id",
+		UUIDValue:       "2005", // Changed from "uniqueId1" to a numeric string
 		PreserveMapping: "true",
 	}
 
@@ -368,7 +366,7 @@ func TestProcessNewXEPGChannel(t *testing.T) {
 	}
 
 	var newXEPGID string
-	for k := range Data.XEPG.Channels { 
+	for k := range Data.XEPG.Channels {
 		newXEPGID = k
 	}
 
@@ -376,14 +374,14 @@ func TestProcessNewXEPGChannel(t *testing.T) {
 	if newXEPGID != "x-ID.0" {
 		t.Errorf("Expected XEPG ID to be 'x-ID.0', got '%s'", newXEPGID)
 	}
-	
-	newChannelData, _ := Data.XEPG.Channels[newXEPGID]
+
+	newChannelData := Data.XEPG.Channels[newXEPGID]
 	newChannelBytes, _ := json.Marshal(newChannelData)
 	var newChannel XEPGChannelStruct
 	json.Unmarshal(newChannelBytes, &newChannel)
 
 	// With UUIDValue = "2005" and PreserveMapping = true, XChannelID should be "2005"
-	if newChannel.XChannelID != "2005" { 
+	if newChannel.XChannelID != "2005" {
 		t.Errorf("Expected XChannelID to be '2005', got '%s'", newChannel.XChannelID)
 	}
 	expectedChannelNumFloat, _ := strconv.ParseFloat("2005", 64)
@@ -409,29 +407,31 @@ func TestProcessNewXEPGChannel(t *testing.T) {
 
 	// Test Case 2: PreserveMapping = "false", StartingChannel used
 	m3uChannel2 := M3UChannelStructXEPG{
-		FileM3UID:     "test_m3u_id_2",
-		Name:          "Test Channel 2",
-		StartingChannel: "2500", 
+		FileM3UID:       "test_m3u_id_2",
+		Name:            "Test Channel 2",
+		StartingChannel: "2500",
 		PreserveMapping: "false",
-		TvgShift:        "", 
+		TvgShift:        "",
 	}
-	Data.XEPG.Channels = make(map[string]any) 
-	allChannelNumbers = []float64{} 
+	Data.XEPG.Channels = make(map[string]any)
+	allChannelNumbers = []float64{}
 	processNewXEPGChannel(m3uChannel2, &allChannelNumbers)
-	
+
 	var newXEPGID2 string
 	i := 0
-	for k := range Data.XEPG.Channels { 
-		newXEPGID2 = k; 
+	for k := range Data.XEPG.Channels {
+		newXEPGID2 = k
 		i++
-		if i > 1 { t.Fatal("More than one channel created for test case 2")}
+		if i > 1 {
+			t.Fatal("More than one channel created for test case 2")
+		}
 	}
 
-	if newXEPGID2 != "x-ID.0" { 
+	if newXEPGID2 != "x-ID.0" {
 		t.Errorf("Expected XEPG ID to be 'x-ID.0', got '%s'", newXEPGID2)
 	}
 
-	newChannelData2, _ := Data.XEPG.Channels[newXEPGID2]
+	newChannelData2 := Data.XEPG.Channels[newXEPGID2]
 	newChannelBytes2, _ := json.Marshal(newChannelData2)
 	var newChannel2 XEPGChannelStruct
 	json.Unmarshal(newChannelBytes2, &newChannel2)
@@ -442,7 +442,7 @@ func TestProcessNewXEPGChannel(t *testing.T) {
 	if !lo.Contains(allChannelNumbers, 2500.0) {
 		t.Errorf("Expected 2500 to be added to allChannelNumbers. Got: %v", allChannelNumbers)
 	}
-	if newChannel2.TvgShift != "0" { 
+	if newChannel2.TvgShift != "0" {
 		t.Errorf("Expected TvgShift to be '0', got '%s'", newChannel2.TvgShift)
 	}
 	if newChannel2.XTimeshift != "0" {
@@ -451,19 +451,25 @@ func TestProcessNewXEPGChannel(t *testing.T) {
 
 	// Test Case 3: No StartingChannel, PreserveMapping = "false", Settings.MappingFirstChannel should be used
 	m3uChannel3 := M3UChannelStructXEPG{
-		FileM3UID:     "test_m3u_id_3",
-		Name:          "Test Channel 3",
+		FileM3UID:       "test_m3u_id_3",
+		Name:            "Test Channel 3",
 		PreserveMapping: "false",
 	}
 	Data.XEPG.Channels = make(map[string]any)
 	allChannelNumbers = []float64{}
-	Settings.MappingFirstChannel = 3000 
+	Settings.MappingFirstChannel = 3000
 	processNewXEPGChannel(m3uChannel3, &allChannelNumbers)
 
 	var newXEPGID3 string
 	i = 0
-	for k := range Data.XEPG.Channels { newXEPGID3 = k; i++; if i > 1 {t.Fatal("More than one channel created for test case 3")}}
-	newChannelData3, _ := Data.XEPG.Channels[newXEPGID3]
+	for k := range Data.XEPG.Channels {
+		newXEPGID3 = k
+		i++
+		if i > 1 {
+			t.Fatal("More than one channel created for test case 3")
+		}
+	}
+	newChannelData3 := Data.XEPG.Channels[newXEPGID3]
 	newChannelBytes3, _ := json.Marshal(newChannelData3)
 	var newChannel3 XEPGChannelStruct
 	json.Unmarshal(newChannelBytes3, &newChannel3)

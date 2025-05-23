@@ -53,11 +53,6 @@ func maintenance() {
 					buildXEPG(false)
 				}
 			}
-
-			// Update xTeVe (Binary)
-			if System.TimeForAutoUpdate == t.Format("1504") {
-				BinaryUpdate()
-			}
 		}
 		time.Sleep(60 * time.Second)
 	}

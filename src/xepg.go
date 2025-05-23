@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"regexp"
+	"runtime"
 	"sort"
 
 	"crypto/md5"
@@ -472,7 +473,7 @@ func mapping() (err error) {
 
 // performAutomaticChannelMapping attempts to automatically map an inactive channel.
 // It returns the (potentially modified) channel and a boolean indicating if a mapping was made.
-func performAutomaticChannelMapping(xepgChannel XEPGChannelStruct, xepgID string) (XEPGChannelStruct, bool) {
+func performAutomaticChannelMapping(xepgChannel XEPGChannelStruct, _ string) (XEPGChannelStruct, bool) {
 	mappingMade := false
 	if !xepgChannel.XActive {
 		// Values can be "-", therefore len <= 1.
@@ -490,7 +491,7 @@ func performAutomaticChannelMapping(xepgChannel XEPGChannelStruct, xepgID string
 				// mappingMade remains false if no default is set and no match is found later
 			}
 			// Data.XEPG.Channels[xepgID] = xepgChannel // This write should happen in the calling function or after all modifications
-			
+
 			mappingFound := false // Flag to indicate if a mapping has been found and we can exit the outer loop
 			for file, xmltvChannels := range Data.XMLTV.Mapping {
 				if mappingFound {
@@ -542,7 +543,7 @@ func performAutomaticChannelMapping(xepgChannel XEPGChannelStruct, xepgID string
 									displayNamesArray[i] = dn
 								}
 							} else {
-								continue 
+								continue
 							}
 						}
 
@@ -551,7 +552,7 @@ func performAutomaticChannelMapping(xepgChannel XEPGChannelStruct, xepgID string
 							if dnStruct, ok := nameEntry.(DisplayName); ok {
 								currentDisplayNameValue = dnStruct.Value
 							} else if dnMap, ok := nameEntry.(map[string]any); ok {
-								if val, ok := dnMap["Value"].(string); ok { 
+								if val, ok := dnMap["Value"].(string); ok {
 									currentDisplayNameValue = val
 								} else {
 									continue
@@ -573,7 +574,7 @@ func performAutomaticChannelMapping(xepgChannel XEPGChannelStruct, xepgID string
 									}
 								}
 								mappingFound = true // Set flag to break outer and inner loops
-								break // Break from inner loop over displayNamesArray
+								break               // Break from inner loop over displayNamesArray
 							}
 						}
 						// if mappingFound, the inner loop over xmltvMap will break in next iter
@@ -695,11 +696,7 @@ func createXMLTVFile() (err error) {
 	var xepgXML XMLTV
 	xepgXML.Generator = System.Name
 
-	if System.Branch == "master" {
-		xepgXML.Source = fmt.Sprintf("%s - %s", System.Name, System.Version)
-	} else {
-		xepgXML.Source = fmt.Sprintf("%s - %s.%s", System.Name, System.Version, System.Build)
-	}
+	xepgXML.Source = fmt.Sprintf("%s - %s.%s", System.Name, System.Version, System.Build)
 
 	for _, dxc := range Data.XEPG.Channels {
 		var xepgChannel XEPGChannelStruct
@@ -732,7 +729,7 @@ func createXMLTVFile() (err error) {
 	err = compressGZIP(&xmlOutput, System.Compressed.GZxml) // Original err is shadowed here, this is fine.
 
 	xepgXML = XMLTV{} // Clear struct for memory
-	return // Returns the error from compressGZIP or nil
+	return            // Returns the error from compressGZIP or nil
 }
 
 // Create Program Data (createXMLTVFile)

@@ -764,7 +764,7 @@ func API(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !ip.IsLoopback() {
-		showWarning(fmt.Sprintf("API: Denied access from non-localhost address: %s", r.RemoteAddr))
+		showWarning(2023)
 		http.Error(w, "Forbidden - API access is restricted to localhost.", http.StatusForbidden)
 		return
 	}
@@ -972,14 +972,7 @@ func setDefaultResponseData(response ResponseStruct, data bool) (defaults Respon
 	defaults.Settings.HostIP = Settings.HostIP
 	defaults.Notification = System.Notification
 	defaults.Log = WebScreenLog
-
-	switch System.Branch {
-	case "master":
-		defaults.ClientInfo.Version = System.Version
-	default:
-		defaults.ClientInfo.Version = fmt.Sprintf("%s (%s)", System.Version, System.Build)
-		defaults.ClientInfo.Branch = System.Branch
-	}
+	defaults.ClientInfo.Version = fmt.Sprintf("%s (%s)", System.Version, System.Build)
 
 	if data {
 		defaults.Users, _ = authentication.GetAllUserData()

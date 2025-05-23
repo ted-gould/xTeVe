@@ -104,7 +104,6 @@ func loadSettings() (settings SettingsStruct, err error) {
 	defaults["files.update"] = true
 	defaults["files"] = dataMap
 	defaults["filter"] = make(map[string]any)
-	defaults["git.branch"] = System.Branch
 	defaults["hostIP"] = "" // Will be set in resolveHostIP()
 	defaults["hostName"] = ""
 	defaults["language"] = "en"
@@ -141,11 +140,6 @@ func loadSettings() (settings SettingsStruct, err error) {
 	// Adopt the settings from the Flags
 	if len(System.Flag.Port) > 0 {
 		settings.Port = System.Flag.Port
-	}
-
-	if len(System.Flag.Branch) > 0 {
-		settings.Branch = System.Flag.Branch
-		showInfo(fmt.Sprintf("Git Branch:Switching Git Branch to -> %s", settings.Branch))
 	}
 
 	if len(settings.FFmpegPath) == 0 {
