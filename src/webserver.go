@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"strconv"
@@ -865,6 +866,27 @@ func Web(w http.ResponseWriter, r *http.Request) {
 
 // API : API request /api/
 func API(w http.ResponseWriter, r *http.Request) {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		// Log the error for debugging, but still deny access.
+		ShowError(fmt.Errorf("API: error parsing RemoteAddr '%s': %w", r.RemoteAddr, err), 0)
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
+	ip := net.ParseIP(host)
+	if ip == nil {
+		// Log the error for debugging, but still deny access.
+		ShowError(fmt.Errorf("API: error parsing IP from host '%s' in RemoteAddr '%s'", host, r.RemoteAddr), 0)
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
+	if !ip.IsLoopback() {
+		showWarning(fmt.Sprintf("API: Denied access from non-localhost address: %s", r.RemoteAddr))
+		http.Error(w, "Forbidden - API access is restricted to localhost.", http.StatusForbidden)
+		return
+	}
 
 	/*
 			API conditions (without Authentication):
@@ -928,11 +950,6 @@ func API(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.Status = true
-
-	if !Settings.API {
-		httpStatusError(w, r, 423)
-		return
-	}
 
 	if r.Method == "GET" {
 		httpStatusError(w, r, 404)

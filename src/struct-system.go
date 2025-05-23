@@ -263,7 +263,6 @@ type Notification struct {
 
 // SettingsStruct : Content of settings.json
 type SettingsStruct struct {
-	API                   bool     `json:"api"`
 	AuthenticationAPI     bool     `json:"authentication.api"`
 	AuthenticationM3U     bool     `json:"authentication.m3u"`
 	AuthenticationPMS     bool     `json:"authentication.pms"`
