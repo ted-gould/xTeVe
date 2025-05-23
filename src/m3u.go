@@ -16,35 +16,29 @@ import (
 
 // Parse Playlists
 func parsePlaylist(filename, fileType string) (channels []any, err error) {
-
 	content, err := readByteFromFile(filename)
 	var id = strings.TrimSuffix(getFilenameFromPath(filename), path.Ext(getFilenameFromPath(filename)))
 	var playlistName = getProviderParameter(id, fileType, "name")
 
 	if err == nil {
-
 		switch fileType {
 		case "m3u":
 			channels, err = m3u.MakeInterfaceFromM3U(content)
 		case "hdhr":
 			channels, err = makeInteraceFromHDHR(content, playlistName, id)
 		}
-
 	}
-
 	return
 }
 
 // Filter Streams
 func filterThisStream(s any) (status bool) {
-
 	status = false
 	var stream = s.(map[string]string)
 	var regexpYES = `[{]+[^.]+[}]`
 	var regexpNO = `!+[{]+[^.]+[}]`
 
 	for _, filter := range Data.Filter {
-
 		if filter.Rule == "" {
 			continue
 		}
@@ -68,11 +62,9 @@ func filterThisStream(s any) (status bool) {
 		val := r.FindStringSubmatch(filter.Rule)
 
 		if len(val) == 1 {
-
 			exclude = val[0][2 : len(val[0])-1]
 			filter.Rule = strings.Replace(filter.Rule, " "+val[0], "", -1)
 			filter.Rule = strings.Replace(filter.Rule, val[0], "", -1)
-
 		}
 
 		// Required Streams {DEU}
@@ -80,28 +72,22 @@ func filterThisStream(s any) (status bool) {
 		val = r.FindStringSubmatch(filter.Rule)
 
 		if len(val) == 1 {
-
 			include = val[0][1 : len(val[0])-1]
 			filter.Rule = strings.Replace(filter.Rule, " "+val[0], "", -1)
 			filter.Rule = strings.Replace(filter.Rule, val[0], "", -1)
-
 		}
 
 		switch filter.CaseSensitive {
-
 		case false:
-
 			streamValues = strings.ToLower(streamValues)
 			filter.Rule = strings.ToLower(filter.Rule)
 			exclude = strings.ToLower(exclude)
 			include = strings.ToLower(include)
 			group = strings.ToLower(group)
 			name = strings.ToLower(name)
-
 		}
 
 		switch filter.Type {
-
 		case "group-title":
 			search = name
 
@@ -110,7 +96,6 @@ func filterThisStream(s any) (status bool) {
 				stream["_preserve-mapping"] = strconv.FormatBool(filter.PreserveMapping)
 				stream["_starting-channel"] = filter.StartingChannel
 			}
-
 		case "custom-filter":
 			search = streamValues
 			if strings.Contains(search, filter.Rule) {
@@ -119,7 +104,6 @@ func filterThisStream(s any) (status bool) {
 		}
 
 		if match {
-
 			if len(exclude) > 0 {
 				var status = checkConditions(search, exclude, "exclude")
 				if !status {
@@ -133,27 +117,19 @@ func filterThisStream(s any) (status bool) {
 					return false
 				}
 			}
-
 			return true
-
 		}
-
 	}
-
 	return false
 }
 
 // Conditions for the Filter
 func checkConditions(streamValues, conditions, coType string) (status bool) {
-
 	switch coType {
-
 	case "exclude":
 		status = true
-
 	case "include":
 		status = false
-
 	}
 
 	conditions = strings.Replace(conditions, ", ", ",", -1)
@@ -162,47 +138,33 @@ func checkConditions(streamValues, conditions, coType string) (status bool) {
 	var keys = strings.Split(conditions, ",")
 
 	for _, key := range keys {
-
 		if strings.Contains(streamValues, key) {
-
 			switch coType {
-
 			case "exclude":
 				return false
-
 			case "include":
 				return true
-
 			}
-
 		}
-
 	}
-
 	return
 }
 
 // Create xTeVe M3U file
 func buildM3U(groups []string) (m3u string, err error) {
-
 	var imgc = Data.Cache.Images
 	var m3uChannels = make(map[float64]XEPGChannelStruct)
 	var channelNumbers []float64
 
 	for _, dxc := range Data.XEPG.Channels {
-
 		var xepgChannel XEPGChannelStruct
 		err := json.Unmarshal([]byte(mapToJSON(dxc)), &xepgChannel)
 		if err == nil {
-
 			if xepgChannel.XActive {
-
 				if len(groups) > 0 {
-
 					if lo.IndexOf(groups, xepgChannel.XGroupTitle) == -1 {
 						goto Done
 					}
-
 				}
 
 				var channelNumber, err = strconv.ParseFloat(strings.TrimSpace(xepgChannel.XChannelID), 64)
@@ -211,11 +173,8 @@ func buildM3U(groups []string) (m3u string, err error) {
 					m3uChannels[channelNumber] = xepgChannel
 					channelNumbers = append(channelNumbers, channelNumber)
 				}
-
 			}
-
 		}
-
 	Done:
 	}
 
@@ -226,7 +185,6 @@ func buildM3U(groups []string) (m3u string, err error) {
 	m3u = fmt.Sprintf(`#EXTM3U url-tvg="%s" x-tvg-url="%s"`+"\n", xmltvURL, xmltvURL)
 
 	for _, channelNumber := range channelNumbers {
-
 		var channel = m3uChannels[channelNumber]
 
 		var parameter = fmt.Sprintf(`#EXTINF:0 channelID="%s" tvg-chno="%s" tvg-name="%s" tvg-id="%s" tvg-logo="%s" group-title="%s",%s`+"\n", channel.XEPG, channel.XChannelID, channel.XName, channel.XChannelID, imgc.Image.GetURL(channel.TvgLogo), channel.XGroupTitle, channel.XName)
@@ -234,15 +192,11 @@ func buildM3U(groups []string) (m3u string, err error) {
 		if err == nil {
 			m3u = m3u + parameter + stream + "\n"
 		}
-
 	}
 
 	if len(groups) == 0 {
-
 		var filename = System.Folder.Data + "xteve.m3u"
 		err = writeByteToFile(filename, []byte(m3u))
-
 	}
-
 	return
 }

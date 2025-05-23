@@ -8,7 +8,6 @@ import (
 )
 
 func conditionalUpdateChanges() (err error) {
-
 checkVersion:
 	settingsMap, err := loadJSONFileToMap(System.File.Settings)
 	if err != nil || len(settingsMap) == 0 {
@@ -16,7 +15,6 @@ checkVersion:
 	}
 
 	if settingsVersion, ok := settingsMap["version"].(string); ok {
-
 		if settingsVersion > System.DBVersion {
 			showInfo("Settings DB Version:" + settingsVersion)
 			showInfo("System DB Version:" + System.DBVersion)
@@ -31,7 +29,6 @@ checkVersion:
 		}
 
 		switch settingsVersion {
-
 		case "1.4.4":
 			// Set UUID Value in xepg.json
 			err = setValueForUUID()
@@ -50,18 +47,13 @@ checkVersion:
 				if err != nil {
 					return
 				}
-
 				goto checkVersion
-
 			} else {
 				err = errors.New(getErrMsg(1030))
 				return
 			}
-
 		case "2.0.0":
-
 			if oldBuffer, ok := settingsMap["buffer"].(bool); ok {
-
 				var newBuffer string
 				switch oldBuffer {
 				case true:
@@ -78,14 +70,11 @@ checkVersion:
 				if err != nil {
 					return
 				}
-
 				goto checkVersion
-
 			} else {
 				err = errors.New(getErrMsg(1030))
 				return
 			}
-
 		case "2.1.0", "2.1.1":
 			// Database verison <= 2.1.1 has broken XEPG mapping
 
@@ -111,34 +100,26 @@ checkVersion:
 			if err != nil {
 				return
 			}
-
 			goto checkVersion
-
 		case "2.2.0", "2.2.1", "2.2.2", "2.2.3", "2.3.0":
 			// If there are changes to the Database in a later update, continue here
-
 			break
 		}
-
 	} else {
 		// settings.json is too old (older than Version 1.4.4)
 		err = errors.New(getErrMsg(1013))
 	}
-
 	return
 }
 
 func convertToNewFilter(oldFilter []any) (newFilterMap map[int]any) {
-
 	newFilterMap = make(map[int]any)
 
 	switch reflect.TypeOf(oldFilter).Kind() {
-
 	case reflect.Slice:
 		s := reflect.ValueOf(oldFilter)
 
 		for i := range s.Len() {
-
 			var newFilter FilterStruct
 			newFilter.Active = true
 			newFilter.Name = fmt.Sprintf("Custom filter %d", i+1)
@@ -147,37 +128,26 @@ func convertToNewFilter(oldFilter []any) (newFilterMap map[int]any) {
 			newFilter.CaseSensitive = false
 
 			newFilterMap[i] = newFilter
-
 		}
-
 	}
-
 	return
 }
 
 func setValueForUUID() (err error) {
-
 	xepg, _ := loadJSONFileToMap(System.File.XEPG)
 
 	for _, c := range xepg {
-
 		var xepgChannel = c.(map[string]any)
 
 		if uuidKey, ok := xepgChannel["_uuid.key"].(string); ok {
-
 			if value, ok := xepgChannel[uuidKey].(string); ok {
-
 				if len(value) > 0 {
 					xepgChannel["_uuid.value"] = value
 				}
-
 			}
-
 		}
-
 	}
 
 	err = saveMapToJSONFile(System.File.XEPG, xepg)
-
 	return
 }

@@ -74,6 +74,5 @@ func genCertFiles() (err error) {
 	if err != nil {
 		return
 	}
-
 	return
 }

@@ -85,7 +85,6 @@ func setupXMLTVTestGlobals() func() {
 		panic(fmt.Sprintf("Failed to initialize imgcache for tests: %v", err))
 	}
 
-
 	Data = DataStruct{
 		XEPG: struct {
 			Channels  map[string]any
@@ -133,7 +132,6 @@ func setupXMLTVTestGlobals() func() {
 	// So if xepgChannel.XmltvFile = "provider.xml", path is "./testdata/provider.xml"
 	os.WriteFile(path.Join(System.Folder.Data, "provider.xml"), []byte(dummyXMLContent), 0644)
 
-
 	return func() {
 		System = originalSystem
 		Settings = originalSettings
@@ -142,7 +140,6 @@ func setupXMLTVTestGlobals() func() {
 		os.Remove(System.File.XML) // Clean up generated XML file
 	}
 }
-
 
 // --- Tests for createChannelElements ---
 func TestCreateChannelElements(t *testing.T) {
@@ -296,7 +293,6 @@ func TestCreateProgramElements(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// If testing dummy EPG, ensure Settings.XepgReplaceMissingImages is considered.
 			// For this test, it's false by default in testXMLTVSettings.
-
 			programs, err := createProgramElements(tt.xepgChannel)
 
 			if (err != nil) != tt.wantErr {

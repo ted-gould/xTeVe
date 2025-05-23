@@ -39,7 +39,6 @@ var Lock = sync.RWMutex{}
 
 // Init : System Initialization
 func Init() (err error) {
-
 	var debug string
 
 	// System Settings
@@ -189,13 +188,11 @@ func Init() (err error) {
 
 	// Create HTML Files, with dev the local HTML Files are used
 	if System.Dev {
-
 		HTMLInit("webUI", "src", "html"+string(os.PathSeparator), "src"+string(os.PathSeparator)+"webUI.go")
 		err = BuildGoFile()
 		if err != nil {
 			return
 		}
-
 	}
 
 	// Start the DLNA Server
@@ -206,13 +203,11 @@ func Init() (err error) {
 
 	// Load HTML Files
 	loadHTMLMap()
-
 	return
 }
 
 // StartSystem : System is starting up
 func StartSystem(updateProviderFiles bool) (err error) {
-
 	setDeviceID()
 
 	if System.ScanInProgress == 1 {
@@ -227,7 +222,6 @@ func StartSystem(updateProviderFiles bool) (err error) {
 
 	// Update Provider Data
 	if len(Settings.Files.M3U) > 0 && Settings.FilesUpdate || updateProviderFiles {
-
 		err = xTeVeAutoBackup()
 		if err != nil {
 			ShowError(err, 1090)
@@ -239,7 +233,6 @@ func StartSystem(updateProviderFiles bool) (err error) {
 		if Settings.EpgSource == "XEPG" {
 			getProviderData("xmltv", "")
 		}
-
 	}
 
 	err = buildDatabaseDVR()
@@ -249,7 +242,6 @@ func StartSystem(updateProviderFiles bool) (err error) {
 	}
 
 	buildXEPG(false)
-
 	return
 }
 

@@ -23,17 +23,14 @@ var blankMap = make(map[string]any)
 // htmlFolder: HTML Files Folder
 // packageName: Name of the package
 func HTMLInit(name, pkg, folder, file string) {
-
 	htmlFolder = folder
 	goFile = file
 	mapName = name
 	packageName = pkg
-
 }
 
 // BuildGoFile : Creates the GO Document
 func BuildGoFile() error {
-
 	var err = checkHTMLFile(htmlFolder)
 
 	if err != nil {
@@ -49,7 +46,6 @@ func BuildGoFile() error {
 
 	content += "}" + "\n\n"
 	writeStringToFile(goFile, content)
-
 	return nil
 }
 
@@ -60,7 +56,6 @@ func GetHTMLString(base string) string {
 }
 
 func createMapFromFiles(folder string) string {
-
 	var path = getLocalPath(folder)
 
 	err := filepath.Walk(path, readFilesToMap)
@@ -81,22 +76,18 @@ func createMapFromFiles(folder string) string {
 		var newKey = key
 		content += `  ` + mapName + `["` + newKey + `"` + `] = "` + blankMap[key].(string) + `"` + "\n"
 	}
-
 	return content
 }
 
 func readFilesToMap(path string, info os.FileInfo, err error) error {
-
 	if !info.IsDir() {
 		var base64Str = fileToBase64(getLocalPath(path))
 		blankMap[filepath.ToSlash(path)] = base64Str
 	}
-
 	return nil
 }
 
 func fileToBase64(file string) string {
-
 	imgFile, _ := os.Open(file)
 	defer imgFile.Close()
 
@@ -110,17 +101,14 @@ func fileToBase64(file string) string {
 	fReader.Read(buf)
 
 	imgBase64Str := base64.StdEncoding.EncodeToString(buf)
-
 	return imgBase64Str
 }
 
 func getLocalPath(filename string) string {
-
 	path, file := filepath.Split(filename)
 	var newPath = filepath.ToSlash(filepath.Dir(path))
 
 	var newFileName = newPath + "/" + file
-
 	return newFileName
 }
 
@@ -130,18 +118,15 @@ func writeStringToFile(filename, content string) error {
 		checkErr(err)
 		return err
 	}
-
 	return nil
 }
 
 func checkHTMLFile(filename string) error {
-
 	if _, err := os.Stat(getLocalPath(filename)); os.IsNotExist(err) {
 		fmt.Println(filename)
 		checkErr(err)
 		return err
 	}
-
 	return nil
 }
 

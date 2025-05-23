@@ -243,7 +243,6 @@ func TestProcessExistingXEPGChannel(t *testing.T) {
 	var updatedChannel XEPGChannelStruct
 	json.Unmarshal(updatedChannelBytes, &updatedChannel)
 
-
 	if updatedChannel.Name != "New Name" {
 		t.Errorf("Expected Name to be 'New Name', got '%s'", updatedChannel.Name)
 	}
@@ -269,7 +268,6 @@ func TestProcessExistingXEPGChannel(t *testing.T) {
 	initialChannel.TvgLogo = "old_logo.png"      
 	initialChannel.XUpdateChannelName = true 
 	Data.XEPG.Channels[xepgID] = initialChannel
-
 
 	m3uChannel.Name = "NameNoUUID"
 	m3uChannel.GroupTitle = "GroupNoUUID"
@@ -409,7 +407,6 @@ func TestProcessNewXEPGChannel(t *testing.T) {
 		t.Errorf("Expected UUIDValue to be '2005', got '%s'", newChannel.UUIDValue)
 	}
 
-
 	// Test Case 2: PreserveMapping = "false", StartingChannel used
 	m3uChannel2 := M3UChannelStructXEPG{
 		FileM3UID:     "test_m3u_id_2",
@@ -429,7 +426,6 @@ func TestProcessNewXEPGChannel(t *testing.T) {
 		i++
 		if i > 1 { t.Fatal("More than one channel created for test case 2")}
 	}
-
 
 	if newXEPGID2 != "x-ID.0" { 
 		t.Errorf("Expected XEPG ID to be 'x-ID.0', got '%s'", newXEPGID2)
@@ -452,7 +448,6 @@ func TestProcessNewXEPGChannel(t *testing.T) {
 	if newChannel2.XTimeshift != "0" {
 		t.Errorf("Expected XTimeshift to be '0', got '%s'", newChannel2.XTimeshift)
 	}
-
 
 	// Test Case 3: No StartingChannel, PreserveMapping = "false", Settings.MappingFirstChannel should be used
 	m3uChannel3 := M3UChannelStructXEPG{
@@ -480,7 +475,6 @@ func TestProcessNewXEPGChannel(t *testing.T) {
 		t.Errorf("Expected 3000 to be added to allChannelNumbers. Got: %v", allChannelNumbers)
 	}
 }
-
 
 // Ensure all necessary types from the original xepg.go that are used by the
 // new functions or their tests are defined here or properly mocked.
