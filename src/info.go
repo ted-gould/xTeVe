@@ -12,7 +12,6 @@ func ShowSystemVersion() {
 
 // ShowSystemInfo : View System Information
 func ShowSystemInfo() {
-
 	fmt.Print("Creating the information takes a moment...")
 	err := buildDatabaseDVR()
 	if err != nil {
@@ -38,31 +37,24 @@ func ShowSystemInfo() {
 	fmt.Println("IPv4 Addresses:")
 
 	for i, ipv4 := range System.IPAddressesV4 {
-
 		switch count := i; {
-
 		case count < 10:
 			fmt.Printf("  %d.                 %s\n", count, ipv4)
 		case count < 100:
 			fmt.Printf("  %d.                %s\n", count, ipv4)
-
 		}
-
 	}
 
 	println()
 	fmt.Println("IPv6 Addresses:")
 
 	for i, ipv4 := range System.IPAddressesV6 {
-
 		switch count := i; {
-
 		case count < 10:
 			fmt.Printf("  %d.                 %s\n", count, ipv4)
 		case count < 100:
 			fmt.Printf("  %d.                %s\n", count, ipv4)
 		}
-
 	}
 
 	println("---")
@@ -96,5 +88,4 @@ func ShowSystemInfo() {
 	fmt.Println("Settings [Backup]")
 	fmt.Printf("Folder (backup):     %s\n", Settings.BackupPath)
 	fmt.Printf("Backup Keep:         %d\n", Settings.BackupKeep)
-
 }

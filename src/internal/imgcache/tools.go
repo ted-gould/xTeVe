@@ -13,23 +13,19 @@ func strToMD5(str string) string {
 }
 
 func indexOfString(str string, slice []string) int {
-
 	for i, v := range slice {
 		if str == v {
 			return i
 		}
 	}
-
 	return -1
 }
 
 func removeStringFromSlice(str string, slice []string) []string {
-
 	var i = indexOfString(str, slice)
 
 	if i != -1 {
 		slice = slices.Delete(slice, i, i+1)
 	}
-
 	return slice
 }

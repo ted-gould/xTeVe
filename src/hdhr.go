@@ -12,14 +12,11 @@ import (
 )
 
 func makeInteraceFromHDHR(content []byte, playlistName, id string) (channels []any, err error) {
-
 	var hdhrData []any
 
 	err = json.Unmarshal(content, &hdhrData)
 	if err == nil {
-
 		for _, d := range hdhrData {
-
 			var channel = make(map[string]string)
 			var data = d.(map[string]any)
 
@@ -32,16 +29,12 @@ func makeInteraceFromHDHR(content []byte, playlistName, id string) (channels []a
 			channel["_values"] = playlistName + " " + channel["name"]
 
 			channels = append(channels, channel)
-
 		}
-
 	}
-
 	return
 }
 
 func getCapability() (xmlContent []byte, err error) {
-
 	var capability Capability
 	var buffer bytes.Buffer
 
@@ -67,12 +60,10 @@ func getCapability() (xmlContent []byte, err error) {
 	buffer.Write([]byte(xml.Header))
 	buffer.Write([]byte(output))
 	xmlContent = buffer.Bytes()
-
 	return
 }
 
 func getDiscover() (jsonContent []byte, err error) {
-
 	var discover Discover
 
 	discover.BaseURL = System.ServerProtocol.WEB + "://" + System.Domain
@@ -88,12 +79,10 @@ func getDiscover() (jsonContent []byte, err error) {
 	discover.TunerCount = Settings.Tuner
 
 	jsonContent, err = json.MarshalIndent(discover, "", "  ")
-
 	return
 }
 
 func getLineupStatus() (jsonContent []byte, err error) {
-
 	var lineupStatus LineupStatus
 
 	lineupStatus.ScanInProgress = System.ScanInProgress
@@ -102,19 +91,15 @@ func getLineupStatus() (jsonContent []byte, err error) {
 	lineupStatus.SourceList = []string{"Cable"}
 
 	jsonContent, err = json.MarshalIndent(lineupStatus, "", "  ")
-
 	return
 }
 
 func getLineup() (jsonContent []byte, err error) {
-
 	var lineup Lineup
 
 	switch Settings.EpgSource {
-
 	case "PMS":
 		for i, dsa := range Data.Streams.Active {
-
 			var m3uChannel M3UChannelStructXEPG
 
 			err = json.Unmarshal([]byte(mapToJSON(dsa)), &m3uChannel)
@@ -125,19 +110,15 @@ func getLineup() (jsonContent []byte, err error) {
 			var stream LineupStream
 			stream.GuideName = m3uChannel.Name
 			switch len(m3uChannel.UUIDValue) {
-
 			case 0:
 				stream.GuideNumber = fmt.Sprintf("%d", i+1000)
 				guideNumber, err := getGuideNumberPMS(stream.GuideName)
 				if err != nil {
 					ShowError(err, 0)
 				}
-
 				stream.GuideNumber = guideNumber
-
 			default:
 				stream.GuideNumber = m3uChannel.UUIDValue
-
 			}
 
 			stream.URL, err = createStreamingURL("DVR", m3uChannel.FileM3UID, stream.GuideNumber, m3uChannel.Name, m3uChannel.URL)
@@ -146,12 +127,9 @@ func getLineup() (jsonContent []byte, err error) {
 			} else {
 				ShowError(err, 1202)
 			}
-
 		}
-
 	case "XEPG":
 		for _, dxc := range Data.XEPG.Channels {
-
 			var xepgChannel XEPGChannelStruct
 			err = json.Unmarshal([]byte(mapToJSON(dxc)), &xepgChannel)
 			if err != nil {
@@ -169,9 +147,7 @@ func getLineup() (jsonContent []byte, err error) {
 				} else {
 					ShowError(err, 1202)
 				}
-
 			}
-
 		}
 	}
 
@@ -189,14 +165,11 @@ func getLineup() (jsonContent []byte, err error) {
 	Data.Cache.PMS = nil
 
 	saveMapToJSONFile(System.File.URLS, Data.Cache.StreamingURLS)
-
 	return
 }
 
 func getGuideNumberPMS(channelName string) (pmsID string, err error) {
-
 	if len(Data.Cache.PMS) == 0 {
-
 		Data.Cache.PMS = make(map[string]string)
 
 		pms, err := loadJSONFileToMap(System.File.PMS)
@@ -208,15 +181,11 @@ func getGuideNumberPMS(channelName string) (pmsID string, err error) {
 		for key, value := range pms {
 			Data.Cache.PMS[key] = value.(string)
 		}
-
 	}
 
 	var getNewID = func(channelName string) (id string) {
-
 		var i int
-
 	newID:
-
 		var ids []string
 		id = fmt.Sprintf("id-%d", i)
 
@@ -228,21 +197,15 @@ func getGuideNumberPMS(channelName string) (pmsID string, err error) {
 			i++
 			goto newID
 		}
-
 		return
 	}
 
 	if value, ok := Data.Cache.PMS[channelName]; ok {
-
 		pmsID = value
-
 	} else {
-
 		pmsID = getNewID(channelName)
 		Data.Cache.PMS[channelName] = pmsID
 		saveMapToJSONFile(System.File.PMS, Data.Cache.PMS)
-
 	}
-
 	return
 }

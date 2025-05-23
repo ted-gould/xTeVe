@@ -86,7 +86,6 @@ func xTeVeAutoBackup() (err error) {
 }
 
 func xteveBackup() (archive string, err error) {
-
 	err = checkFolder(System.Folder.Temp)
 	if err != nil {
 		return
@@ -116,7 +115,6 @@ func xteveBackup() (archive string, err error) {
 }
 
 func xteveRestore(archive string) (newWebURL string, err error) {
-
 	var newPort, oldPort, backupVersion, tmpRestore string
 
 	tmpRestore = System.Folder.Temp + "restore" + string(os.PathSeparator)
@@ -169,7 +167,6 @@ func xteveRestore(archive string) (newWebURL string, err error) {
 	oldPort = Settings.Port
 
 	if newPort == oldPort {
-
 		if err != nil {
 			ShowError(err, 0)
 		}
@@ -198,7 +195,6 @@ func xteveRestore(archive string) (newWebURL string, err error) {
 }
 
 func xteveRestoreFromWeb(input string) (newWebURL string, err error) {
-
 	// Convert base64 JSON string to base64
 	b64data := input[strings.IndexByte(input, ',')+1:]
 
@@ -223,7 +219,6 @@ func xteveRestoreFromWeb(input string) (newWebURL string, err error) {
 
 // XteveRestoreFromCLI : Recovery from the Command Line
 func XteveRestoreFromCLI(archive string) (err error) {
-
 	var confirm string
 
 	println()
@@ -237,21 +232,17 @@ func XteveRestoreFromCLI(archive string) (err error) {
 	fmt.Scanln(&confirm)
 
 	switch strings.ToLower(confirm) {
-
 	case "yes":
 		break
 
 	case "no":
 		return
-
 	default:
 		fmt.Println("Invalid input")
 		return
-
 	}
 
 	if len(System.Folder.Config) > 0 {
-
 		err = checkFilePermission(System.Folder.Config)
 		if err != nil {
 			return
@@ -263,7 +254,6 @@ func XteveRestoreFromCLI(archive string) (err error) {
 		}
 
 		showHighlight(fmt.Sprintf("Restor:Backup was successfully restored. %s can now be started normally", System.Name))
-
 	}
 	return
 }

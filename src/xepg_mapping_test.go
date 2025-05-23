@@ -95,7 +95,6 @@ func setupMappingTestGlobals() func() {
 		},
 	}
 
-
 	os.MkdirAll(System.Folder.Data, os.ModePerm)
 	os.Remove(System.File.XEPG)
 
@@ -106,7 +105,6 @@ func setupMappingTestGlobals() func() {
 		os.Remove(System.File.XEPG)
 	}
 }
-
 
 func TestPerformAutomaticChannelMapping(t *testing.T) {
 	teardown := setupMappingTestGlobals()
@@ -271,7 +269,6 @@ func TestPerformAutomaticChannelMapping(t *testing.T) {
 		})
 	}
 }
-
 
 func TestVerifyExistingChannelMappings(t *testing.T) {
 	teardown := setupMappingTestGlobals()

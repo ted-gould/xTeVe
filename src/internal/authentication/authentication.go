@@ -154,7 +154,6 @@ func Init(databasePath string, validity int) (err error) {
 
 // CreateDefaultUser = created efault user
 func CreateDefaultUser(username, password string) (err error) {
-
 	err = checkInit()
 	if err != nil {
 		return
@@ -170,13 +169,11 @@ func CreateDefaultUser(username, password string) (err error) {
 	var defaults = defaultsForNewUser(username, password)
 	users[defaults["_id"].(string)] = defaults
 	saveDatabase(data)
-
 	return
 }
 
 // CreateNewUser : create new user
 func CreateNewUser(username, password string) (userID string, err error) {
-
 	err = checkInit()
 	if err != nil {
 		return
@@ -189,7 +186,6 @@ func CreateNewUser(username, password string) (userID string, err error) {
 		if SHA256(username, salt) == loginUsername {
 			err = createError(020)
 		}
-
 		return
 	}
 
@@ -206,13 +202,11 @@ func CreateNewUser(username, password string) (userID string, err error) {
 	users[userID] = defaults
 
 	saveDatabase(data)
-
 	return
 }
 
 // UserAuthentication : user authentication
 func UserAuthentication(username, password string) (token string, err error) {
-
 	err = checkInit()
 	if err != nil {
 		return
@@ -230,7 +224,6 @@ func UserAuthentication(username, password string) (token string, err error) {
 				err = nil
 			}
 		}
-
 		return
 	}
 
@@ -242,13 +235,11 @@ func UserAuthentication(username, password string) (token string, err error) {
 			return
 		}
 	}
-
 	return
 }
 
 // CheckTheValidityOfTheToken : check token
 func CheckTheValidityOfTheToken(token string) (newToken string, err error) {
-
 	err = checkInit()
 	if err != nil {
 		return
@@ -263,21 +254,16 @@ func CheckTheValidityOfTheToken(token string) (newToken string, err error) {
 		if expires.Sub(time.Now().Local()) < 0 {
 			return
 		}
-
 		newToken = setToken(userID, token)
-
 		err = nil
-
 	} else {
 		return
 	}
-
 	return
 }
 
 // GetUserID : get user ID
 func GetUserID(token string) (userID string, err error) {
-
 	err = checkInit()
 	if err != nil {
 		return
@@ -292,16 +278,13 @@ func GetUserID(token string) (userID string, err error) {
 		if expires.Sub(time.Now().Local()) < 0 {
 			return
 		}
-
 		err = nil
 	}
-
 	return
 }
 
 // WriteUserData : save user date
 func WriteUserData(userID string, userData map[string]any) (err error) {
-
 	err = checkInit()
 	if err != nil {
 		return
@@ -310,20 +293,16 @@ func WriteUserData(userID string, userData map[string]any) (err error) {
 	err = createError(030)
 
 	if v, ok := data["users"].(map[string]any)[userID].(map[string]any); ok {
-
 		v["data"] = userData
 		err = saveDatabase(data)
-
 	} else {
 		return
 	}
-
 	return
 }
 
 // ReadUserData : load user date
 func ReadUserData(userID string) (userData map[string]any, err error) {
-
 	err = checkInit()
 	if err != nil {
 		return
@@ -334,16 +313,13 @@ func ReadUserData(userID string) (userData map[string]any, err error) {
 	if v, ok := data["users"].(map[string]any)[userID].(map[string]any); ok {
 		userData = v["data"].(map[string]any)
 		err = nil
-
 		return
 	}
-
 	return
 }
 
 // RemoveUser : remove user
 func RemoveUser(userID string) (err error) {
-
 	err = checkInit()
 	if err != nil {
 		return
@@ -352,19 +328,15 @@ func RemoveUser(userID string) (err error) {
 	err = createError(032)
 
 	if _, ok := data["users"].(map[string]any)[userID]; ok {
-
 		delete(data["users"].(map[string]any), userID)
 		err = saveDatabase(data)
-
 		return
 	}
-
 	return
 }
 
 // SetDefaultUserData : set default user data
 func SetDefaultUserData(defaults map[string]any) (err error) {
-
 	allUserData, err := GetAllUserData()
 
 	for _, d := range allUserData {
@@ -403,16 +375,13 @@ func ChangeCredentials(userID, username, password string) (err error) {
 		if len(password) > 0 {
 			userData.(map[string]any)["_password"] = SHA256(password, salt)
 		}
-
 		err = saveDatabase(data)
 	}
-
 	return
 }
 
 // GetAllUserData : get all user data
 func GetAllUserData() (allUserData map[string]any, err error) {
-
 	err = checkInit()
 	if err != nil {
 		return
@@ -453,12 +422,10 @@ func checkInit() (err error) {
 	if !initAuthentication {
 		err = createError(000)
 	}
-
 	return
 }
 
 func saveDatabase(tmpMap any) (err error) {
-
 	jsonString, err := json.MarshalIndent(tmpMap, "", "  ")
 
 	if err != nil {
@@ -469,7 +436,6 @@ func saveDatabase(tmpMap any) (err error) {
 	if err != nil {
 		return
 	}
-
 	return
 }
 
@@ -483,7 +449,6 @@ func loadDatabase() (err error) {
 	if err != nil {
 		return
 	}
-
 	return
 }
 
@@ -553,13 +518,11 @@ func defaultsForNewUser(username, password string) map[string]any {
 	defaults["_id"] = "id-" + randomID(idLength)
 	//defaults["_one.time.token"] = randomString(tokenLength)
 	defaults["data"] = make(map[string]any)
-
 	return defaults
 }
 
 func setToken(id, oldToken string) (newToken string) {
 	delete(tokens, oldToken)
-
 loopToken:
 	newToken = randomString(tokenLength)
 	if _, ok := tokens[newToken]; ok {
@@ -571,7 +534,6 @@ loopToken:
 	tmp["expires"] = time.Now().Local().Add(time.Minute * time.Duration(tokenValidity))
 
 	tokens[newToken] = tmp
-
 	return
 }
 

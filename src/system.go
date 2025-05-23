@@ -11,9 +11,7 @@ import (
 
 // Show Developer Information
 func showDevInfo() {
-
 	if System.Dev {
-
 		fmt.Print("\033[31m")
 		fmt.Println("* * * * * D E V   M O D E * * * * *")
 		fmt.Println("Version: ", System.Version)
@@ -21,37 +19,27 @@ func showDevInfo() {
 		fmt.Println("* * * * * * * * * * * * * * * * * *")
 		fmt.Print("\033[0m")
 		fmt.Println()
-
 	}
-
 }
 
 // Create all System Folders
 func createSystemFolders() (err error) {
-
 	e := reflect.ValueOf(&System.Folder).Elem()
 
 	for i := range e.NumField() {
-
 		var folder = e.Field(i).Interface().(string)
-
 		err = checkFolder(folder)
-
 		if err != nil {
 			return
 		}
-
 	}
-
 	return
 }
 
 // Create all System Files
 func createSystemFiles() (err error) {
-
 	var debug string
 	for _, file := range SystemFiles {
-
 		var filename = getPlatformFile(System.Folder.Config + file)
 
 		err = checkFile(filename)
@@ -61,14 +49,11 @@ func createSystemFiles() (err error) {
 			if err != nil {
 				return
 			}
-
 			debug = fmt.Sprintf("Create File:%s", filename)
 			showDebug(debug, 1)
-
 		}
 
 		switch file {
-
 		case "authentication.json":
 			System.File.Authentication = filename
 		case "pms.json":
@@ -79,17 +64,13 @@ func createSystemFiles() (err error) {
 			System.File.XEPG = filename
 		case "urls.json":
 			System.File.URLS = filename
-
 		}
-
 	}
-
 	return
 }
 
 // Load Settings and set Default Values (xTeVe)
 func loadSettings() (settings SettingsStruct, err error) {
-
 	settingsMap, err := loadJSONFileToMap(System.File.Settings)
 	if err != nil {
 		return
@@ -190,13 +171,11 @@ func loadSettings() (settings SettingsStruct, err error) {
 	if len(Settings.VLCPath) == 0 && Settings.Buffer == "vlc" {
 		showWarning(2021)
 	}
-
 	return
 }
 
 // Save Settings (xTeVe)
 func saveSettings(settings SettingsStruct) (err error) {
-
 	if settings.BackupKeep == 0 {
 		settings.BackupKeep = 10
 	}
@@ -223,13 +202,11 @@ func saveSettings(settings SettingsStruct) (err error) {
 	Settings = settings
 
 	setDeviceID()
-
 	return
 }
 
 // Enable access via the Domain
 func setGlobalDomain(domain string) {
-
 	System.Domain = domain
 
 	if Settings.TLSMode {
@@ -265,7 +242,6 @@ func setGlobalDomain(domain string) {
 		System.Addresses.M3U = getErrMsg(2106)
 		System.Addresses.XML = getErrMsg(2106)
 	}
-
 }
 
 // Generate UUID
@@ -276,22 +252,18 @@ func createUUID() (uuid string) {
 
 // Generate Unique Device ID for Plex
 func setDeviceID() {
-
 	var id = Settings.UUID
 
 	switch Settings.Tuner {
 	case 1:
 		System.DeviceID = id
-
 	default:
 		System.DeviceID = fmt.Sprintf("%s:%d", id, Settings.Tuner)
 	}
-
 }
 
 // Convert Provider Streaming URL to xTeVe Streaming URL
 func createStreamingURL(streamingType, playlistID, channelNumber, channelName, url string) (streamingURL string, err error) {
-
 	var streamInfo StreamInfo
 	var serverProtocol string
 
@@ -302,11 +274,8 @@ func createStreamingURL(streamingType, playlistID, channelNumber, channelName, u
 	var urlID = getMD5(fmt.Sprintf("%s-%s", playlistID, url))
 
 	if s, ok := Data.Cache.StreamingURLS[urlID]; ok {
-
 		streamInfo = s
-
 	} else {
-
 		streamInfo.URL = url
 		streamInfo.Name = channelName
 		streamInfo.PlaylistID = playlistID
@@ -314,28 +283,21 @@ func createStreamingURL(streamingType, playlistID, channelNumber, channelName, u
 		streamInfo.URLid = urlID
 
 		Data.Cache.StreamingURLS[urlID] = streamInfo
-
 	}
 
 	switch streamingType {
-
 	case "DVR":
 		serverProtocol = System.ServerProtocol.DVR
-
 	case "M3U":
 		serverProtocol = System.ServerProtocol.M3U
-
 	}
 
 	streamingURL = fmt.Sprintf("%s://%s/stream/%s", serverProtocol, System.Domain, streamInfo.URLid)
-
 	return
 }
 
 func getStreamInfo(urlID string) (streamInfo StreamInfo, err error) {
-
 	if len(Data.Cache.StreamingURLS) == 0 {
-
 		tmp, err := loadJSONFileToMap(System.File.URLS)
 		if err != nil {
 			return streamInfo, err
@@ -345,7 +307,6 @@ func getStreamInfo(urlID string) (streamInfo StreamInfo, err error) {
 		if err != nil {
 			return streamInfo, err
 		}
-
 	}
 
 	if s, ok := Data.Cache.StreamingURLS[urlID]; ok {
@@ -354,6 +315,5 @@ func getStreamInfo(urlID string) (streamInfo StreamInfo, err error) {
 	} else {
 		err = errors.New("streaming error")
 	}
-
 	return
 }

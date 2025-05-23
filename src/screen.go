@@ -12,7 +12,6 @@ import (
 )
 
 func showInfo(str string) {
-
 	if System.Flag.Info {
 		return
 	}
@@ -23,7 +22,6 @@ func showInfo(str string) {
 	var space string
 
 	if len(msg) == 2 {
-
 		for i := length; i < max; i++ {
 			space = space + " "
 		}
@@ -37,13 +35,10 @@ func showInfo(str string) {
 		logMsg = strings.Replace(logMsg, " ", "&nbsp;", -1)
 		WebScreenLog.Log = append(WebScreenLog.Log, time.Now().Format("2006-01-02 15:04:05")+" "+logMsg)
 		logCleanUp()
-
 	}
-
 }
 
 func showDebug(str string, level int) {
-
 	if System.Flag.Debug < level {
 		return
 	}
@@ -55,7 +50,6 @@ func showDebug(str string, level int) {
 	var mutex = sync.RWMutex{}
 
 	if len(msg) == 2 {
-
 		for i := length; i < max; i++ {
 			space = space + " "
 		}
@@ -70,13 +64,10 @@ func showDebug(str string, level int) {
 		WebScreenLog.Log = append(WebScreenLog.Log, time.Now().Format("2006-01-02 15:04:05")+" "+logMsg)
 		logCleanUp()
 		mutex.Unlock()
-
 	}
-
 }
 
 func showHighlight(str string) {
-
 	var max = 23
 	var msg = strings.SplitN(str, ":", 2)
 	var length = len(msg[0])
@@ -86,7 +77,6 @@ func showHighlight(str string) {
 	notification.Type = "info"
 
 	if len(msg) == 2 {
-
 		for i := length; i < max; i++ {
 			space = space + " "
 		}
@@ -96,18 +86,15 @@ func showHighlight(str string) {
 		var logMsg = fmt.Sprintf("[%s] %s%s", System.Name, msg[0], msg[1])
 
 		printLogOnScreen(logMsg, "highlight")
-
 	}
 
 	notification.Type = "info"
 	notification.Message = msg[1]
 
 	addNotification(notification)
-
 }
 
 func showWarning(errCode int) {
-
 	var errMsg = getErrMsg(errCode)
 	var logMsg = fmt.Sprintf("[%s] [WARNING] %s", System.Name, errMsg)
 	var mutex = sync.RWMutex{}
@@ -118,12 +105,10 @@ func showWarning(errCode int) {
 	WebScreenLog.Log = append(WebScreenLog.Log, time.Now().Format("2006-01-02 15:04:05")+" "+logMsg)
 	WebScreenLog.Warnings++
 	mutex.Unlock()
-
 }
 
 // ShowError : Shows the Error Messages in the Console
 func ShowError(err error, errCode int) {
-
 	var mutex = sync.RWMutex{}
 
 	var errMsg = getErrMsg(errCode)
@@ -135,48 +120,35 @@ func ShowError(err error, errCode int) {
 	WebScreenLog.Log = append(WebScreenLog.Log, time.Now().Format("2006-01-02 15:04:05")+" "+logMsg)
 	WebScreenLog.Errors++
 	mutex.Unlock()
-
 }
 
 func printLogOnScreen(logMsg string, logType string) {
-
 	var color string
 
 	switch logType {
-
 	case "info":
 		color = "\033[0m"
-
 	case "debug":
 		color = "\033[35m"
-
 	case "highlight":
 		color = "\033[32m"
-
 	case "warning":
 		color = "\033[33m"
-
 	case "error":
 		color = "\033[31m"
-
 	}
 
 	switch runtime.GOOS {
-
 	case "windows":
 		log.Println(logMsg)
-
 	default:
 		fmt.Print(color)
 		log.Println(logMsg)
 		fmt.Print("\033[0m")
-
 	}
-
 }
 
 func logCleanUp() {
-
 	var logEntriesRAM = Settings.LogEntriesRAM
 	var logs = WebScreenLog.Log
 
@@ -184,17 +156,14 @@ func logCleanUp() {
 	WebScreenLog.Errors = 0
 
 	if len(logs) > logEntriesRAM {
-
 		var tmp = make([]string, 0)
 		for i := len(logs) - logEntriesRAM; i < logEntriesRAM; i++ {
 			tmp = append(tmp, logs[i])
 		}
-
 		logs = tmp
 	}
 
 	for _, log := range logs {
-
 		if strings.Contains(log, "WARNING") {
 			WebScreenLog.Warnings++
 		}
@@ -202,18 +171,13 @@ func logCleanUp() {
 		if strings.Contains(log, "ERROR") {
 			WebScreenLog.Errors++
 		}
-
 	}
-
 	WebScreenLog.Log = logs
-
 }
 
 // Return Error Message from numeric Error Codes
 func getErrMsg(errCode int) (errMsg string) {
-
 	switch errCode {
-
 	case 0:
 		return
 
@@ -250,7 +214,6 @@ func getErrMsg(errCode int) (errMsg string) {
 		errMsg = "Web server could not be started in TLS mode, fallback to default."
 	case 1018:
 		errMsg = "Failed to compile channel name update regex"
-
 	case 1020:
 		errMsg = "Data could not be saved, invalid keyword"
 
@@ -263,7 +226,6 @@ func getErrMsg(errCode int) (errMsg string) {
 	// M3U Parser
 	case 1050:
 		errMsg = "Invalid duration specification in the M3U8 playlist."
-
 	case 1060:
 		errMsg = "Invalid characters found in the tvg parameters, streams with invalid parameters were skipped."
 
@@ -326,7 +288,6 @@ func getErrMsg(errCode int) (errMsg string) {
 		errMsg = "VLC binary was not found. Check the VLC path binary in the xTeVe settings."
 	case 2022:
 		errMsg = "Loaded database had broken XEPG mapping (version <= 2.1.1). It was cleared."
-
 	case 2099:
 		errMsg = "Updates have been disabled by the developer"
 
@@ -335,10 +296,8 @@ func getErrMsg(errCode int) (errMsg string) {
 		errMsg = fmt.Sprintf("The number of tuners has changed, you have to delete " + System.Name + " in Plex / Emby HDHR and set it up again.")
 	case 2106:
 		errMsg = "This function is only available with XEPG as EPG source"
-
 	case 2110:
 		errMsg = "Don't run this as Root!"
-
 	case 2300:
 		errMsg = "No channel logo found in the XMLTV or M3U file."
 	case 2301:
@@ -399,16 +358,13 @@ func getErrMsg(errCode int) (errMsg string) {
 	// Certificates
 	case 7000:
 		errMsg = "Can not generate a certificate"
-
 	default:
 		errMsg = fmt.Sprintf("Unknown error / warning (%d)", errCode)
 	}
-
 	return errMsg
 }
 
 func sendAlert(text string) {
-
 	select {
 	case webAlerts <- text:
 		//
@@ -419,7 +375,6 @@ func sendAlert(text string) {
 }
 
 func addNotification(notification Notification) (err error) {
-
 	var i int
 	var t = time.Now().UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))
 	notification.Time = strconv.FormatInt(t, 10)
@@ -436,14 +391,10 @@ func addNotification(notification Notification) (err error) {
 	System.Notification[notification.Time] = notification
 
 	for key := range System.Notification {
-
 		if i < len(System.Notification)-10 {
 			delete(System.Notification, key)
 		}
-
 		i++
-
 	}
-
 	return
 }
