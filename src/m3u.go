@@ -14,6 +14,12 @@ import (
 	"github.com/samber/lo"
 )
 
+var (
+	// Optimizations: Precompile regexps used in FilterThisStream
+	regexpYES = regexp.MustCompile(`[{]+[^.]+[}]`)
+	regexpNO  = regexp.MustCompile(`!+[{]+[^.]+[}]`)
+)
+
 // Parse Playlists
 func parsePlaylist(filename, fileType string) (channels []any, err error) {
 	content, err := readByteFromFile(filename)
@@ -32,95 +38,107 @@ func parsePlaylist(filename, fileType string) (channels []any, err error) {
 }
 
 // Filter Streams
-func filterThisStream(s any) (status bool) {
-	status = false
-	var stream = s.(map[string]string)
-	var regexpYES = `[{]+[^.]+[}]`
-	var regexpNO = `!+[{]+[^.]+[}]`
+// FilterThisStream checks if a stream should be filtered based on global filter rules.
+// It is used by benchmarks and potentially other parts of the application.
+func FilterThisStream(s any) (status bool) {
+	status = false // Default to not matching/not being filtered for positive inclusion
+	stream, ok := s.(map[string]string)
+	if !ok {
+		// This should ideally not happen if s is always map[string]string
+		return false
+	}
+
+	// Cache raw stream values. Normalize _values once.
+	rawStreamName, streamNameOK := stream["name"]
+	rawStreamGroup, streamGroupOK := stream["group-title"]
+	rawStreamValues, streamValuesOK := stream["_values"]
+	if streamValuesOK {
+		rawStreamValues = strings.Replace(rawStreamValues, "\r", "", -1)
+	}
 
 	for _, filter := range Data.Filter {
 		if filter.Rule == "" {
 			continue
 		}
 
-		var group, name, search string
+		var baseFilterRule = filter.Rule // The rule from the filter struct
 		var exclude, include string
 		var match = false
+		var searchTarget string // This will hold the stream value to search within (e.g., name or _values)
 
-		var streamValues = strings.Replace(stream["_values"], "\r", "", -1)
+		// Determine effective stream and rule values based on case sensitivity
+		var effectiveStreamName = rawStreamName
+		var effectiveStreamGroup = rawStreamGroup
+		var effectiveStreamValues = rawStreamValues
+		var effectiveMainFilterRulePart = baseFilterRule // This will be the main part of rule after ex/include are stripped
 
-		if v, ok := stream["group-title"]; ok {
-			group = v
+		// Extract exclude/include specifiers first from the original baseFilterRule
+		// These specifiers might contain mixed case if the filter is case-sensitive
+		valNO := regexpNO.FindStringSubmatch(baseFilterRule)
+		if len(valNO) == 1 {
+			exclude = valNO[0][2 : len(valNO[0])-1] // Store with original casing
+			baseFilterRule = strings.Replace(baseFilterRule, " "+valNO[0], "", -1)
+			baseFilterRule = strings.Replace(baseFilterRule, valNO[0], "", -1)
 		}
 
-		if v, ok := stream["name"]; ok {
-			name = v
+		valYES := regexpYES.FindStringSubmatch(baseFilterRule)
+		if len(valYES) == 1 {
+			include = valYES[0][1 : len(valYES[0])-1] // Store with original casing
+			baseFilterRule = strings.Replace(baseFilterRule, " "+valYES[0], "", -1)
+			baseFilterRule = strings.Replace(baseFilterRule, valYES[0], "", -1)
+		}
+		effectiveMainFilterRulePart = baseFilterRule // This is now the main rule part
+
+		// Apply case insensitivity if needed
+		if !filter.CaseSensitive {
+			effectiveMainFilterRulePart = strings.ToLower(baseFilterRule)
+			exclude = strings.ToLower(exclude) // Lowercase exclude if filter is case-insensitive
+			include = strings.ToLower(include) // Lowercase include if filter is case-insensitive
+
+			if streamNameOK {
+				effectiveStreamName = strings.ToLower(rawStreamName)
+			}
+			if streamGroupOK {
+				effectiveStreamGroup = strings.ToLower(rawStreamGroup)
+			}
+			if streamValuesOK {
+				effectiveStreamValues = strings.ToLower(rawStreamValues)
+			}
 		}
 
-		// Unwanted Streams !{DEU}
-		r := regexp.MustCompile(regexpNO)
-		val := r.FindStringSubmatch(filter.Rule)
-
-		if len(val) == 1 {
-			exclude = val[0][2 : len(val[0])-1]
-			filter.Rule = strings.Replace(filter.Rule, " "+val[0], "", -1)
-			filter.Rule = strings.Replace(filter.Rule, val[0], "", -1)
-		}
-
-		// Required Streams {DEU}
-		r = regexp.MustCompile(regexpYES)
-		val = r.FindStringSubmatch(filter.Rule)
-
-		if len(val) == 1 {
-			include = val[0][1 : len(val[0])-1]
-			filter.Rule = strings.Replace(filter.Rule, " "+val[0], "", -1)
-			filter.Rule = strings.Replace(filter.Rule, val[0], "", -1)
-		}
-
-		switch filter.CaseSensitive {
-		case false:
-			streamValues = strings.ToLower(streamValues)
-			filter.Rule = strings.ToLower(filter.Rule)
-			exclude = strings.ToLower(exclude)
-			include = strings.ToLower(include)
-			group = strings.ToLower(group)
-			name = strings.ToLower(name)
-		}
-
+		// Perform the match based on filter type
 		switch filter.Type {
 		case "group-title":
-			search = name
-
-			if group == filter.Rule {
+			searchTarget = effectiveStreamName // For group-title, conditions check against stream name
+			if streamGroupOK && effectiveStreamGroup == effectiveMainFilterRulePart {
 				match = true
 				stream["_preserve-mapping"] = strconv.FormatBool(filter.PreserveMapping)
 				stream["_starting-channel"] = filter.StartingChannel
 			}
 		case "custom-filter":
-			search = streamValues
-			if strings.Contains(search, filter.Rule) {
+			searchTarget = effectiveStreamValues // For custom-filter, conditions check against stream values
+			if streamValuesOK && strings.Contains(effectiveStreamValues, effectiveMainFilterRulePart) {
 				match = true
 			}
 		}
 
 		if match {
+			// If matched, check exclude/include conditions
+			// `searchTarget` and `exclude`/`include` are already correctly cased
 			if len(exclude) > 0 {
-				var status = checkConditions(search, exclude, "exclude")
-				if !status {
-					return false
+				if !checkConditions(searchTarget, exclude, "exclude") {
+					return false // Fails exclude condition
 				}
 			}
-
 			if len(include) > 0 {
-				var status = checkConditions(search, include, "include")
-				if !status {
-					return false
+				if !checkConditions(searchTarget, include, "include") {
+					return false // Fails include condition
 				}
 			}
-			return true
+			return true // Matches filter and all its conditions
 		}
 	}
-	return false
+	return false // No filter matched
 }
 
 // Conditions for the Filter

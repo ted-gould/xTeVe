@@ -1,0 +1,11 @@
+#EXTM3U
+#EXTINF:-1 tvg-id="id.1" tvg-name="Channel Name 1" tvg-logo="http://logo.example.com/1.png" group-title="Group Title 1",Channel Name 1
+http://stream.example.com/stream/1
+#EXTINF:-1 tvg-id="id.2" tvg-name="Channel Name 2" tvg-logo="http://logo.example.com/2.png" group-title="Group Title 2",Channel Name 2
+http://stream.example.com/stream/2
+#EXTINF:-1 tvg-id="id.3" tvg-name="Channel Name 3" tvg-logo="http://logo.example.com/3.png" group-title="Group Title 3",Channel Name 3
+http://stream.example.com/stream/3
+#EXTINF:-1 tvg-id="id.4" tvg-name="Channel Name 4" tvg-logo="http://logo.example.com/4.png" group-title="Group Title 4",Channel Name 4
+http://stream.example.com/stream/4
+#EXTINF:-1 tvg-id="id.5" tvg-name="Channel Name 5" tvg-logo="http://logo.example.com/5.png" group-title="Group Title 5",Channel Name 5
+http://stream.example.com/stream/5
