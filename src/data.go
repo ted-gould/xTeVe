@@ -741,7 +741,7 @@ func buildDatabaseDVR() (err error) {
 
 				// New Filter from Version 1.3.0
 				var preview string
-				var status = filterThisStream(stream)
+				var status = FilterThisStream(stream) // Corrected: Call exported function
 
 				if name, ok := s["name"]; ok {
 					var group string

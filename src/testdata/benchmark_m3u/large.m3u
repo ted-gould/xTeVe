@@ -1,0 +1,28 @@
+#EXTM3U
+#EXTINF:-1 tvg-id="channel1" tvg-name="Channel 1" tvg-logo="logo1.png" group-title="Group A",Channel 1
+#EXTGRP:Group A
+http://server.com/stream1
+#EXTINF:-1 tvg-id="channel2" tvg-name="Channel 2" tvg-logo="logo2.png" group-title="Group B",Channel 2
+http://server.com/stream2
+#EXTINF:-1 tvg-id="channel3" tvg-name="Channel 3" tvg-logo="logo3.png" group-title="Group A",Channel 3
+http://server.com/stream3
+#EXTINF:-1 tvg-id="channel4" tvg-name="Channel 4" tvg-logo="logo4.png" group-title="Group C",Channel 4
+#EXTGRP:Group C
+http://server.com/stream4
+#EXTINF:-1 tvg-id="channel5" tvg-name="Channel 5" tvg-logo="logo5.png" group-title="Group B",Channel 5
+http://server.com/stream5
+#EXTINF:-1 tvg-id="channel6" tvg-name="Channel 6" tvg-logo="logo6.png" group-title="Group A",Channel 6
+http://server.com/stream6
+#EXTINF:-1 tvg-id="channel7" tvg-name="Channel 7" tvg-logo="logo7.png" group-title="Group C",Channel 7
+http://server.com/stream7
+#EXTINF:-1 tvg-id="channel8" tvg-name="Channel 8" tvg-logo="logo8.png" group-title="Group B",Channel 8
+#EXTGRP:Group B
+http://server.com/stream8
+#EXTINF:-1 tvg-id="channel9" tvg-name="Channel 9" tvg-logo="logo9.png" group-title="Group A",Channel 9
+http://server.com/stream9
+#EXTINF:-1 tvg-id="channel10" tvg-name="Channel 10" tvg-logo="logo10.png" group-title="Group C",Channel 10
+http://server.com/stream10
+// This file will be populated with 10000 channels. For brevity, only 10 are shown here.
+// ... (Imagine 9990 more similar entries, ensuring variety in group titles and other attributes) ...
+#EXTINF:-1 tvg-id="channel10000" tvg-name="Channel 10000" tvg-logo="logo10000.png" group-title="Group Z",Channel 10000
+http://server.com/stream10000

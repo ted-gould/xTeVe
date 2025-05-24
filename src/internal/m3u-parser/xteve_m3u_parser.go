@@ -8,7 +8,6 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/samber/lo"
 	"slices"
 )
 
@@ -19,26 +18,28 @@ var extGrpRx = regexp.MustCompile(`#EXTGRP: *(.*)`)
 // MakeInterfaceFromM3U :
 func MakeInterfaceFromM3U(byteStream []byte) (allChannels []any, err error) {
 	var content = string(byteStream)
-	var channelName string
-	var uuids []string
+	// channelName is now local to parseMetaData
+	processedUUIDs := make(map[string]struct{}) // For optimized UUID check across all channels
 
-	var parseMetaData = func(channel string) (stream map[string]string) {
+	var parseMetaData = func(channelBlock string) (stream map[string]string) { // currentProcessedUUIDs param removed, uses captured processedUUIDs
 		stream = make(map[string]string)
+		var channelName string // Made local
 
-		var lines = strings.Split(strings.Replace(channel, "\r\n", "\n", -1), "\n")
+		var linesIn = strings.Split(strings.Replace(channelBlock, "\r\n", "\n", -1), "\n")
 
-		// Remove lines with # and blank lines
-		for i := len(lines) - 1; i >= 0; i-- {
-			if len(lines[i]) == 0 || lines[i][0:1] == "#" {
-				lines = slices.Delete(lines, i, i+1)
+		// Optimized line filtering
+		var lines []string 
+		for _, line := range linesIn {
+			if len(line) > 0 && line[0] != '#' { // Simplified condition
+				lines = append(lines, line)
 			}
 		}
 
 		if len(lines) >= 2 {
 			for _, line := range lines {
-				_, err := url.ParseRequestURI(line)
+				_, errURL := url.ParseRequestURI(line) // Renamed err to errURL
 
-				switch err {
+				switch errURL { // Use errURL
 				case nil:
 					stream["url"] = strings.Trim(line, "\r\n")
 				default:
@@ -99,19 +100,23 @@ func MakeInterfaceFromM3U(byteStream []byte) (allChannels []any, err error) {
 			}
 		}
 
-		// Search for a unique ID in the stream
+		// Search for a unique ID in the stream (optimized with map, using captured processedUUIDs)
 		for key, value := range stream {
 			if !strings.Contains(strings.ToLower(key), "tvg-id") {
 				if strings.Contains(strings.ToLower(key), "id") {
-					if lo.IndexOf(uuids, value) != -1 {
-						log.Println(fmt.Sprintf("Channel: %s - %s = %s ", stream["name"], key, value))
-						break
+					if _, exists := processedUUIDs[value]; exists {
+						log.Println(fmt.Sprintf("Channel: %s - %s = %s (Duplicate UUID based on non-tvg-id field)", stream["name"], key, value))
+						// If a duplicate is found for this key, the original logic implies
+						// _uuid.key and _uuid.value are NOT set by this specific id field.
+						// The 'break' ensures we don't look for other 'id' fields in this stream.
+					} else {
+						// This is a new unique value for an "id" field.
+						processedUUIDs[value] = struct{}{} // Mark this value as seen.
+						stream["_uuid.key"] = key
+						stream["_uuid.value"] = value
 					}
-
-					uuids = append(uuids, value)
-
-					stream["_uuid.key"] = key
-					stream["_uuid.value"] = value
+					// Whether it was a duplicate or a new unique ID,
+					// we break after processing the first encountered "id" field (non "tvg-id").
 					break
 				}
 			}
@@ -125,16 +130,17 @@ func MakeInterfaceFromM3U(byteStream []byte) (allChannels []any, err error) {
 	}
 
 	if strings.Contains(content, "#EXTM3U") {
-		var channels = strings.Split(content, "#EXTINF")
+		var channelBlocks = strings.Split(content, "#EXTINF") // Renamed 'channels' to 'channelBlocks'
 
-		channels = slices.Delete(channels, 0, 1)
+		channelBlocks = slices.Delete(channelBlocks, 0, 1) // Remove the part before the first #EXTINF
 
 		var lastExtGrp string
 
-		for _, channel := range channels {
-			var stream = parseMetaData(channel)
+		for _, cb := range channelBlocks { // Iterate over channelBlocks
+			// parseMetaData now uses the captured processedUUIDs from MakeInterfaceFromM3U
+			var stream = parseMetaData(cb) 
 
-			if extGrp := extGrpRx.FindStringSubmatch(channel); len(extGrp) > 1 {
+			if extGrp := extGrpRx.FindStringSubmatch(cb); len(extGrp) > 1 {
 				// EXTGRP applies to all subseqent channels until overriden
 				lastExtGrp = strings.Trim(extGrp[1], "\r\n")
 			}
