@@ -101,15 +101,15 @@ snap services xteve
 echo "--- Dumping xteve service logs ---"
 sudo snap logs xteve || echo "No logs yet or logs not accessible"
 echo "--- Verifying xteve service is active ---"
-snap services xteve | grep -E "^xteve\s+.*active"
+snap services xteve | grep -E "^xteve\.xteve\s+.*active"
 ```
 
 Expected output:
 
 ```
 --- Checking xteve service status ---
-Service  Startup  Current  Notes
-xteve    enabled  active   -
+Service      Startup  Current  Notes
+xteve.xteve  enabled  active   -
 
 --- Dumping xteve service logs ---
 YYYY-MM-DDTHH:MM:SSZ xteve.daemon[PID]: <Log message 1 from xteve>
@@ -117,11 +117,11 @@ YYYY-MM-DDTHH:MM:SSZ xteve.daemon[PID]: <Log message 2 from xteve>
 ... (more logs) ...
 
 --- Verifying xteve service is active ---
-xteve    enabled  active   -
+xteve.xteve    enabled  active   -
 ```
 
-- **`snap services xteve`**: Shows the `xteve` service as `enabled` and `active`.
-- **`sudo snap logs xteve`**: Outputs the logs from the `xteve` service. The exact log content will vary depending on the application's activity. If the service just started, logs might be minimal. The `|| echo "No logs yet or logs not accessible"` part is a fallback in case the logs command fails for some reason (e.g., if the service hasn't written any logs yet or there are permission issues in a specific CI setup, though `sudo` should handle most permission issues).
-- **`snap services xteve | grep -E "^xteve\s+.*active"`**: This command is used to programmatically check if the service is active. If it's active, it will print the line containing "xteve" and "active", and the CI step will pass. If it's not active, `grep` will not find a match and will return a non-zero exit code, causing the CI step to fail.
+- **`snap services xteve`**: Shows the `xteve.xteve` service as `enabled` and `active`. (Note: `snap services <snapname>` lists services associated with the snap, and for xTeVe, the service is `xteve.xteve`).
+- **`sudo snap logs xteve`**: Outputs the logs from the `xteve` snap's services. The exact log content will vary depending on the application's activity. If the service just started, logs might be minimal. The `|| echo "No logs yet or logs not accessible"` part is a fallback in case the logs command fails for some reason.
+- **`snap services xteve | grep -E "^xteve\.xteve\s+.*active"`**: This command is used to programmatically check if the `xteve.xteve` service is active. If it's active, it will print the line containing "xteve.xteve" and "active", and the CI step will pass. If it's not active, `grep` will not find a match and will return a non-zero exit code, causing the CI step to fail.
 
 This documentation should help in understanding the CI process for the xTeVe snap.

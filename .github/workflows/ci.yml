@@ -93,4 +93,4 @@ jobs:
           echo "--- Dumping xteve service logs ---"
           sudo snap logs xteve || echo "No logs yet or logs not accessible"
           echo "--- Verifying xteve service is active ---"
-          snap services xteve | grep -E "^xteve\s+.*active"
+          snap services xteve | grep -E "^xteve\.xteve\s+.*active"
