@@ -58,3 +58,27 @@ jobs:
       # For example:
       # - name: Lint code
       #   run: golangci-lint run
+
+  snap-test:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Install snapcraft and lxd
+        run: sudo apt-get update && sudo apt-get install -y snapcraft lxd
+      - name: Initialize LXD
+        run: sudo lxd init --auto
+      - name: Add user to lxd group
+        run: sudo adduser $USER lxd
+      - name: Build the snap
+        run: sg lxd -c "snapcraft"
+      - name: Install the snap
+        run: sudo snap install --dangerous xteve*.snap
+      - name: Wait for service startup
+        run: sleep 10
+      - name: Check service status and dump logs
+        run: |
+          snap services xteve
+          sudo snap logs xteve
+          snap services xteve | grep -E "^xteve\s+.*active"
