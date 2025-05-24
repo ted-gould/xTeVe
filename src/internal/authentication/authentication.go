@@ -3,7 +3,7 @@ package authentication
 import (
 	"encoding/json"
 	"errors"
-	"io/ioutil"
+	// "io/ioutil" // Will be removed
 	"net/http"
 	"os"
 	"path/filepath"
@@ -166,9 +166,12 @@ func CreateDefaultUser(username, password string) (err error) {
 		return
 	}
 
-	var defaults = defaultsForNewUser(username, password)
+	defaults, err := defaultsForNewUser(username, password)
+	if err != nil {
+		return
+	}
 	users[defaults["_id"].(string)] = defaults
-	saveDatabase(data)
+	err = saveDatabase(data)
 	return
 }
 
@@ -183,7 +186,12 @@ func CreateNewUser(username, password string) (userID string, err error) {
 		var salt = userData["_salt"].(string)
 		var loginUsername = userData["_username"].(string)
 
-		if SHA256(username, salt) == loginUsername {
+		sUsername, err := SHA256(username, salt)
+		if err != nil {
+			return err
+		}
+
+		if sUsername == loginUsername {
 			err = createError(020)
 		}
 		return
@@ -197,11 +205,14 @@ func CreateNewUser(username, password string) (userID string, err error) {
 		}
 	}
 
-	var defaults = defaultsForNewUser(username, password)
+	defaults, err := defaultsForNewUser(username, password)
+	if err != nil {
+		return
+	}
 	userID = defaults["_id"].(string)
 	users[userID] = defaults
 
-	saveDatabase(data)
+	err = saveDatabase(data)
 	return
 }
 
@@ -219,8 +230,17 @@ func UserAuthentication(username, password string) (token string, err error) {
 		var loginUsername = loginData["_username"].(string)
 		var loginPassword = loginData["_password"].(string)
 
-		if SHA256(username, salt) == loginUsername {
-			if SHA256(password, salt) == loginPassword {
+		sUsername, errSHA := SHA256(username, salt)
+		if errSHA != nil {
+			return errSHA
+		}
+		sPassword, errSHA := SHA256(password, salt)
+		if errSHA != nil {
+			return errSHA
+		}
+
+		if sUsername == loginUsername {
+			if sPassword == loginPassword {
 				err = nil
 			}
 		}
@@ -231,7 +251,7 @@ func UserAuthentication(username, password string) (token string, err error) {
 	for id, loginData := range users {
 		err = login(username, password, loginData.(map[string]any))
 		if err == nil {
-			token = setToken(id, "-")
+			token, err = setToken(id, "-")
 			return
 		}
 	}
@@ -254,10 +274,14 @@ func CheckTheValidityOfTheToken(token string) (newToken string, err error) {
 		if expires.Sub(time.Now().Local()) < 0 {
 			return
 		}
-		newToken = setToken(userID, token)
+		newToken, err = setToken(userID, token)
+		if err != nil {
+			return "", err // Propagate error from setToken
+		}
 		err = nil
 	} else {
-		return
+		// err is already createError(011) from the top of the function
+		return "", err
 	}
 	return
 }
@@ -338,19 +362,25 @@ func RemoveUser(userID string) (err error) {
 // SetDefaultUserData : set default user data
 func SetDefaultUserData(defaults map[string]any) (err error) {
 	allUserData, err := GetAllUserData()
+	if err != nil {
+		return err // Propagate error from GetAllUserData
+	}
 
 	for _, d := range allUserData {
-		var data = d.(map[string]any)["data"].(map[string]any)
+		var userDataMap = d.(map[string]any)["data"].(map[string]any) // Renamed to avoid conflict
 		var userID = d.(map[string]any)["_id"].(string)
 
 		for k, v := range defaults {
-			if _, ok := data[k]; ok {
+			if _, ok := userDataMap[k]; ok {
 				// Key exist
 			} else {
-				data[k] = v
+				userDataMap[k] = v
 			}
 		}
-		err = WriteUserData(userID, data)
+		err = WriteUserData(userID, userDataMap)
+		if err != nil {
+			return err // Propagate error from WriteUserData
+		}
 	}
 	return
 }
@@ -364,19 +394,34 @@ func ChangeCredentials(userID, username, password string) (err error) {
 
 	err = createError(032)
 
+	errCreate := createError(032) // Keep original error in case user not found
+
 	if userData, ok := data["users"].(map[string]any)[userID]; ok {
 		//var userData = tmp.(map[string]interface{})
 		var salt = userData.(map[string]any)["_salt"].(string)
 
 		if len(username) > 0 {
-			userData.(map[string]any)["_username"] = SHA256(username, salt)
+			usernameHash, errSHA := SHA256(username, salt)
+			if errSHA != nil {
+				return errSHA
+			}
+			userData.(map[string]any)["_username"] = usernameHash
 		}
 
 		if len(password) > 0 {
-			userData.(map[string]any)["_password"] = SHA256(password, salt)
+			passwordHash, errSHA := SHA256(password, salt)
+			if errSHA != nil {
+				return errSHA
+			}
+			userData.(map[string]any)["_password"] = passwordHash
 		}
 		err = saveDatabase(data)
+		if err != nil {
+			return err // Propagate error from saveDatabase
+		}
+		return nil // Successful update, clear original error
 	}
+	err = errCreate // User not found, return the original error
 	return
 }
 
@@ -392,7 +437,10 @@ func GetAllUserData() (allUserData map[string]any, err error) {
 		defaults["dbVersion"] = "1.0"
 		defaults["hash"] = "sha256"
 		defaults["users"] = make(map[string]any)
-		saveDatabase(defaults)
+		err = saveDatabase(defaults) // Handle error from saveDatabase
+		if err != nil {
+			return nil, err
+		}
 		data = defaults
 	}
 
@@ -402,17 +450,26 @@ func GetAllUserData() (allUserData map[string]any, err error) {
 
 // CheckTheValidityOfTheTokenFromHTTPHeader : get token from HTTP header
 func CheckTheValidityOfTheTokenFromHTTPHeader(w http.ResponseWriter, r *http.Request) (writer http.ResponseWriter, newToken string, err error) {
-	err = createError(011)
+	err = createError(011) // Default error if token is not found or invalid
 	for _, cookie := range r.Cookies() {
 		if cookie.Name == "Token" {
-			var token string
-			token, err = CheckTheValidityOfTheToken(cookie.Value)
-			//fmt.Println("T", token, err)
+			var currentTokenValue = cookie.Value
+			token, errCheck := CheckTheValidityOfTheToken(currentTokenValue) // Use new var for this error
+			if errCheck != nil {
+				// If token is invalid, we might want to clear it or just report error
+				// For now, let's propagate the error and not set a new cookie
+				err = errCheck // Assign the specific error from CheckTheValidityOfTheToken
+				return writer, "", err
+			}
+			//fmt.Println("T", token, errCheck)
 			writer = SetCookieToken(w, token)
 			newToken = token
+			err = nil // Token was valid and processed, clear default error
+			return    // Found and processed the token, no need to check other cookies
 		}
 	}
-	//fmt.Println(err)
+	// If loop finishes, means no "Token" cookie was found.
+	// The initial err = createError(011) will be returned.
 	return
 }
 
@@ -432,7 +489,7 @@ func saveDatabase(tmpMap any) (err error) {
 		return
 	}
 
-	err = ioutil.WriteFile(database, []byte(jsonString), 0600)
+	err = os.WriteFile(database, []byte(jsonString), 0600)
 	if err != nil {
 		return
 	}
@@ -440,7 +497,7 @@ func saveDatabase(tmpMap any) (err error) {
 }
 
 func loadDatabase() (err error) {
-	jsonString, err := ioutil.ReadFile(database)
+	jsonString, err := os.ReadFile(database)
 	if err != nil {
 		return
 	}
@@ -453,33 +510,42 @@ func loadDatabase() (err error) {
 }
 
 // SHA256 : password + salt = sha256 string
-func SHA256(secret, salt string) string {
+func SHA256(secret, salt string) (string, error) {
 	key := []byte(secret)
 	h := hmac.New(sha256.New, key)
-	h.Write([]byte("_remote_db"))
-	return base64.StdEncoding.EncodeToString(h.Sum(nil))
+	_, err := h.Write([]byte("_remote_db"))
+	if err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(h.Sum(nil)), nil
 }
 
-func randomString(n int) string {
+func randomString(n int) (string, error) {
 	const alphanum = "-AbCdEfGhIjKlMnOpQrStUvWxYz0123456789aBcDeFgHiJkLmNoPqRsTuVwXyZ_"
 
 	var bytes = make([]byte, n)
-	rand.Read(bytes)
+	_, err := rand.Read(bytes)
+	if err != nil {
+		return "", err
+	}
 	for i, b := range bytes {
 		bytes[i] = alphanum[b%byte(len(alphanum))]
 	}
-	return string(bytes)
+	return string(bytes), nil
 }
 
-func randomID(n int) string {
+func randomID(n int) (string, error) {
 	const alphanum = "ABCDEFGHJKLMNOPQRSTUVWXYZ0123456789"
 
 	var bytes = make([]byte, n)
-	rand.Read(bytes)
+	_, err := rand.Read(bytes)
+	if err != nil {
+		return "", err
+	}
 	for i, b := range bytes {
 		bytes[i] = alphanum[b%byte(len(alphanum))]
 	}
-	return string(bytes)
+	return string(bytes), nil
 }
 
 func createError(errCode int) (err error) {
@@ -509,22 +575,43 @@ func createError(errCode int) (err error) {
 	return
 }
 
-func defaultsForNewUser(username, password string) map[string]any {
+func defaultsForNewUser(username, password string) (map[string]any, error) {
 	var defaults = make(map[string]any)
-	var salt = randomString(saltLength)
-	defaults["_username"] = SHA256(username, salt)
-	defaults["_password"] = SHA256(password, salt)
+	salt, err := randomString(saltLength)
+	if err != nil {
+		return nil, err
+	}
+	usernameHash, err := SHA256(username, salt)
+	if err != nil {
+		return nil, err
+	}
+	passwordHash, err := SHA256(password, salt)
+	if err != nil {
+		return nil, err
+	}
+	idSuffix, err := randomID(idLength)
+	if err != nil {
+		return nil, err
+	}
+	defaults["_username"] = usernameHash
+	defaults["_password"] = passwordHash
 	defaults["_salt"] = salt
-	defaults["_id"] = "id-" + randomID(idLength)
-	//defaults["_one.time.token"] = randomString(tokenLength)
+	defaults["_id"] = "id-" + idSuffix
+	//defaults["_one.time.token"], err = randomString(tokenLength)
+	//if err != nil {
+	//	return nil, err
+	//}
 	defaults["data"] = make(map[string]any)
-	return defaults
+	return defaults, nil
 }
 
-func setToken(id, oldToken string) (newToken string) {
+func setToken(id, oldToken string) (newToken string, err error) {
 	delete(tokens, oldToken)
 loopToken:
-	newToken = randomString(tokenLength)
+	newToken, err = randomString(tokenLength)
+	if err != nil {
+		return "", err
+	}
 	if _, ok := tokens[newToken]; ok {
 		goto loopToken
 	}

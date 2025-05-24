@@ -632,11 +632,18 @@ func verifyExistingChannelMappings(xepgChannel XEPGChannelStruct) XEPGChannelStr
 			// This condition means it was active, but mapping is now effectively nil or "-", so deactivate.
 			// The ShowError/showWarning above would already set XActive = false for missing data.
 			// This is more of a final sanity check.
+			xepgChannel.XActive = false // Deactivate the channel
+			// Log a warning that this specific condition led to deactivation.
+			// log.Printf("Warning: Channel %s (%s) was active but had invalid mapping ('%s', '%s') after checks. Deactivating.", xepgChannel.Name, xepgChannel.XChannelID, xepgChannel.XmltvFile, xepgChannel.XMapping)
+			// Using ShowError as it seems to be the project's way to log warnings/errors.
+			ShowError(fmt.Errorf("channel '%s' (%s) was active but had invalid mapping file ('%s') or ID ('%s') after checks. Deactivating", xepgChannel.Name, xepgChannel.XChannelID, xepgChannel.XmltvFile, xepgChannel.XMapping), 0)
+
 		}
 		// If it was already deactivated by ShowError, this just re-confirms.
 		// If it was active but had empty XmltvFile/XMapping (unlikely state), this deactivates.
 	}
 	// An additional check for ensuring channel is deactivated if mapping is "-" or file is "-"
+	// This check is still valuable as the above block might not cover all paths to "-" if XActive was already false.
 	if xepgChannel.XmltvFile == "-" || xepgChannel.XMapping == "-" {
 		xepgChannel.XActive = false
 	}

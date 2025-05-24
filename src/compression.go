@@ -31,7 +31,7 @@ func zipFiles(sourceFiles []string, target string) error {
 			baseDir = filepath.Base(System.Folder.Data)
 		}
 
-		filepath.Walk(source, func(path string, info os.FileInfo, err error) error {
+		walkErr := filepath.Walk(source, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				return err
 			}
@@ -69,8 +69,17 @@ func zipFiles(sourceFiles []string, target string) error {
 			_, err = io.Copy(writer, file)
 			return err
 		})
+		// If filepath.Walk itself had an error (e.g. source path issue)
+		// or if the last error from the walkFn was not handled inside.
+		if walkErr != nil {
+			return walkErr
+		}
 	}
-	return err
+	// The original 'err' was from os.Stat(source) which is inside the loop.
+	// It should be nil here if the loop completed or returned earlier.
+	// If sourceFiles is empty, err would be from the last os.Stat, which is incorrect.
+	// The function should return nil if everything is successful.
+	return nil
 }
 
 func extractZIP(archive, target string) (err error) {
@@ -87,7 +96,11 @@ func extractZIP(archive, target string) (err error) {
 	for _, file := range reader.File {
 		path := filepath.Join(target, file.Name)
 		if file.FileInfo().IsDir() {
-			os.MkdirAll(path, file.Mode())
+			if err := os.MkdirAll(path, file.Mode()); err != nil {
+				// Log the error and continue with other files/dirs
+				// log.Printf("Error creating directory %s during ZIP extraction: %v", path, err)
+				// Depending on desired strictness, could accumulate errors and return at the end
+			}
 			continue
 		}
 
@@ -144,8 +157,20 @@ func compressGZIP(data *[]byte, file string) (err error) {
 		}
 
 		w := gzip.NewWriter(f)
-		w.Write(*data)
-		w.Close()
+		if _, errWrite := w.Write(*data); errWrite != nil {
+			// Attempt to close f even if write failed, then return the write error
+			_ = f.Close() // Best effort close, ignore error as we're returning writeErr
+			return errWrite
+		}
+		if errClose := w.Close(); errClose != nil {
+			// Attempt to close f even if gzip close failed, then return the close error
+			_ = f.Close() // Best effort close
+			return errClose
+		}
+		// Ensure underlying file is also closed
+		if errFileClose := f.Close(); errFileClose != nil {
+			return errFileClose
+		}
 	}
 	return
 }

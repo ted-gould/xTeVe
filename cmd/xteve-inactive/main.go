@@ -3,9 +3,11 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"bytes"
+	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io" // Added for io.ReadAll
 	"net/http"
 	"os"
 	"strconv"
@@ -50,7 +52,7 @@ func main() {
 
 	defer resp.Body.Close()
 
-	respStr, err := ioutil.ReadAll(resp.Body)
+	respStr, err := io.ReadAll(resp.Body)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Unable read response: %v\n", err)
 		os.Exit(-1)

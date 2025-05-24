@@ -105,7 +105,7 @@ func MakeInterfaceFromM3U(byteStream []byte) (allChannels []any, err error) {
 			if !strings.Contains(strings.ToLower(key), "tvg-id") {
 				if strings.Contains(strings.ToLower(key), "id") {
 					if _, exists := processedUUIDs[value]; exists {
-						log.Println(fmt.Sprintf("Channel: %s - %s = %s (Duplicate UUID based on non-tvg-id field)", stream["name"], key, value))
+						log.Printf("Channel: %s - %s = %s (Duplicate UUID based on non-tvg-id field)", stream["name"], key, value)
 						// If a duplicate is found for this key, the original logic implies
 						// _uuid.key and _uuid.value are NOT set by this specific id field.
 						// The 'break' ensures we don't look for other 'id' fields in this stream.

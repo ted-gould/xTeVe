@@ -140,7 +140,10 @@ func Index(w http.ResponseWriter, r *http.Request) {
 
 	if err == nil {
 		w.WriteHeader(200)
-		w.Write(response)
+		if _, writeErr := w.Write(response); writeErr != nil {
+			log.Printf("Error writing response in Index handler: %v", writeErr)
+			// At this point, headers are sent, so we can't send a different HTTP error.
+		}
 		return
 	}
 	httpStatusError(w, r, 500)
@@ -280,7 +283,9 @@ func xTeVe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", contentType)
-	w.Write([]byte(content))
+	if _, writeErr := w.Write([]byte(content)); writeErr != nil {
+		log.Printf("Error writing response in xTeVe handler: %v", writeErr)
+	}
 }
 
 // Images : Image Cache /images/
@@ -297,7 +302,9 @@ func Images(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Content-Type", getContentType(filePath))
 	w.Header().Add("Content-Length", fmt.Sprintf("%d", len(content)))
 	w.WriteHeader(200)
-	w.Write(content)
+	if _, writeErr := w.Write(content); writeErr != nil {
+		log.Printf("Error writing image response in Images handler: %v", writeErr)
+	}
 }
 
 // DataImages : Image path for Logos / Images that have been uploaded / data_images /
@@ -314,7 +321,9 @@ func DataImages(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Content-Type", getContentType(filePath))
 	w.Header().Add("Content-Length", fmt.Sprintf("%d", len(content)))
 	w.WriteHeader(200)
-	w.Write(content)
+	if _, writeErr := w.Write(content); writeErr != nil {
+		log.Printf("Error writing image response in DataImages handler: %v", writeErr)
+	}
 }
 
 // WS : Web Sockets /ws/
@@ -377,10 +386,13 @@ func WS(w http.ResponseWriter, r *http.Request) {
 					response.Error = err.Error()
 					request.Cmd = "-"
 
-					if err = conn.WriteJSON(response); err != nil {
-						ShowError(err, 1102)
+					if errWrite := conn.WriteJSON(response); errWrite != nil {
+						log.Printf("Error writing JSON response (token auth failed): %v", errWrite)
+						// ShowError(errWrite, 1102) // Original logging
+						// If we can't even write the error message, best to close connection.
+						return // Return from the handler for this client
 					}
-					return
+					return // Successfully wrote error, now return
 				}
 				response.Token = newToken
 				response.Users, _ = authentication.GetAllUserData()
@@ -393,8 +405,10 @@ func WS(w http.ResponseWriter, r *http.Request) {
 			// response.Config = Settings
 		case "updateLog":
 			response = setDefaultResponseData(response, false)
-			if err = conn.WriteJSON(response); err != nil {
-				ShowError(err, 1022)
+			if errWrite := conn.WriteJSON(response); errWrite != nil {
+				log.Printf("Error writing JSON response (updateLog): %v", errWrite)
+				// ShowError(errWrite, 1022) // Original logging
+				return // Return from the handler for this client
 			}
 			return
 		case "loadFiles":
@@ -532,12 +546,15 @@ func WS(w http.ResponseWriter, r *http.Request) {
 				response.LogoURL, err = uploadLogo(request.Base64, request.Filename)
 
 				if err == nil {
-					if err = conn.WriteJSON(response); err != nil {
-						ShowError(err, 1022)
-					} else {
-						return
+					if errWrite := conn.WriteJSON(response); errWrite != nil {
+						log.Printf("Error writing JSON response (uploadLogo): %v", errWrite)
+						// ShowError(errWrite, 1022) // Original logging
+						return // Error writing this specific response, terminate for this client.
 					}
+					// Successfully wrote the logo response, so return from the handler.
+					return
 				}
+				// If err from uploadLogo was not nil, it will be handled by the generic error handling below.
 			}
 		case "saveWizard":
 			nextStep, errNew := saveWizard(request)
@@ -575,11 +592,12 @@ func WS(w http.ResponseWriter, r *http.Request) {
 			response.ConfigurationWizard = System.ConfigurationWizard
 		}
 
-		if err = conn.WriteJSON(response); err != nil {
-			ShowError(err, 1022)
-		} else {
-			break
+		if errWrite := conn.WriteJSON(response); errWrite != nil {
+			log.Printf("Error writing main JSON response in WS handler: %v", errWrite)
+			// ShowError(errWrite, 1022) // Original logging
 		}
+		// Whether successful or not, the loop should break as per original logic.
+		break
 	}
 }
 
@@ -742,7 +760,9 @@ func Web(w http.ResponseWriter, r *http.Request) {
 		content = parseTemplate(content, lang)
 	}
 
-	w.Write([]byte(content))
+	if _, writeErr := w.Write([]byte(content)); writeErr != nil {
+		log.Printf("Error writing response in Web handler: %v", writeErr)
+	}
 }
 
 // API : API request /api/
@@ -825,7 +845,9 @@ func API(w http.ResponseWriter, r *http.Request) {
 
 		response.Status = false
 		response.Error = err.Error()
-		w.Write([]byte(mapToJSON(response)))
+		if _, writeErr := w.Write([]byte(mapToJSON(response))); writeErr != nil {
+			log.Printf("Error writing error JSON response in API handler: %v", writeErr)
+		}
 	}
 
 	response.Status = true
@@ -933,9 +955,12 @@ func API(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		responseAPIError(err)
+		return // Ensure we don't try to write a success response if there was an error
 	}
 
-	w.Write([]byte(mapToJSON(response)))
+	if _, writeErr := w.Write([]byte(mapToJSON(response))); writeErr != nil {
+		log.Printf("Error writing main JSON response in API handler: %v", writeErr)
+	}
 }
 
 // Download : File Download
@@ -950,8 +975,13 @@ func Download(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	os.RemoveAll(System.Folder.Temp + getFilenameFromPath(path))
-	w.Write([]byte(content))
+	if errRemove := os.RemoveAll(System.Folder.Temp + getFilenameFromPath(path)); errRemove != nil {
+		log.Printf("Error removing temporary file %s after download: %v", file, errRemove)
+		// Continue to send content even if removal failed.
+	}
+	if _, writeErr := w.Write([]byte(content)); writeErr != nil {
+		log.Printf("Error writing download response: %v", writeErr)
+	}
 }
 
 func setDefaultResponseData(response ResponseStruct, data bool) (defaults ResponseStruct) {

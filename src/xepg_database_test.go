@@ -65,8 +65,12 @@ func setupGlobalStateForTest() func() {
 	// as the tested functions do not directly use Data.Cache.Images.
 	Data = freshData
 
-	os.MkdirAll(System.Folder.Data, os.ModePerm)
-	os.Remove(System.File.XEPG) // Clean up from previous tests
+	if err := os.MkdirAll(System.Folder.Data, os.ModePerm); err != nil {
+		// This is a fatal error for test setup, so panic or t.Fatal if t was available.
+		// Since t is not available here, panic is the most straightforward.
+		panic(fmt.Sprintf("Failed to create test data directory: %v", err))
+	}
+	os.Remove(System.File.XEPG) // Clean up from previous tests, error ignored as it might not exist
 
 	return func() { // Teardown function
 		System = originalSystem
@@ -237,9 +241,14 @@ func TestProcessExistingXEPGChannel(t *testing.T) {
 	if !ok {
 		t.Fatalf("Channel with ID %s not found in Data.XEPG.Channels after update", xepgID)
 	}
-	updatedChannelBytes, _ := json.Marshal(updatedChannelData)
+	updatedChannelBytes, errMarshal1 := json.Marshal(updatedChannelData)
+	if errMarshal1 != nil {
+		t.Fatalf("Failed to marshal updatedChannelData (Test Case 1): %v", errMarshal1)
+	}
 	var updatedChannel XEPGChannelStruct
-	json.Unmarshal(updatedChannelBytes, &updatedChannel)
+	if errUnmarshal1 := json.Unmarshal(updatedChannelBytes, &updatedChannel); errUnmarshal1 != nil {
+		t.Fatalf("Failed to unmarshal updatedChannelBytes (Test Case 1): %v", errUnmarshal1)
+	}
 
 	if updatedChannel.Name != "New Name" {
 		t.Errorf("Expected Name to be 'New Name', got '%s'", updatedChannel.Name)
@@ -280,9 +289,14 @@ func TestProcessExistingXEPGChannel(t *testing.T) {
 	if !ok2 {
 		t.Fatalf("Channel with ID %s not found after update (Test Case 2)", xepgID)
 	}
-	updatedChannelBytes2, _ := json.Marshal(updatedChannelData2)
+	updatedChannelBytes2, errMarshal2 := json.Marshal(updatedChannelData2)
+	if errMarshal2 != nil {
+		t.Fatalf("Failed to marshal updatedChannelData2 (Test Case 2): %v", errMarshal2)
+	}
 	var updatedChannel2 XEPGChannelStruct
-	json.Unmarshal(updatedChannelBytes2, &updatedChannel2)
+	if errUnmarshal2 := json.Unmarshal(updatedChannelBytes2, &updatedChannel2); errUnmarshal2 != nil {
+		t.Fatalf("Failed to unmarshal updatedChannelBytes2 (Test Case 2): %v", errUnmarshal2)
+	}
 
 	if updatedChannel2.Name != "NameNoUUID" {
 		t.Errorf("Expected Name to be 'NameNoUUID', got '%s'", updatedChannel2.Name)
@@ -315,9 +329,14 @@ func TestProcessExistingXEPGChannel(t *testing.T) {
 		t.Fatalf("processExistingXEPGChannel failed: %v", err)
 	}
 	updatedChannelData3 := Data.XEPG.Channels[xepgID]
-	updatedChannelBytes3, _ := json.Marshal(updatedChannelData3)
+	updatedChannelBytes3, errMarshal3 := json.Marshal(updatedChannelData3)
+	if errMarshal3 != nil {
+		t.Fatalf("Failed to marshal updatedChannelData3 (Test Case 3): %v", errMarshal3)
+	}
 	var updatedChannel3 XEPGChannelStruct
-	json.Unmarshal(updatedChannelBytes3, &updatedChannel3)
+	if errUnmarshal3 := json.Unmarshal(updatedChannelBytes3, &updatedChannel3); errUnmarshal3 != nil {
+		t.Fatalf("Failed to unmarshal updatedChannelBytes3 (Test Case 3): %v", errUnmarshal3)
+	}
 
 	if updatedChannel3.XName != "XNameNoUpdateFlag" {
 		t.Errorf("Expected XName to be 'XNameNoUpdateFlag', got '%s'", updatedChannel3.XName)
@@ -376,9 +395,14 @@ func TestProcessNewXEPGChannel(t *testing.T) {
 	}
 
 	newChannelData := Data.XEPG.Channels[newXEPGID]
-	newChannelBytes, _ := json.Marshal(newChannelData)
+	newChannelBytes, errMarshal1 := json.Marshal(newChannelData)
+	if errMarshal1 != nil {
+		t.Fatalf("Failed to marshal newChannelData (Test Case 1): %v", errMarshal1)
+	}
 	var newChannel XEPGChannelStruct
-	json.Unmarshal(newChannelBytes, &newChannel)
+	if errUnmarshal1 := json.Unmarshal(newChannelBytes, &newChannel); errUnmarshal1 != nil {
+		t.Fatalf("Failed to unmarshal newChannelBytes (Test Case 1): %v", errUnmarshal1)
+	}
 
 	// With UUIDValue = "2005" and PreserveMapping = true, XChannelID should be "2005"
 	if newChannel.XChannelID != "2005" {
@@ -432,9 +456,14 @@ func TestProcessNewXEPGChannel(t *testing.T) {
 	}
 
 	newChannelData2 := Data.XEPG.Channels[newXEPGID2]
-	newChannelBytes2, _ := json.Marshal(newChannelData2)
+	newChannelBytes2, errMarshal2 := json.Marshal(newChannelData2)
+	if errMarshal2 != nil {
+		t.Fatalf("Failed to marshal newChannelData2 (Test Case 2): %v", errMarshal2)
+	}
 	var newChannel2 XEPGChannelStruct
-	json.Unmarshal(newChannelBytes2, &newChannel2)
+	if errUnmarshal2 := json.Unmarshal(newChannelBytes2, &newChannel2); errUnmarshal2 != nil {
+		t.Fatalf("Failed to unmarshal newChannelBytes2 (Test Case 2): %v", errUnmarshal2)
+	}
 
 	if newChannel2.XChannelID != "2500" {
 		t.Errorf("Expected XChannelID to be '2500', got '%s'", newChannel2.XChannelID)
@@ -470,9 +499,14 @@ func TestProcessNewXEPGChannel(t *testing.T) {
 		}
 	}
 	newChannelData3 := Data.XEPG.Channels[newXEPGID3]
-	newChannelBytes3, _ := json.Marshal(newChannelData3)
+	newChannelBytes3, errMarshal3 := json.Marshal(newChannelData3)
+	if errMarshal3 != nil {
+		t.Fatalf("Failed to marshal newChannelData3 (Test Case 3): %v", errMarshal3)
+	}
 	var newChannel3 XEPGChannelStruct
-	json.Unmarshal(newChannelBytes3, &newChannel3)
+	if errUnmarshal3 := json.Unmarshal(newChannelBytes3, &newChannel3); errUnmarshal3 != nil {
+		t.Fatalf("Failed to unmarshal newChannelBytes3 (Test Case 3): %v", errUnmarshal3)
+	}
 
 	if newChannel3.XChannelID != "3000" {
 		t.Errorf("Expected XChannelID to be '3000', got '%s'", newChannel3.XChannelID)

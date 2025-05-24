@@ -70,7 +70,7 @@ func FilterThisStream(s any) (status bool) {
 		var effectiveStreamName = rawStreamName
 		var effectiveStreamGroup = rawStreamGroup
 		var effectiveStreamValues = rawStreamValues
-		var effectiveMainFilterRulePart = baseFilterRule // This will be the main part of rule after ex/include are stripped
+		var effectiveMainFilterRulePart string // Declare, assign after baseFilterRule is processed
 
 		// Extract exclude/include specifiers first from the original baseFilterRule
 		// These specifiers might contain mixed case if the filter is case-sensitive
