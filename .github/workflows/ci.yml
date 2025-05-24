@@ -81,7 +81,7 @@ jobs:
           # Re-login or newgrp is not feasible in most CI script flows.
           # We rely on `sg lxd -c "snapcraft"` for the build step to use the new group membership.
       - name: Build the snap
-        run: sg lxd -c "snapcraft"
+        run: sudo snapcraft --destructive-mode
       - name: Install the snap
         run: sudo snap install --dangerous xteve*.snap
       - name: Wait for service startup

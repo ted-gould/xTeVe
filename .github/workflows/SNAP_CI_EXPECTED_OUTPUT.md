@@ -64,7 +64,8 @@ Expected output:
 
 ## 4. Build the snap
 
-Command: `sg lxd -c "snapcraft"`
+Command: `sudo snapcraft --destructive-mode`
+*(Note: `--destructive-mode` runs the build process directly on the host machine, not within an LXD container.)*
 
 Expected output:
 - `snapcraft` build logs, showing progress.
