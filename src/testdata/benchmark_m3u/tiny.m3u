@@ -9,11 +9,3 @@ http://stream.example.com/stream/3
 http://stream.example.com/stream/4
 #EXTINF:-1 tvg-id="id.5" tvg-name="Channel Name 5" tvg-logo="http://logo.example.com/5.png" group-title="Group Title 5",Channel Name 5
 http://stream.example.com/stream/5
-#EXTGRP:Group Title 6
-#EXTINF:-1 tvg-id="id.6" tvg-name="Channel Name 6" tvg-logo="http://logo.example.com/6.png" group-title="Group Title 6",Channel Name 6
-http://stream.example.com/stream/6
-# ... entries for n = 7 through 9998 ...
-#EXTINF:-1 tvg-id="id.9999" tvg-name="Channel Name 9999" tvg-logo="http://logo.example.com/9999.png" group-title="Group Title 99",Channel Name 9999
-http://stream.example.com/stream/9999
-#EXTINF:-1 tvg-id="id.10000" tvg-name="Channel Name 10000" tvg-logo="http://logo.example.com/10000.png" group-title="Group Title 100",Channel Name 10000
-http://stream.example.com/stream/10000
