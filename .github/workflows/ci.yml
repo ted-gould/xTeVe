@@ -66,11 +66,20 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
       - name: Install snapcraft and lxd
-        run: sudo apt-get update && sudo apt-get install -y snapcraft lxd
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-kvm
+          sudo snap install snapcraft --classic
+          sudo snap install lxd
       - name: Initialize LXD
         run: sudo lxd init --auto
       - name: Add user to lxd group
-        run: sudo adduser $USER lxd
+        run: |
+          sudo groupadd --system lxd || true
+          sudo usermod -a -G lxd $USER || true
+          # The new session part is tricky in CI. sg lxd -c "command" will be used later for snapcraft.
+          # Re-login or newgrp is not feasible in most CI script flows.
+          # We rely on `sg lxd -c "snapcraft"` for the build step to use the new group membership.
       - name: Build the snap
         run: sg lxd -c "snapcraft"
       - name: Install the snap

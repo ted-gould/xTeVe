@@ -6,20 +6,39 @@ This document outlines the expected output for the key commands executed in the 
 
 ## 1. Install snapcraft and lxd
 
-Command: `sudo apt-get update && sudo apt-get install -y snapcraft lxd`
+Commands:
+```
+sudo apt-get update
+sudo apt-get install -y qemu-kvm
+sudo snap install snapcraft --classic
+sudo snap install lxd
+```
 
 Expected output:
-- Standard package installation messages from `apt-get`.
-- Successful installation of `snapcraft` and `lxd` packages.
+- Standard package installation messages from `apt-get` for `qemu-kvm`.
+- Successful installation messages from `snap` for `snapcraft` and `lxd`.
 - Example snippet (actual output will be much longer):
   ```
-  ...
-  Setting up lxd (x.x.x-ubuntuX) ...
-  Setting up snapcraft (x.x.x) ...
-  ...
+  ... (apt output for qemu-kvm) ...
+  snap "snapcraft" installed
+  snap "lxd" installed
   ```
 
-## 2. Initialize LXD
+## 2. Configure LXD Group
+
+Commands:
+```bash
+sudo groupadd --system lxd || true
+sudo usermod -a -G lxd $USER || true
+```
+
+Expected output:
+- These commands typically don't produce output if successful unless the group or user membership is actually changed.
+- `groupadd: group 'lxd' already exists` (if it exists, due to `|| true`)
+- (No output if user is already in group or successfully added, due to `|| true`)
+- A comment in the CI script notes that `sg lxd -c "snapcraft"` handles the new group membership for the build step.
+
+## 3. Initialize LXD
 
 Command: `sudo lxd init --auto`
 
@@ -43,7 +62,7 @@ Expected output:
   ```
   *(Note: `--auto` might produce less interactive output, but should indicate success)*
 
-## 3. Build the snap
+## 4. Build the snap
 
 Command: `sg lxd -c "snapcraft"`
 
@@ -61,7 +80,7 @@ Expected output:
   Snapped xteve_X.Y.Z_amd64.snap
   ```
 
-## 4. Install the snap
+## 5. Install the snap
 
 Command: `sudo snap install --dangerous xteve*.snap`
 
@@ -72,7 +91,7 @@ Expected output:
   xteve <version> installed
   ```
 
-## 5. Check service status and dump logs
+## 6. Check service status and dump logs
 
 Commands:
 ```bash
