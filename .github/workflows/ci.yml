@@ -79,6 +79,9 @@ jobs:
         run: sleep 10
       - name: Check service status and dump logs
         run: |
+          echo "--- Checking xteve service status ---"
           snap services xteve
-          sudo snap logs xteve
+          echo "--- Dumping xteve service logs ---"
+          sudo snap logs xteve || echo "No logs yet or logs not accessible"
+          echo "--- Verifying xteve service is active ---"
           snap services xteve | grep -E "^xteve\s+.*active"
