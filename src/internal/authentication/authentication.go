@@ -392,7 +392,7 @@ func ChangeCredentials(userID, username, password string) (err error) {
 		return
 	}
 
-	err = createError(032)
+	// err = createError(032) // Removed ineffectual assignment
 
 	errCreate := createError(032) // Keep original error in case user not found
 

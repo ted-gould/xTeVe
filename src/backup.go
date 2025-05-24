@@ -182,7 +182,9 @@ func xteveRestore(archive string) (newWebURL string, err error) {
 			}
 		}
 
-		if err = loadSettings(); err != nil {
+		// loadSettings likely returns (SettingsStruct, error)
+		// We only care about the error here as Settings is a global variable modified by loadSettings.
+		if _, err = loadSettings(); err != nil {
 			ShowError(err, 0) // Or choose to propagate it
 			return "", err // Propagating seems more appropriate for a restore failure
 		}

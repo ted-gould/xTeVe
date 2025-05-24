@@ -3,8 +3,6 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"bytes"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"io" // Added for io.ReadAll

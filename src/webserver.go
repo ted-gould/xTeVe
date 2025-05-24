@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log" // Added for log.Printf
 	"net"
 	"net/http"
 	"os"

@@ -2,7 +2,6 @@ package m3u
 
 import (
 	"errors"
-	"fmt"
 	"log"
 	"net/url"
 	"regexp"

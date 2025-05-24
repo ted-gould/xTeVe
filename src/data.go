@@ -944,8 +944,8 @@ func getProviderParameter(id, fileType, key string) (s string) {
 }
 
 // Update Provider Statistics Compatibility
-func setProviderCompatibility(id, fileType string, compatibility map[string]int) {
-	var dataMap = make(map[string]any)
+func setProviderCompatibility(id, fileType string, compatibility map[string]int) error { // Added error return type
+	var dataMap map[string]any // Declare, assign below
 
 	switch fileType {
 	case "m3u":
@@ -967,6 +967,7 @@ func setProviderCompatibility(id, fileType string, compatibility map[string]int)
 		case "xmltv":
 			Settings.Files.XMLTV = dataMap
 		}
-		saveSettings(Settings)
+		return saveSettings(Settings) // Return error from saveSettings
 	}
+	return nil // Return nil if dataId not found in dataMap
 }

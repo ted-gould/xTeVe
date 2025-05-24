@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/base64"
 	"fmt"
+	"io" // Added for io.EOF
 	"log"
 	"os"
 	"path/filepath"
@@ -107,7 +108,7 @@ func fileToBase64(file string) string {
 	// read file content into buffer
 	fReader := bufio.NewReader(imgFile)
 	n, err := fReader.Read(buf)
-	if err != nil && err != bufio.EOF && err != io.EOF { // EOF is not an error for Read
+	if err != nil && err != io.EOF { // EOF is not an error for Read, bufio.EOF is not a thing
 		log.Printf("Error reading file %s: %v", file, err)
 		return "" // Return empty string or handle error as appropriate
 	}

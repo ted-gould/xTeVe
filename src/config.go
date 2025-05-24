@@ -157,8 +157,9 @@ func Init() (err error) {
 	// Check the permissions on all Folders
 	err = checkFilePermission(System.Folder.Config)
 	if err == nil {
-		checkFilePermission(System.Folder.Temp)
+		err = checkFilePermission(System.Folder.Temp) // Assign and check the error
 	}
+	// If err is not nil here, it will be returned by Init() eventually, or handled if more logic follows.
 
 	// Separate tmp Folder for each Instance
 	// System.Folder.Temp = System.Folder.Temp + Settings.UUID + string(os.PathSeparator)
@@ -225,13 +226,23 @@ func StartSystem(updateProviderFiles bool) (err error) {
 		err = xTeVeAutoBackup()
 		if err != nil {
 			ShowError(err, 1090)
+			// Even if backup fails, attempt to get provider data
 		}
 
-		getProviderData("m3u", "")
-		getProviderData("hdhr", "")
+		if err = getProviderData("m3u", ""); err != nil {
+			ShowError(err, 0) // Pass error and an int code
+			// Decide if this is fatal for StartSystem. For now, log and continue.
+		}
+		if err = getProviderData("hdhr", ""); err != nil {
+			ShowError(err, 0) // Pass error and an int code
+			// Log and continue.
+		}
 
 		if Settings.EpgSource == "XEPG" {
-			getProviderData("xmltv", "")
+			if err = getProviderData("xmltv", ""); err != nil {
+				ShowError(err, 0) // Pass error and an int code
+				// Log and continue.
+			}
 		}
 	}
 

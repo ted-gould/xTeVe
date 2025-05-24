@@ -2,7 +2,7 @@ package m3u
 
 import (
 	"encoding/json"
-	"io/ioutil"
+	"os" // Replaced io/ioutil with os
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -23,7 +23,7 @@ type M3UStream struct {
 func TestMakeInterfaceFromM3U(t *testing.T) {
 	// Read playlist
 	file := "test_playlist_1.m3u"
-	content, err := ioutil.ReadFile(file)
+	content, err := os.ReadFile(file) // Replaced ioutil.ReadFile with os.ReadFile
 	assert.NoError(t, err, "Should read playlist")
 
 	// Parse playlist into []interface{}
