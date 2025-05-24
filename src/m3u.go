@@ -41,7 +41,7 @@ func parsePlaylist(filename, fileType string) (channels []any, err error) {
 // FilterThisStream checks if a stream should be filtered based on global filter rules.
 // It is used by benchmarks and potentially other parts of the application.
 func FilterThisStream(s any) (status bool) {
-	status = false // Default to not matching/not being filtered for positive inclusion
+	// status is false by default for a bool named return
 	stream, ok := s.(map[string]string)
 	if !ok {
 		// This should ideally not happen if s is always map[string]string
@@ -70,7 +70,7 @@ func FilterThisStream(s any) (status bool) {
 		var effectiveStreamName = rawStreamName
 		var effectiveStreamGroup = rawStreamGroup
 		var effectiveStreamValues = rawStreamValues
-		var effectiveMainFilterRulePart = baseFilterRule // This will be the main part of rule after ex/include are stripped
+		var effectiveMainFilterRulePart string // Declare, assign after baseFilterRule is processed
 
 		// Extract exclude/include specifiers first from the original baseFilterRule
 		// These specifiers might contain mixed case if the filter is case-sensitive

@@ -73,7 +73,9 @@ func setupXMLTVTestGlobals() func() {
 	// When caching is false, GetURL returns the src as-is, simplifying tests.
 	// The cacheURL for imgcache.New is formed using System.ServerProtocol.WEB and System.Domain
 	cachePath := System.Folder.ImagesCache
-	os.MkdirAll(cachePath, os.ModePerm) // Ensure cache path exists for New()
+	if err := os.MkdirAll(cachePath, os.ModePerm); err != nil { // Ensure cache path exists for New()
+		panic(fmt.Sprintf("Failed to create image cache directory for tests: %v", err))
+	}
 
 	// The cacheURL for imgcache.New is not critical if caching is false for GetURL behavior.
 	// However, to fully initialize, use values from testXMLTVSystem.
@@ -114,7 +116,9 @@ func setupXMLTVTestGlobals() func() {
 		},
 	}
 
-	os.MkdirAll(System.Folder.Data, os.ModePerm)
+	if err := os.MkdirAll(System.Folder.Data, os.ModePerm); err != nil {
+		panic(fmt.Sprintf("Failed to create data directory for tests: %v", err))
+	}
 	// Create a dummy provider XMLTV file for getLocalXMLTV to read
 	dummyXMLContent := `
 	<tv>
@@ -129,7 +133,9 @@ func setupXMLTVTestGlobals() func() {
 	`
 	// For getLocalXMLTV, the filename is Data.Folder.data + xepgChannel.XmltvFile
 	// So if xepgChannel.XmltvFile = "provider.xml", path is "./testdata/provider.xml"
-	os.WriteFile(path.Join(System.Folder.Data, "provider.xml"), []byte(dummyXMLContent), 0644)
+	if err := os.WriteFile(path.Join(System.Folder.Data, "provider.xml"), []byte(dummyXMLContent), 0644); err != nil {
+		panic(fmt.Sprintf("Failed to write dummy XMLTV file for tests: %v", err))
+	}
 
 	return func() {
 		System = originalSystem

@@ -148,7 +148,11 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 
 					for i := 1; i < 60; i++ {
 						_ = i
-						w.Write([]byte(content))
+						if _, errWrite := w.Write([]byte(content)); errWrite != nil {
+							// Log error and break, client connection is likely gone
+							// log.Printf("Error writing stream-limit content to client: %v", errWrite)
+							return
+						}
 						time.Sleep(time.Duration(500) * time.Millisecond)
 					}
 					return
@@ -288,7 +292,13 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 							_, err = file.Read(buffer)
 
 							if err == nil {
-								file.Seek(0, 0)
+								if _, errSeek := file.Seek(0, 0); errSeek != nil {
+									// Log error and potentially skip this segment or return
+									// log.Printf("Error seeking file %s: %v", fileName, errSeek)
+									file.Close() // Ensure file is closed before returning or continuing
+									// Depending on desired behavior, might need to killClientConnection here
+									return // Or continue to next segment if appropriate
+								}
 
 								if !streaming {
 									contentType := http.DetectContentType(buffer)
@@ -306,9 +316,8 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 								   w.Header().Set("transferMode.dlna.org", "Streaming")
 								*/
 
-								_, err := w.Write(buffer)
-
-								if err != nil {
+								if _, errWrite := w.Write(buffer); errWrite != nil {
+									// log.Printf("Error writing segment to client %s: %v", stream.ChannelName, errWrite)
 									file.Close()
 									killClientConnection(streamID, playlistID, false)
 									return
@@ -1048,7 +1057,10 @@ func parseM3U8(stream *ThisStream) (err error) {
 
 	if !noNewSegment {
 		if stream.DynamicBandwidth {
-			switchBandwidth(stream)
+			err = switchBandwidth(stream) // Check and assign error
+			if err != nil {
+				return err // Propagate error
+			}
 		} else {
 			stream.Segment = append(stream.Segment, segment)
 		}
@@ -1216,8 +1228,12 @@ func thirdPartyBuffer(streamID int, playlistID string) {
 		stdOut, err := cmd.StdoutPipe()
 		if err != nil {
 			ShowError(err, 0)
-			cmd.Process.Kill()
-			cmd.Wait()
+			if killErr := cmd.Process.Kill(); killErr != nil {
+				// log.Printf("Error killing process after StdoutPipe failure: %v", killErr)
+			}
+			if waitErr := cmd.Wait(); waitErr != nil {
+				// log.Printf("Error waiting for process after StdoutPipe failure: %v", waitErr)
+			}
 			addErrorToStream(err)
 			return
 		}
@@ -1226,8 +1242,12 @@ func thirdPartyBuffer(streamID int, playlistID string) {
 		logOut, err := cmd.StderrPipe()
 		if err != nil {
 			ShowError(err, 0)
-			cmd.Process.Kill()
-			cmd.Wait()
+			if killErr := cmd.Process.Kill(); killErr != nil {
+				// log.Printf("Error killing process after StderrPipe failure: %v", killErr)
+			}
+			if waitErr := cmd.Wait(); waitErr != nil {
+				// log.Printf("Error waiting for process after StderrPipe failure: %v", waitErr)
+			}
 			addErrorToStream(err)
 			return
 		}
@@ -1236,8 +1256,17 @@ func thirdPartyBuffer(streamID int, playlistID string) {
 			showInfo(bufferType + ":Processing data")
 		}
 
-		cmd.Start()
-		defer cmd.Wait()
+		if err := cmd.Start(); err != nil {
+			ShowError(err, 0)
+			addErrorToStream(err)
+			// No need to Kill/Wait if Start fails, process likely didn't start
+			return
+		}
+		defer func() {
+			if err := cmd.Wait(); err != nil {
+				// log.Printf("Error waiting for command %s: %v", bufferType, err)
+			}
+		}()
 
 		go func() {
 			// Show Log Data from the Process in Debug Mode 1.
@@ -1288,11 +1317,15 @@ func thirdPartyBuffer(streamID int, playlistID string) {
 			select {
 			case timeout := <-t:
 				if timeout >= 20 && tmpSegment == 1 {
-					cmd.Process.Kill()
+					if killErr := cmd.Process.Kill(); killErr != nil {
+						// log.Printf("Error killing process on timeout: %v", killErr)
+					}
 					err = errors.New("Timout")
 					ShowError(err, 4006)
 					addErrorToStream(err)
-					cmd.Wait()
+					if waitErr := cmd.Wait(); waitErr != nil {
+						// log.Printf("Error waiting for process on timeout: %v", waitErr)
+					}
 					f.Close()
 					return
 				}
@@ -1304,9 +1337,13 @@ func thirdPartyBuffer(streamID int, playlistID string) {
 			}
 
 			if !clientConnection(stream) {
-				cmd.Process.Kill()
+				if killErr := cmd.Process.Kill(); killErr != nil {
+					// log.Printf("Error killing process (client disconnected): %v", killErr)
+				}
 				f.Close()
-				cmd.Wait()
+				if waitErr := cmd.Wait(); waitErr != nil {
+					// log.Printf("Error waiting for process (client disconnected): %v", waitErr)
+				}
 				return
 			}
 
@@ -1314,14 +1351,31 @@ func thirdPartyBuffer(streamID int, playlistID string) {
 			if err == io.EOF {
 				break
 			}
+			if err != nil { // Handle error from reader.Read
+				// log.Printf("Error reading from %s stdout: %v", bufferType, err)
+				if killErr := cmd.Process.Kill(); killErr != nil {
+					// log.Printf("Error killing process (read error): %v", killErr)
+				}
+				addErrorToStream(err) // Propagate the read error
+				if waitErr := cmd.Wait(); waitErr != nil {
+					// log.Printf("Error waiting for process (read error): %v", waitErr)
+				}
+				f.Close()
+				return
+			}
+
 
 			fileSize = fileSize + len(buffer[:n])
 
-			if _, err := f.Write(buffer[:n]); err != nil {
-				cmd.Process.Kill()
-				ShowError(err, 0)
-				addErrorToStream(err)
-				cmd.Wait()
+			if _, errWrite := f.Write(buffer[:n]); errWrite != nil {
+				if killErr := cmd.Process.Kill(); killErr != nil {
+					// log.Printf("Error killing process (write error): %v", killErr)
+				}
+				ShowError(errWrite, 0)
+				addErrorToStream(errWrite)
+				if waitErr := cmd.Wait(); waitErr != nil {
+					// log.Printf("Error waiting for process (write error): %v", waitErr)
+				}
 				f.Close()
 				return
 			}
@@ -1352,20 +1406,32 @@ func thirdPartyBuffer(streamID int, playlistID string) {
 				_, errCreate = bufferVFS.Create(tmpFile)
 				f, errOpen = bufferVFS.OpenFile(tmpFile, os.O_APPEND|os.O_WRONLY, 0600)
 				if errCreate != nil || errOpen != nil {
-					cmd.Process.Kill()
-					ShowError(err, 0)
-					addErrorToStream(err)
-					cmd.Wait()
-					f.Close()
+					if killErr := cmd.Process.Kill(); killErr != nil {
+						// log.Printf("Error killing process (file op error): %v", killErr)
+					}
+					// ShowError expects the actual error, not the potentially nil 'err' from before
+					if errCreate != nil {
+						ShowError(errCreate, 0)
+						addErrorToStream(errCreate)
+					} else {
+						ShowError(errOpen, 0)
+						addErrorToStream(errOpen)
+					}
+					if waitErr := cmd.Wait(); waitErr != nil {
+						// log.Printf("Error waiting for process (file op error): %v", waitErr)
+					}
+					f.Close() // f might be nil if OpenFile failed, but Close handles nil receiver
 					return
 				}
 			}
 		}
 
-		cmd.Process.Kill()
-		cmd.Wait()
+		if killErr := cmd.Process.Kill(); killErr != nil {
+			// log.Printf("Error killing process at end of %s buffer: %v", bufferType, killErr)
+		}
+		// The existing cmd.Wait() is deferred and will handle waiting.
 
-		err = errors.New(bufferType + " error")
+		err = errors.New(bufferType + " error") // This seems to indicate the process ended, possibly unexpectedly
 		addErrorToStream(err)
 		ShowError(err, 1204)
 

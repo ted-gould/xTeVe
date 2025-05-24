@@ -3,7 +3,7 @@ package imgcache
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
+	// "io/ioutil" // Will be removed
 	"net/http"
 	"net/url"
 	"os"
@@ -49,7 +49,7 @@ func New(path, chacheURL string, caching bool) (c *Cache, err error) {
 
 		src = strings.Trim(src, "\r\n")
 
-		if c.caching == false {
+		if !c.caching {
 			return src
 		}
 
@@ -131,30 +131,30 @@ func New(path, chacheURL string, caching bool) (c *Cache, err error) {
 		c.Lock()
 		defer c.Unlock()
 
-		files, err := ioutil.ReadDir(c.path)
+		dirEntries, err := os.ReadDir(c.path)
 		if err != nil {
 			return
 		}
 
-		for _, file := range files {
+		for _, entry := range dirEntries {
 			switch c.caching {
 			case true:
-				if _, ok := c.images[file.Name()]; !ok {
-					os.RemoveAll(c.path + file.Name())
+				if _, ok := c.images[entry.Name()]; !ok {
+					os.RemoveAll(c.path + entry.Name())
 				}
 			case false:
-				os.RemoveAll(c.path + file.Name())
+				os.RemoveAll(c.path + entry.Name())
 			}
 		}
 	}
 
-	files, err := ioutil.ReadDir(c.path)
+	dirEntries, err := os.ReadDir(c.path)
 	if err != nil {
 		return
 	}
 
-	for _, file := range files {
-		c.Cache = append(c.Cache, file.Name())
+	for _, entry := range dirEntries {
+		c.Cache = append(c.Cache, entry.Name())
 	}
 	return
 }

@@ -40,27 +40,38 @@ func checkXMLCompatibility(id string, body []byte) (err error) {
 }
 
 // Create XEPG Data
-func buildXEPG(background bool) {
+func buildXEPG(background bool) error { // Added error return type
 	if System.ScanInProgress == 1 {
-		return
+		return nil // Or an error indicating it's busy
 	}
 	System.ScanInProgress = 1
-	var err error
+	var err error // Keep for local error handling before returning
 
 	Data.Cache.Images, err = imgcache.New(System.Folder.ImagesCache, fmt.Sprintf("%s://%s/images/", System.ServerProtocol.WEB, System.Domain), Settings.CacheImages)
 	if err != nil {
 		ShowError(err, 0)
+		// Decide if this is fatal for buildXEPG
+		// For now, let's assume it can continue and might only affect images
 	}
 
 	if Settings.EpgSource == "XEPG" {
 		if background { // Was: case true
 			go func() {
+				// Functions in goroutine, their errors can't be directly returned by buildXEPG
 				createXEPGMapping()
-				createXEPGDatabase()
-				mapping()
+				if dbErr := createXEPGDatabase(); dbErr != nil {
+					ShowError(fmt.Errorf("error creating XEPG database in background: %w", dbErr), 0)
+				}
+				if mapErr := mapping(); mapErr != nil {
+					ShowError(fmt.Errorf("error during XEPG mapping in background: %w", mapErr), 0)
+				}
 				cleanupXEPG()
-				createXMLTVFile()
-				createM3UFile()
+				if xmlErr := createXMLTVFile(); xmlErr != nil {
+					ShowError(fmt.Errorf("error creating XMLTV file in background: %w", xmlErr), 0)
+				}
+				if m3uErr := createM3UFile(); m3uErr != nil {
+					ShowError(fmt.Errorf("error creating M3U file in background: %w", m3uErr), 0)
+				}
 
 				showInfo("XEPG:" + "Ready to use")
 
@@ -81,15 +92,29 @@ func buildXEPG(background bool) {
 					clearXMLTVCache()
 				}
 			}()
+			return nil // Background task launched, main function returns no immediate error
 		} else { // Was: case false
-			createXEPGMapping()
-			createXEPGDatabase()
-			mapping()
-			cleanupXEPG()
+			createXEPGMapping() // Assuming this doesn't return error or handles internally
+			if err = createXEPGDatabase(); err != nil {
+				ShowError(fmt.Errorf("error creating XEPG database: %w", err), 0)
+				System.ScanInProgress = 0
+				return err
+			}
+			if err = mapping(); err != nil {
+				ShowError(fmt.Errorf("error during XEPG mapping: %w", err), 0)
+				System.ScanInProgress = 0
+				return err
+			}
+			cleanupXEPG() // Assuming this doesn't return error or handles internally
 
 			go func() {
-				createXMLTVFile()
-				createM3UFile()
+				// Errors in this goroutine are logged as buildXEPG already returned for sync path
+				if xmlErr := createXMLTVFile(); xmlErr != nil {
+					ShowError(fmt.Errorf("error creating XMLTV file (async): %w", xmlErr), 0)
+				}
+				if m3uErr := createM3UFile(); m3uErr != nil {
+					ShowError(fmt.Errorf("error creating M3U file (async): %w", m3uErr), 0)
+				}
 
 				if Settings.CacheImages && System.ImageCachingInProgress == 0 {
 					go func() {
@@ -98,8 +123,12 @@ func buildXEPG(background bool) {
 						Data.Cache.Images.Image.Caching()
 						Data.Cache.Images.Image.Remove()
 						showInfo("Image Caching:Done")
-						createXMLTVFile()
-						createM3UFile()
+						if xmlErr := createXMLTVFile(); xmlErr != nil { // Called again here
+							ShowError(fmt.Errorf("error creating XMLTV file (async cache): %w", xmlErr), 0)
+						}
+						if m3uErr := createM3UFile(); m3uErr != nil { // Called again here
+							ShowError(fmt.Errorf("error creating M3U file (async cache): %w", m3uErr), 0)
+						}
 						System.ImageCachingInProgress = 0
 					}()
 				}
@@ -109,11 +138,18 @@ func buildXEPG(background bool) {
 					clearXMLTVCache()
 				}
 			}()
+			return nil // Synchronous part successful
 		}
 	} else {
+		// getLineup() // Assuming getLineup() modifies globals and doesn't return error, or handles its own.
+		// If getLineup can fail and that failure should be propagated, it needs to return error.
+		// For now, assume it matches original behavior.
 		getLineup()
 		System.ScanInProgress = 0
+		return nil
 	}
+	// Fallback, though all paths should be covered.
+	return nil
 }
 
 // Create Mapping Menu for the XMLTV Files
@@ -632,11 +668,18 @@ func verifyExistingChannelMappings(xepgChannel XEPGChannelStruct) XEPGChannelStr
 			// This condition means it was active, but mapping is now effectively nil or "-", so deactivate.
 			// The ShowError/showWarning above would already set XActive = false for missing data.
 			// This is more of a final sanity check.
+			xepgChannel.XActive = false // Deactivate the channel
+			// Log a warning that this specific condition led to deactivation.
+			// log.Printf("Warning: Channel %s (%s) was active but had invalid mapping ('%s', '%s') after checks. Deactivating.", xepgChannel.Name, xepgChannel.XChannelID, xepgChannel.XmltvFile, xepgChannel.XMapping)
+			// Using ShowError as it seems to be the project's way to log warnings/errors.
+			ShowError(fmt.Errorf("channel '%s' (%s) was active but had invalid mapping file ('%s') or ID ('%s') after checks. Deactivating", xepgChannel.Name, xepgChannel.XChannelID, xepgChannel.XmltvFile, xepgChannel.XMapping), 0)
+
 		}
 		// If it was already deactivated by ShowError, this just re-confirms.
 		// If it was active but had empty XmltvFile/XMapping (unlikely state), this deactivates.
 	}
 	// An additional check for ensuring channel is deactivated if mapping is "-" or file is "-"
+	// This check is still valuable as the above block might not cover all paths to "-" if XActive was already false.
 	if xepgChannel.XmltvFile == "-" || xepgChannel.XMapping == "-" {
 		xepgChannel.XActive = false
 	}
@@ -972,13 +1015,19 @@ func getLocalXMLTV(file string, xmltv *XMLTV) (err error) {
 }
 
 // Create M3U File
-func createM3UFile() {
+func createM3UFile() error { // Added error return type
 	showInfo("XEPG:" + fmt.Sprintf("Create M3U file (%s)", System.File.M3U))
 	_, err := buildM3U([]string{})
 	if err != nil {
 		ShowError(err, 000)
+		return err // Propagate error
 	}
-	saveMapToJSONFile(System.File.URLS, Data.Cache.StreamingURLS)
+	err = saveMapToJSONFile(System.File.URLS, Data.Cache.StreamingURLS)
+	if err != nil {
+		ShowError(err, 000) // Show error, but also return it
+		return err
+	}
+	return nil
 }
 
 // Clean up the XEPG Database

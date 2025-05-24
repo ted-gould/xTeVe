@@ -21,25 +21,25 @@ func activatedSystemAuthentication() (err error) {
 	defaults["authentication.xml"] = false
 	defaults["authentication.api"] = false
 	err = authentication.SetDefaultUserData(defaults)
-
+	// Propagate error from SetDefaultUserData
 	return
 }
 
 func createFirstUserForAuthentication(username, password string) (token string, err error) {
-	var authenticationErr = func(err error) {
-		if err != nil {
-			return
-		}
+	err = authentication.CreateDefaultUser(username, password)
+	if err != nil {
+		return "", err
 	}
 
-	err = authentication.CreateDefaultUser(username, password)
-	authenticationErr(err)
-
 	token, err = authentication.UserAuthentication(username, password)
-	authenticationErr(err)
+	if err != nil {
+		return "", err
+	}
 
 	token, err = authentication.CheckTheValidityOfTheToken(token)
-	authenticationErr(err)
+	if err != nil {
+		return "", err
+	}
 
 	var userData = make(map[string]any)
 	userData["username"] = username
@@ -51,10 +51,14 @@ func createFirstUserForAuthentication(username, password string) (token string, 
 	userData["defaultUser"] = true
 
 	userID, err := authentication.GetUserID(token)
-	authenticationErr(err)
+	if err != nil {
+		return "", err
+	}
 
 	err = authentication.WriteUserData(userID, userData)
-	authenticationErr(err)
+	if err != nil {
+		return "", err
+	}
 
 	return
 }
@@ -78,8 +82,18 @@ func basicAuth(r *http.Request, level string) (username string, err error) {
 		return
 	}
 
-	payload, _ := base64.StdEncoding.DecodeString(auth[1])
+	payload, errDecode := base64.StdEncoding.DecodeString(auth[1])
+	if errDecode != nil {
+		// If decoding fails, it's an invalid Authorization header.
+		// The original err (user authentication failed) is appropriate.
+		return "", err // Return the original error
+	}
 	pair := strings.SplitN(string(payload), ":", 2)
+
+	if len(pair) != 2 {
+		// If not two parts, it's an invalid format.
+		return "", err // Return the original error
+	}
 
 	username = pair[0]
 	var password = pair[1]
@@ -145,13 +159,22 @@ func checkAuthorizationLevel(token, level string) (err error) {
 				err = errors.New("no authorization")
 			}
 		} else {
+			// Level not found, set to false and try to save.
+			// The user does not have authorization regardless of save success.
 			userData[level] = false
-			authentication.WriteUserData(userID, userData)
-			//err = errors.New("No authorization")
+			if writeErr := authentication.WriteUserData(userID, userData); writeErr != nil {
+				// Log the error, but the primary error (no authorization) stands.
+				// log.Printf("Failed to write default authorization level for user %s, level %s: %v", userID, level, writeErr)
+			}
+			err = errors.New("no authorization") // Ensure error is set if level was not found
 		}
 	} else {
-		authentication.WriteUserData(userID, userData)
-		//err = errors.New("No authorization")
+		// UserData is empty, this is an unusual case.
+		// Attempt to write, but the user definitely doesn't have authorization.
+		if writeErr := authentication.WriteUserData(userID, userData); writeErr != nil {
+			// log.Printf("Failed to write empty userData for user %s, level %s: %v", userID, level, writeErr)
+		}
+		err = errors.New("no authorization") // Ensure error is set if userData was empty
 	}
 
 	return
