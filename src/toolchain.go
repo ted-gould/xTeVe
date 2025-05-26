@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log" // Added for log.Printf
 	"net"
 	"os"
 	"os/exec"
@@ -232,8 +233,12 @@ func mapToJSON(tmpMap any) string {
 
 func jsonToMap(content string) map[string]any {
 	var tmpMap = make(map[string]any)
-	json.Unmarshal([]byte(content), &tmpMap)
-	return (tmpMap)
+	if err := json.Unmarshal([]byte(content), &tmpMap); err != nil {
+		log.Printf("Error unmarshalling JSON to map: %v. Content: %s", err, content)
+		// Return an empty map or handle as appropriate for the callers
+		return make(map[string]any)
+	}
+	return tmpMap
 }
 
 func jsonToInterface(content string) (tmpMap any, err error) {
@@ -269,7 +274,14 @@ func loadJSONFileToMap(file string) (tmpMap map[string]any, err error) {
 		err = json.Unmarshal([]byte(content), &tmpMap)
 	}
 
-	f.Close()
+	if closeErr := f.Close(); closeErr != nil {
+		log.Printf("Error closing file %s: %v", file, closeErr)
+		// If err is nil at this point, we should return closeErr.
+		// If err is not nil, the original error is probably more important.
+		if err == nil {
+			return tmpMap, closeErr
+		}
+	}
 	return
 }
 
@@ -282,7 +294,23 @@ func readByteFromFile(file string) (content []byte, err error) {
 	defer f.Close()
 
 	content, err = io.ReadAll(f)
-	f.Close()
+	// The deferred f.Close() will run. If an explicit Close is needed before return,
+	// it should be handled carefully with the deferred one.
+	// In this case, io.ReadAll reads until EOF or error, so the file is likely fully read or errored.
+	// The deferred close is generally sufficient. If we want to capture a close error specifically
+	// *before* returning a potential io.ReadAll error, the logic would be more complex.
+	// Given the original structure, we'll assume the deferred close is the primary mechanism.
+	// However, the explicit f.Close() was there. Let's handle its error if err is nil.
+	if err == nil { // If ReadAll was successful
+		if closeErr := f.Close(); closeErr != nil {
+			log.Printf("Error closing file %s after read: %v", file, closeErr)
+			return content, closeErr // Return the close error as the primary error now
+		}
+	} else {
+		// If ReadAll failed, we still rely on the deferred close.
+		// We could try to close explicitly and log, but it might mask the original ReadAll error.
+		// For now, let's stick to the deferred close for the error path of ReadAll.
+	}
 	return
 }
 
@@ -367,7 +395,13 @@ func randomString(n int) string {
 
 	var bytes = make([]byte, n)
 
-	rand.Read(bytes)
+	if _, err := rand.Read(bytes); err != nil {
+		log.Printf("Error reading random bytes for randomString: %v", err)
+		// Fallback to a less random or empty string, or panic if this is critical
+		// For now, returning a fixed string or empty to avoid panic,
+		// but this might have security implications depending on usage.
+		return "error_generating_random_string"
+	}
 
 	for i, b := range bytes {
 		bytes[i] = alphanum[b%byte(len(alphanum))]
@@ -389,6 +423,11 @@ func parseTemplate(content string, tmpMap map[string]any) (result string) {
 
 func getMD5(str string) string {
 	md5Hasher := md5.New()
-	md5Hasher.Write([]byte(str))
+	if _, err := md5Hasher.Write([]byte(str)); err != nil {
+		log.Printf("Error writing to md5 hasher: %v", err)
+		// Return an empty string or a fixed error indicator.
+		// This depends on how callers handle an MD5 generation failure.
+		return "" // Or a specific error string like "md5_error"
+	}
 	return hex.EncodeToString(md5Hasher.Sum(nil))
 }

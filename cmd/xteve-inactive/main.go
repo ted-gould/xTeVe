@@ -5,8 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io"
-	"io/ioutil"
+	"io" // Added for io.ReadAll
 	"net/http"
 	"os"
 	"strconv"
@@ -49,7 +48,7 @@ func runLogic(cmdHost, cmdPort string, outWriter io.Writer, errWriter io.Writer)
 
 	defer resp.Body.Close()
 
-	respStr, err := ioutil.ReadAll(resp.Body)
+	respStr, err := io.ReadAll(resp.Body)
 	if err != nil {
 		fmt.Fprintf(errWriter, "Unable read response: %v\n", err)
 		return -1

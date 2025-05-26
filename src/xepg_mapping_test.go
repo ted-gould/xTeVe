@@ -1,6 +1,7 @@
 package src
 
 import (
+	"fmt" // Added for fmt.Sprintf in panic
 	"os"
 	"testing"
 
@@ -95,8 +96,12 @@ func setupMappingTestGlobals() func() {
 		},
 	}
 
-	os.MkdirAll(System.Folder.Data, os.ModePerm)
-	os.Remove(System.File.XEPG)
+	if err := os.MkdirAll(System.Folder.Data, os.ModePerm); err != nil {
+		// This is a fatal error for test setup. Panic is appropriate here
+		// as t is not available to call t.Fatalf.
+		panic(fmt.Sprintf("Failed to create test data directory in setupMappingTestGlobals: %v", err))
+	}
+	os.Remove(System.File.XEPG) // Error benign if file doesn't exist
 
 	return func() {
 		System = originalSystem

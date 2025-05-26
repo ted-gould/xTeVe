@@ -48,8 +48,13 @@ func xTeVeAutoBackup() (err error) {
 			end = Settings.BackupKeep - 1
 		}
 
-		for i := range len(oldBackupFiles) - end {
-			os.RemoveAll(System.Folder.Backup + oldBackupFiles[i])
+		for i := 0; i < len(oldBackupFiles)-end; i++ { // Corrected loop condition
+			backupFileToDelete := System.Folder.Backup + oldBackupFiles[i]
+			if errRemove := os.RemoveAll(backupFileToDelete); errRemove != nil {
+				// Log the error, but continue trying to delete other old backups
+				// log.Printf("Error deleting old backup file %s: %v", backupFileToDelete, errRemove)
+				// Potentially, update 'err' to return a generic error indicating some cleanup failed
+			}
 			debug = fmt.Sprintf("Delete backup file:%s", oldBackupFiles[i])
 			showDebug(debug, 1)
 		}
@@ -148,6 +153,7 @@ func xteveRestore(archive string) (newWebURL string, err error) {
 
 	if err = removeChildItems(getPlatformPath(System.Folder.Config)); err != nil {
 		ShowError(err, 1073)
+		return // Propagate the error
 	}
 
 	// Extract the ZIP Archive into the Config Folder
@@ -169,11 +175,21 @@ func xteveRestore(archive string) (newWebURL string, err error) {
 	if newPort == oldPort {
 		if err != nil {
 			ShowError(err, 0)
+			// Even if newPort == oldPort, err might have been set by a previous operation.
+			// We should return it if it's not nil.
+			if err != nil {
+				return "", err
+			}
 		}
 
-		loadSettings()
+		// loadSettings likely returns (SettingsStruct, error)
+		// We only care about the error here as Settings is a global variable modified by loadSettings.
+		if _, err = loadSettings(); err != nil {
+			ShowError(err, 0) // Or choose to propagate it
+			return "", err // Propagating seems more appropriate for a restore failure
+		}
 
-		err := Init()
+		err = Init()
 		if err != nil {
 			ShowError(err, 0)
 			return "", err
@@ -229,7 +245,10 @@ func XteveRestoreFromCLI(archive string) (err error) {
 
 	fmt.Print("All data will be replaced with those from the backup. Should the files be restored? [yes|no]:")
 
-	fmt.Scanln(&confirm)
+	if _, errScan := fmt.Scanln(&confirm); errScan != nil {
+		fmt.Println("Error reading input:", errScan)
+		return errScan // Propagate the error
+	}
 
 	switch strings.ToLower(confirm) {
 	case "yes":

@@ -45,15 +45,23 @@ func SSDP() (err error) {
 			case <-aliveTick.C:
 				err = adv.Alive()
 				if err != nil {
-					ShowError(err, 0)
-					adv.Bye()
-					adv.Close()
+					ShowError(err, 0) // Original error from Alive()
+					if byeErr := adv.Bye(); byeErr != nil {
+						log.Printf("Error sending SSDP Bye after Alive failure: %v", byeErr)
+					}
+					if closeErr := adv.Close(); closeErr != nil {
+						log.Printf("Error closing SSDP after Alive failure: %v", closeErr)
+					}
 					break loop
 				}
 			case <-quit:
-				adv.Bye()
-				adv.Close()
-				os.Exit(0)
+				if byeErr := adv.Bye(); byeErr != nil {
+					log.Printf("Error sending SSDP Bye on quit: %v", byeErr)
+				}
+				if closeErr := adv.Close(); closeErr != nil {
+					log.Printf("Error closing SSDP on quit: %v", closeErr)
+				}
+				os.Exit(0) // This will terminate the program, so further error handling is moot.
 				break loop
 			}
 		}

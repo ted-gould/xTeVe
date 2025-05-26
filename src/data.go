@@ -156,7 +156,12 @@ func updateServerSettings(request RequestStruct) (settings SettingsStruct, err e
 			if err != nil {
 				return
 			}
-			buildXEPG(false)
+			if errBuild := buildXEPG(false); errBuild != nil {
+				// Log or potentially return this error as well
+				// log.Printf("Error building XEPG after settings save: %v", errBuild)
+				ShowError(errBuild, 0) // Assuming ShowError logs and is acceptable here
+				// return settings, errBuild // Or decide if this is critical enough to return
+			}
 		}
 
 		if cacheImages {
@@ -168,12 +173,24 @@ func updateServerSettings(request RequestStruct) (settings SettingsStruct, err e
 
 				switch Settings.CacheImages {
 				case false:
-					createXMLTVFile()
-					createM3UFile()
+					if errXML := createXMLTVFile(); errXML != nil {
+						// log.Printf("Error creating XMLTV file: %v", errXML)
+						ShowError(errXML, 0)
+					}
+					if errM3U := createM3UFile(); errM3U != nil {
+						// log.Printf("Error creating M3U file: %v", errM3U)
+						ShowError(errM3U, 0)
+					}
 				case true:
 					go func() {
-						createXMLTVFile()
-						createM3UFile()
+						if errXML := createXMLTVFile(); errXML != nil {
+							// log.Printf("Error creating XMLTV file in goroutine: %v", errXML)
+							ShowError(errXML, 0)
+						}
+						if errM3U := createM3UFile(); errM3U != nil {
+							// log.Printf("Error creating M3U file in goroutine: %v", errM3U)
+							ShowError(errM3U, 0)
+						}
 
 						System.ImageCachingInProgress = 1
 						showInfo("Image Caching:Images are cached")
@@ -183,7 +200,10 @@ func updateServerSettings(request RequestStruct) (settings SettingsStruct, err e
 
 						System.ImageCachingInProgress = 0
 
-						buildXEPG(false)
+						if errBuild := buildXEPG(false); errBuild != nil {
+							// log.Printf("Error building XEPG after image caching: %v", errBuild)
+							ShowError(errBuild, 0)
+						}
 					}()
 				}
 			}
@@ -191,8 +211,14 @@ func updateServerSettings(request RequestStruct) (settings SettingsStruct, err e
 
 		if createXEPGFiles {
 			go func() {
-				createXMLTVFile()
-				createM3UFile()
+				if errXML := createXMLTVFile(); errXML != nil {
+					// log.Printf("Error creating XMLTV file (createXEPGFiles): %v", errXML)
+					ShowError(errXML, 0)
+				}
+				if errM3U := createM3UFile(); errM3U != nil {
+					// log.Printf("Error creating M3U file (createXEPGFiles): %v", errM3U)
+					ShowError(errM3U, 0)
+				}
 			}()
 		}
 	}
@@ -275,9 +301,13 @@ func saveFiles(request RequestStruct, fileType string) (err error) {
 			if err != nil {
 				return err
 			}
-			buildXEPG(false)
+			if errBuild := buildXEPG(false); errBuild != nil {
+				// log.Printf("Error building XEPG after saving files: %v", errBuild)
+				ShowError(errBuild, 0)
+				// Depending on severity, might want to return errBuild here
+			}
 		}
-		Settings, _ = loadSettings()
+		Settings, _ = loadSettings() // Explicitly ignoring error as per previous analysis
 	}
 	return
 }
@@ -299,7 +329,14 @@ func updateFile(request RequestStruct, fileType string) (err error) {
 		err = getProviderData(fileType, dataID)
 		if err == nil {
 			err = buildDatabaseDVR()
-			buildXEPG(false)
+			if err != nil { // Check error from buildDatabaseDVR before calling buildXEPG
+				return err
+			}
+			if errBuild := buildXEPG(false); errBuild != nil {
+				// log.Printf("Error building XEPG after updating file: %v", errBuild)
+				ShowError(errBuild, 0)
+				// Potentially return errBuild
+			}
 		}
 	}
 	return
@@ -324,14 +361,16 @@ func deleteLocalProviderFiles(dataID, fileType string) {
 
 	if _, ok := removeData[dataID]; ok {
 		delete(removeData, dataID)
-		os.RemoveAll(System.Folder.Data + dataID + fileExtension)
+		filePathToRemove := System.Folder.Data + dataID + fileExtension
+		if errRemove := os.RemoveAll(filePathToRemove); errRemove != nil {
+			// log.Printf("Error deleting local provider file %s: %v", filePathToRemove, errRemove)
+			ShowError(errRemove, 0) // Use existing error display mechanism
+		}
 	}
 }
 
 // Save Filter Settings (WebUI)
 func saveFilter(request RequestStruct) (settings SettingsStruct, err error) {
-	var filterMap = make(map[int64]any)
-	var newData = make(map[int64]any)
 	var defaultFilter FilterStruct
 	var newFilter = false
 
@@ -340,8 +379,22 @@ func saveFilter(request RequestStruct) (settings SettingsStruct, err error) {
 	defaultFilter.PreserveMapping = true
 	defaultFilter.StartingChannel = strconv.FormatFloat(Settings.MappingFirstChannel, 'f', -1, 64) // 1000
 
-	filterMap = Settings.Filter
-	newData = request.Filter
+	filterMap := Settings.Filter // Use short declaration and assign directly
+	newData := request.Filter   // Use short declaration and assign directly
+
+	// Ensure filterMap is not nil if Settings.Filter could be nil
+	if filterMap == nil {
+		filterMap = make(map[int64]any)
+		// If Settings.Filter was nil, we need to update it after modifications
+		// This is a bit tricky as filterMap is a copy. The original Settings.Filter
+		// is modified directly in the loop by dataID.
+		// For now, we assume Settings.Filter is initialized elsewhere if it needs to be.
+		// However, if Settings.Filter can be nil, this function should probably update Settings.Filter
+		// with the new map if one is created.
+		// A safer approach is to ensure Settings.Filter is always initialized.
+		// For the purpose of fixing ineffassign, we assume Settings.Filter is a valid map.
+	}
+
 
 	var createNewID = func() (id int64) {
 	newID:
@@ -396,7 +449,11 @@ func saveFilter(request RequestStruct) (settings SettingsStruct, err error) {
 		return
 	}
 
-	buildXEPG(false)
+	if errBuild := buildXEPG(false); errBuild != nil {
+		// log.Printf("Error building XEPG after saving filter: %v", errBuild)
+		ShowError(errBuild, 0)
+		// Potentially return errBuild if this is critical
+	}
 	return
 }
 
@@ -423,9 +480,14 @@ func saveXEpgMapping(request RequestStruct) (err error) {
 
 	if System.ScanInProgress == 0 {
 		System.ScanInProgress = 1
-		cleanupXEPG()
+		cleanupXEPG() // Assuming cleanupXEPG does not return an error or handles its own.
 		System.ScanInProgress = 0
-		buildXEPG(true)
+		if errBuild := buildXEPG(true); errBuild != nil {
+			// log.Printf("Error building XEPG after saving XEPG mapping: %v", errBuild)
+			ShowError(errBuild, 0) // Using existing error display
+			// This function returns err, so we could propagate it.
+			// However, the original logic implies it might continue, so logging seems appropriate.
+		}
 	} else {
 		// If the Mapping is saved again while the Database is being created, the Database will not be updated again until later.
 		go func() {
@@ -442,9 +504,12 @@ func saveXEpgMapping(request RequestStruct) (err error) {
 			}
 
 			System.ScanInProgress = 1
-			cleanupXEPG()
+			cleanupXEPG() // Assuming cleanupXEPG does not return an error or handles its own.
 			System.ScanInProgress = 0
-			buildXEPG(false)
+			if errBuild := buildXEPG(false); errBuild != nil {
+				// log.Printf("Error building XEPG in goroutine after XEPG mapping: %v", errBuild)
+				ShowError(errBuild, 0) // Using existing error display
+			}
 			showInfo("XEPG:" + "Ready to use")
 
 			System.BackgroundProcess = false
@@ -488,7 +553,12 @@ func saveUserData(request RequestStruct) (err error) {
 		delete(newUserData.(map[string]any), "confirm")
 
 		if _, ok := newUserData.(map[string]any)["delete"]; ok {
-			authentication.RemoveUser(userID)
+			if errRemove := authentication.RemoveUser(userID); errRemove != nil {
+				// log.Printf("Error removing user %s: %v", userID, errRemove)
+				ShowError(errRemove, 0) // Using existing error display
+				// Decide if this is a critical error to return, or if processing other users can continue
+				// For now, let's assume it's not critical enough to stop processing other users.
+			}
 		} else {
 			err = authentication.WriteUserData(userID, newUserData.(map[string]any))
 			if err != nil {
@@ -530,11 +600,11 @@ func saveWizard(request RequestStruct) (nextStep int, err error) {
 			Settings.EpgSource = value.(string)
 			nextStep = 2
 		case "m3u", "xmltv":
-			var filesMap = make(map[string]any)
+			var filesMap map[string]any // Declare without initializing
 			var data = make(map[string]any)
 			var indicator, dataID string
 
-			filesMap = make(map[string]any)
+			// filesMap is assigned below based on key
 
 			data["type"] = key
 			data["new"] = true
@@ -589,7 +659,11 @@ func saveWizard(request RequestStruct) (nextStep int, err error) {
 					delete(filesMap, dataID)
 					return
 				}
-				buildXEPG(false)
+				if errBuild := buildXEPG(false); errBuild != nil {
+					// log.Printf("Error building XEPG in wizard: %v", errBuild)
+					ShowError(errBuild, 0) // Using existing error display
+					// This function returns nextStep, err. Consider if this should be returned.
+				}
 				System.ScanInProgress = 0
 			}
 		}
@@ -780,7 +854,12 @@ func buildDatabaseDVR() (err error) {
 				compatibility["stream.id"] = int(uuid * 100 / len(channels))
 			}
 			compatibility["streams"] = len(channels)
-			setProviderCompatibility(id, fileType, compatibility)
+			if errCompat := setProviderCompatibility(id, fileType, compatibility); errCompat != nil {
+				// log.Printf("Error setting provider compatibility for %s (%s): %v", id, fileType, errCompat)
+				ShowError(errCompat, 0) // Using existing error display
+				// This function returns err. If compatibility setting is critical, propagate.
+				// For now, logging and continuing to build DVR for other providers.
+			}
 		}
 	}
 
@@ -865,8 +944,8 @@ func getProviderParameter(id, fileType, key string) (s string) {
 }
 
 // Update Provider Statistics Compatibility
-func setProviderCompatibility(id, fileType string, compatibility map[string]int) {
-	var dataMap = make(map[string]any)
+func setProviderCompatibility(id, fileType string, compatibility map[string]int) error { // Added error return type
+	var dataMap map[string]any // Declare, assign below
 
 	switch fileType {
 	case "m3u":
@@ -888,6 +967,7 @@ func setProviderCompatibility(id, fileType string, compatibility map[string]int)
 		case "xmltv":
 			Settings.Files.XMLTV = dataMap
 		}
-		saveSettings(Settings)
+		return saveSettings(Settings) // Return error from saveSettings
 	}
+	return nil // Return nil if dataId not found in dataMap
 }

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/base64"
 	"fmt"
+	"io" // Added for io.EOF
 	"log"
 	"os"
 	"path/filepath"
@@ -45,8 +46,8 @@ func BuildGoFile() error {
 	content += createMapFromFiles(htmlFolder) + "\n"
 
 	content += "}" + "\n\n"
-	writeStringToFile(goFile, content)
-	return nil
+	// Propagate the error from writeStringToFile
+	return writeStringToFile(goFile, content)
 }
 
 // GetHTMLString : base64 -> string
@@ -88,19 +89,31 @@ func readFilesToMap(path string, info os.FileInfo, err error) error {
 }
 
 func fileToBase64(file string) string {
-	imgFile, _ := os.Open(file)
+	imgFile, err := os.Open(file)
+	if err != nil {
+		log.Printf("Error opening file %s: %v", file, err)
+		return "" // Return empty string or handle error as appropriate
+	}
 	defer imgFile.Close()
 
 	// create a new buffer base on file size
-	fInfo, _ := imgFile.Stat()
+	fInfo, err := imgFile.Stat()
+	if err != nil {
+		log.Printf("Error stating file %s: %v", file, err)
+		return "" // Return empty string or handle error as appropriate
+	}
 	var size = fInfo.Size()
 	buf := make([]byte, int64(size))
 
 	// read file content into buffer
 	fReader := bufio.NewReader(imgFile)
-	fReader.Read(buf)
-
-	imgBase64Str := base64.StdEncoding.EncodeToString(buf)
+	n, err := fReader.Read(buf)
+	if err != nil && err != io.EOF { // EOF is not an error for Read, bufio.EOF is not a thing
+		log.Printf("Error reading file %s: %v", file, err)
+		return "" // Return empty string or handle error as appropriate
+	}
+	// It's good practice to use the actual number of bytes read
+	imgBase64Str := base64.StdEncoding.EncodeToString(buf[:n])
 	return imgBase64Str
 }
 

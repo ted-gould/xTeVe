@@ -15,7 +15,7 @@ import (
 func getProviderData(fileType, fileID string) (err error) {
 	var fileExtension, serverFileName string
 	var body = make([]byte, 0)
-	var newProvider = false
+	// var newProvider = false // Removed: Ineffectual assignment
 	var dataMap = make(map[string]any)
 
 	var saveDateFromProvider = func(fileSource, serverFileName, id string, body []byte) (err error) {
@@ -116,7 +116,7 @@ func getProviderData(fileType, fileID string) (err error) {
 	for dataID, d := range dataMap {
 		var data = d.(map[string]any)
 		var fileSource = data["file.source"].(string)
-		newProvider = false
+		var newProvider = false // Declare and initialize newProvider inside the loop
 
 		if _, ok := data["new"]; ok {
 			newProvider = true
@@ -177,11 +177,11 @@ func getProviderData(fileType, fileID string) (err error) {
 				}
 
 				// Increase Error Counter by 1
-				var data = make(map[string]any)
 				if value, ok := dataMap[dataID].(map[string]any); ok {
-					data = value
-					data["counter.error"] = data["counter.error"].(float64) + 1
-					data["counter.download"] = data["counter.download"].(float64) + 1
+					// Directly modify the map obtained from dataMap
+					value["counter.error"] = value["counter.error"].(float64) + 1
+					value["counter.download"] = value["counter.download"].(float64) + 1
+					// No need for the separate 'data' variable here
 				}
 			} else {
 				return downloadErr
