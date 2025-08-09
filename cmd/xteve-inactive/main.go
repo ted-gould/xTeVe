@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 
 	xteve "xteve/src"
 )
@@ -57,7 +58,7 @@ func runLogic(cmdHost, cmdPort string, outWriter io.Writer, errWriter io.Writer)
 	var apiresp xteve.APIResponseStruct
 	err = json.Unmarshal(respStr, &apiresp)
 	if err != nil {
-		if string(respStr) == "Locked [423]" {
+		if strings.TrimSpace(string(respStr)) == "Locked [423]" {
 			return 1
 		} else {
 			fmt.Fprintf(errWriter, "Unable parse response: %v\n", err)
