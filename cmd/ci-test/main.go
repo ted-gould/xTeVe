@@ -154,7 +154,7 @@ func runTests() error {
 	m3uData := map[string]interface{}{
 		"-": map[string]interface{}{ // Use "-" to indicate a new file
 			"name": "CSPAN",
-			"url":  "src/testdata/c-span.us.m3u",
+			"url":  "https://raw.githubusercontent.com/ted-gould/xTeVe/main/src/testdata/c-span.us.m3u",
 		},
 	}
 	// Correct key is "files" with a nested "m3u" map

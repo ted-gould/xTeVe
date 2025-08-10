@@ -222,12 +222,18 @@ func downloadFileFromServer(providerURL string) (filename string, body []byte, e
 		return
 	}
 
-	resp, err := http.Get(providerURL)
+	req, err := http.NewRequest("GET", providerURL, nil)
 	if err != nil {
 		return
 	}
 
-	resp.Header.Set("User-Agent", Settings.UserAgent)
+	req.Header.Set("User-Agent", Settings.UserAgent)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return
+	}
+	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		err = fmt.Errorf("%d: %s "+http.StatusText(resp.StatusCode), resp.StatusCode, providerURL)
