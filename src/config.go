@@ -156,10 +156,13 @@ func Init() (err error) {
 
 	// Check the permissions on all Folders
 	err = checkFilePermission(System.Folder.Config)
-	if err == nil {
-		err = checkFilePermission(System.Folder.Temp) // Assign and check the error
+	if err != nil {
+		return
 	}
-	// If err is not nil here, it will be returned by Init() eventually, or handled if more logic follows.
+	err = checkFilePermission(System.Folder.Temp)
+	if err != nil {
+		return
+	}
 
 	// Separate tmp Folder for each Instance
 	// System.Folder.Temp = System.Folder.Temp + Settings.UUID + string(os.PathSeparator)
@@ -241,7 +244,12 @@ func StartSystem(updateProviderFiles bool) (err error) {
 		return
 	}
 
-	buildXEPG(false)
+	err = buildXEPG(false)
+	if err != nil {
+		ShowError(err, 0)
+		return
+	}
+
 	return
 }
 

@@ -191,13 +191,10 @@ func getProviderData(fileType, fileID string) (err error) {
 		// Calculate the Margin of Error
 		if !newProvider {
 			if value, ok := dataMap[dataID].(map[string]any); ok {
-				var data = make(map[string]any)
-				data = value
-
-				if data["counter.error"].(float64) == 0 {
-					data["provider.availability"] = 100
+				if value["counter.error"].(float64) == 0 {
+					value["provider.availability"] = 100
 				} else {
-					data["provider.availability"] = int(data["counter.error"].(float64)*100/data["counter.download"].(float64)*-1 + 100)
+					value["provider.availability"] = int(value["counter.error"].(float64)*100/value["counter.download"].(float64)*-1 + 100)
 				}
 			}
 		}

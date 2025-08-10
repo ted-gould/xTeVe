@@ -148,8 +148,6 @@ func buildXEPG(background bool) error { // Added error return type
 		System.ScanInProgress = 0
 		return nil
 	}
-	// Fallback, though all paths should be covered.
-	return nil
 }
 
 // Create Mapping Menu for the XMLTV Files
