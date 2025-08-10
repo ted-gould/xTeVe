@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.comcom/gorilla/websocket"
+	"github.com/gorilla/websocket"
 )
 
 // WebSocketResponse defines the structure of a response from the server.
