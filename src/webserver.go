@@ -105,8 +105,8 @@ func Index(w http.ResponseWriter, r *http.Request) {
 
 	setGlobalDomain(r.Host)
 
-	debug = fmt.Sprintf("Web Server Request:     Path: %s", path)
-	showDebug(debug, 1)
+	debug = fmt.Sprintf("Web Server Request:Path: %s", path)
+	showDebug(debug, 2)
 
 	switch path {
 	case "/favicon.ico":
@@ -135,8 +135,8 @@ func Index(w http.ResponseWriter, r *http.Request) {
 		response, err = getCapability()
 		w.Header().Set("Content-Type", "application/xml")
 	default:
-		http.Redirect(w, r, "/web/", http.StatusMovedPermanently)
-		return
+		response, err = getCapability()
+		w.Header().Set("Content-Type", "application/xml")
 	}
 
 	if err == nil {
@@ -607,17 +607,16 @@ func Web(w http.ResponseWriter, r *http.Request) {
 	var lang = make(map[string]any)
 	var err error
 
-	var requestFile = "html" + strings.TrimPrefix(r.URL.Path, "/web")
+	var path = r.URL.Path
+	if path == "/web" {
+		path = "/web/"
+	}
+	var requestFile = "html" + strings.TrimPrefix(path, "/web")
 	var content, contentType, file string
 
 	var language LanguageUI
 
 	setGlobalDomain(r.Host)
-
-	var path = r.URL.Path
-	var debug string
-	debug = fmt.Sprintf("Web Server Request:     Path: %s", path)
-	showDebug(debug, 1)
 
 	if System.Dev {
 		lang, err = loadJSONFileToMap(fmt.Sprintf("html/lang/%s.json", Settings.Language))
