@@ -38,17 +38,15 @@ func startXteve() (*exec.Cmd, error) {
 	fmt.Println("Starting xteve server...")
 	// Build the xteve binary first
 	buildCmd := exec.Command("go", "build", "-o", "xteve_test_binary", "xteve.go")
-	buildCmd.Dir = "../../" // Run from the root directory
 	buildOutput, err := buildCmd.CombinedOutput()
 	if err != nil {
 		return nil, fmt.Errorf("failed to build xteve: %w\n%s", err, string(buildOutput))
 	}
 
 	// Remove existing config to ensure a clean slate
-	os.RemoveAll("../../.xteve")
+	os.RemoveAll(".xteve")
 
 	cmd := exec.Command("./xteve_test_binary", "-port=34400")
-	cmd.Dir = "../../" // Run from the root directory
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Start(); err != nil {
