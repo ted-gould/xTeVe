@@ -21,25 +21,34 @@ type WebSocketResponse struct {
 }
 
 func main() {
+	if err := run(); err != nil {
+		log.Printf("E2E test failed: %v", err)
+		os.Exit(1)
+	}
+	fmt.Println("E2E test completed successfully!")
+}
+
+func run() error {
 	// 1. Start the xteve server
 	cmd, err := startXteve()
 	if err != nil {
-		log.Fatalf("Failed to start xteve: %v", err)
+		return fmt.Errorf("failed to start xteve: %w", err)
 	}
 	defer stopXteve(cmd)
 
 	// Wait for the server to be ready
 	if err := waitForServerReady("http://localhost:34400/web/"); err != nil {
-		log.Fatalf("Server not ready: %v", err)
+		return fmt.Errorf("server not ready: %w", err)
 	}
 
 	// 2. Run the tests
 	if err := runTests(); err != nil {
-		log.Fatalf("Tests failed: %v", err)
+		return fmt.Errorf("tests failed: %w", err)
 	}
 
-	fmt.Println("CI test completed successfully!")
+	return nil
 }
+
 
 func startXteve() (*exec.Cmd, error) {
 	fmt.Println("Starting xteve server...")
@@ -53,7 +62,7 @@ func startXteve() (*exec.Cmd, error) {
 	// Remove existing config to ensure a clean slate
 	os.RemoveAll(".xteve")
 
-	cmd := exec.Command("./xteve_test_binary", "-port=34400")
+	cmd := exec.Command("./xteve_test_binary", "-port=34400", "-config=.xteve")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Start(); err != nil {
@@ -64,6 +73,9 @@ func startXteve() (*exec.Cmd, error) {
 
 func stopXteve(cmd *exec.Cmd) {
 	fmt.Println("Stopping xteve server...")
+	if cmd.Process == nil {
+		return
+	}
 	if err := cmd.Process.Kill(); err != nil {
 		log.Printf("Failed to kill xteve process: %v", err)
 	}
