@@ -142,7 +142,7 @@ func runTests() error {
 	m3uData := map[string]interface{}{
 		"-": map[string]interface{}{ // Use "-" to indicate a new file
 			"name": "CSPAN",
-			"url":  "https://raw.githubusercontent.com/freearhey/iptv-usa/main/c-span.us.m3u",
+			"url":  "src/testdata/c-span.us.m3u",
 		},
 	}
 	// Correct key is "files" with a nested "m3u" map
