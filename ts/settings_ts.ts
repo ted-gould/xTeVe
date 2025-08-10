@@ -152,7 +152,6 @@ class SettingsCategory {
         setting.appendChild(tdRight);
         break;
 
-
       // Checkboxes
       case "tlsMode":
         var tdLeft = document.createElement("TD");
@@ -703,7 +702,6 @@ class SettingsCategory {
       case "user.agent":
         text = "{{.settings.userAgent.description}}";
         break;
-
 
       case "epgSource":
         text = "{{.settings.epgSource.description}}";
