@@ -461,6 +461,38 @@ func clientConnection(stream ThisStream) (status bool) {
 	return
 }
 
+func connectWithRetry(client *http.Client, req *http.Request) (*http.Response, error) {
+	var resp *http.Response
+	var err error
+	var retries = 0
+
+	for {
+		resp, err = client.Do(req)
+
+		if err != nil {
+			if Settings.StreamRetryEnabled && retries < Settings.StreamMaxRetries {
+				retries++
+				showInfo(fmt.Sprintf("Stream Error (%s). Retry %d/%d in %d seconds.", err.Error(), retries, Settings.StreamMaxRetries, Settings.StreamRetryDelay))
+				time.Sleep(time.Duration(Settings.StreamRetryDelay) * time.Second)
+				continue
+			}
+			return nil, err
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			if Settings.StreamRetryEnabled && retries < Settings.StreamMaxRetries {
+				retries++
+				showInfo(fmt.Sprintf("Stream HTTP Status Error (%s). Retry %d/%d in %d seconds.", http.StatusText(resp.StatusCode), retries, Settings.StreamMaxRetries, Settings.StreamRetryDelay))
+				time.Sleep(time.Duration(Settings.StreamRetryDelay) * time.Second)
+				continue
+			}
+			return resp, fmt.Errorf("bad status: %s", resp.Status)
+		}
+
+		return resp, nil
+	}
+}
+
 func connectToStreamingServer(streamID int, playlistID string) {
 	if p, ok := BufferInformation.Load(playlistID); ok {
 		var playlist = p.(Playlist)
@@ -560,7 +592,6 @@ func connectToStreamingServer(streamID int, playlistID string) {
 			}
 
 			var segment = stream.Segment[0]
-
 			var currentURL = strings.Trim(segment.URL, "\r\n")
 
 			if len(currentURL) == 0 {
@@ -570,12 +601,12 @@ func connectToStreamingServer(streamID int, playlistID string) {
 			debug = fmt.Sprintf("Connection to:%s", currentURL)
 			showDebug(debug, 2)
 
+			var retries = 0
 			// Jump for redirect (301 <---> 308)
 		Redirect:
 			req, _ := http.NewRequest("GET", currentURL, nil)
 			req.Header.Set("User-Agent", Settings.UserAgent)
 			req.Header.Set("Connection", "close")
-			//req.Header.Set("Range", "bytes=0-")
 			req.Header.Set("Accept", "*/*")
 			debugRequest(req)
 
@@ -584,34 +615,15 @@ func connectToStreamingServer(streamID int, playlistID string) {
 				return errors.New("Redirect")
 			}
 
-			resp, err := client.Do(req)
-
-			if resp != nil && err != nil {
-				debugResponse(resp)
-			}
+			resp, err := connectWithRetry(client, req)
 
 			if err != nil {
-				if resp == nil {
-					err = errors.New("no response from streaming server")
-					fmt.Println("Current URL:", currentURL)
-					ShowError(err, 0)
-
-					addErrorToStream(err)
-
-					killClientConnection(streamID, playlistID, true)
-					clientConnection(stream)
-					return
-				}
-
 				// Redirect
-				if resp.StatusCode >= 301 && resp.StatusCode <= 308 {
+				if resp != nil && resp.StatusCode >= 301 && resp.StatusCode <= 308 {
 					debug = fmt.Sprintf("Streaming Status:HTTP response status [%d] %s", resp.StatusCode, http.StatusText(resp.StatusCode))
 					showDebug(debug, 2)
-
 					currentURL = strings.Trim(resp.Header.Get("Location"), "\r\n")
-
 					stream.Location = currentURL
-
 					if len(currentURL) > 0 {
 						debug = fmt.Sprintf("HTTP Redirect:%s", stream.Location)
 						showDebug(debug, 2)
@@ -621,44 +633,22 @@ func connectToStreamingServer(streamID int, playlistID string) {
 						err = errors.New("streaming server")
 						ShowError(err, 4002)
 						addErrorToStream(err)
-
 						defer resp.Body.Close()
 						return
 					}
-				} else {
-					ShowError(err, 0)
-					addErrorToStream(err)
-
-					defer resp.Body.Close()
-					return
 				}
+
+				ShowError(err, 0)
+				addErrorToStream(err)
+				if resp != nil {
+					defer resp.Body.Close()
+				}
+				return
 			}
 			defer resp.Body.Close()
 
 			// Check HTTP Status, in case of errors the stream is terminated
 			var contentType = resp.Header.Get("Content-Type")
-			var httpStatusCode = resp.StatusCode
-			var httpStatusInfo = fmt.Sprintf("HTTP Response Status [%d] %s", httpStatusCode, http.StatusText(resp.StatusCode))
-
-			if resp.StatusCode != http.StatusOK {
-				showInfo("Content Type:" + contentType)
-				showInfo("Streaming Status:" + httpStatusInfo)
-				showInfo("Error with this URL:" + currentURL)
-
-				var err = errors.New(http.StatusText(resp.StatusCode))
-				ShowError(err, 4004)
-
-				debug = fmt.Sprintf("Streaming Status:Playlist: %s - Tuner: %d / %d", playlist.PlaylistName, len(playlist.Streams), playlist.Tuner)
-				showDebug(debug, 1)
-
-				BufferInformation.Store(playlist.PlaylistID, playlist)
-				addErrorToStream(err)
-
-				killClientConnection(streamID, playlistID, true)
-				clientConnection(stream)
-				resp.Body.Close()
-				return
-			}
 
 			// Read out information about the streaming server
 			if !stream.Status {
@@ -667,7 +657,7 @@ func connectToStreamingServer(streamID int, playlistID string) {
 					p, _ := url.Parse(currentURL)
 
 					stream.URLScheme = u.Scheme
-					stream.URLHost = req.Host
+					stream.URLHost = u.Host
 					stream.URLPath = p.Path
 					stream.URLFile = path.Base(p.Path)
 
@@ -712,6 +702,53 @@ func connectToStreamingServer(streamID int, playlistID string) {
 					ShowError(err, 4050)
 					addErrorToStream(err)
 				}
+
+				if stream.HLS {
+					client := &http.Client{}
+					client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+						return errors.New("Redirect")
+					}
+
+					for _, segment := range stream.Segment {
+						req, _ := http.NewRequest("GET", segment.URL, nil)
+						req.Header.Set("User-Agent", Settings.UserAgent)
+						req.Header.Set("Connection", "close")
+						req.Header.Set("Accept", "*/*")
+						debugRequest(req)
+
+						resp, err := connectWithRetry(client, req)
+						if err != nil {
+							ShowError(err, 0)
+							addErrorToStream(err)
+							return
+						}
+						defer resp.Body.Close()
+
+						body, err := io.ReadAll(resp.Body)
+						if err != nil {
+							ShowError(err, 0)
+							addErrorToStream(err)
+						}
+
+						tmpFile := fmt.Sprintf("%s%d.ts", tmpFolder, tmpSegment)
+						bufferFile, err := bufferVFS.Create(tmpFile)
+						if err != nil {
+							addErrorToStream(err)
+							bufferFile.Close()
+							resp.Body.Close()
+							return
+						}
+
+						if _, err := bufferFile.Write(body); err != nil {
+							ShowError(err, 0)
+							addErrorToStream(err)
+							resp.Body.Close()
+							return
+						}
+						bufferFile.Close()
+						tmpSegment++
+					}
+				}
 			// Video Stream (TS)
 			case "video/mpeg", "video/mp4", "video/mp2t", "video/m2ts", "application/octet-stream", "binary/octet-stream", "application/mp2t", "video/x-matroska":
 				var fileSize int
@@ -748,14 +785,29 @@ func connectToStreamingServer(streamID int, playlistID string) {
 					}
 
 					timeOut = 0
+					var n int
 					// Fill the Buffer with data from the Server
-					n, err := resp.Body.Read(buffer)
+					for {
+						n, err = resp.Body.Read(buffer)
 
-					if err != nil && err != io.EOF {
-						ShowError(err, 0)
-						addErrorToStream(err)
-						resp.Body.Close()
-						return
+						if err != nil && err != io.EOF {
+							if Settings.StreamRetryEnabled && retries < Settings.StreamMaxRetries {
+								retries++
+								showInfo(fmt.Sprintf("Stream Read Error (%s). Retry %d/%d in %d seconds.", err.Error(), retries, Settings.StreamMaxRetries, Settings.StreamRetryDelay))
+								time.Sleep(time.Duration(Settings.StreamRetryDelay) * time.Second)
+								resp.Body.Close()
+								goto Redirect
+							}
+							ShowError(err, 0)
+							addErrorToStream(err)
+							resp.Body.Close()
+							return
+						}
+						retries = 0 // Reset retries on successful read
+
+						if n == 0 {
+							break
+						}
 					}
 					defer resp.Body.Close()
 

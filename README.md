@@ -35,6 +35,7 @@ Documentation for setup and configuration is [here](https://github.com/xteve-pro
 
 * Buffer with HLS / M3U8 support
 * Re-streaming
+* Stream Reconnection
 * Number of tuners adjustable
 * Compatible with Plex / Emby EPG
 
@@ -197,3 +198,11 @@ var GitHub = GitHubStruct{Branch: "main", User: "senexcrenshaw", Repo: "xTeVe", 
 // Repo:   GitHub Repository
 // Update: Automatic updates from the GitHub repository [true|false]
 ```
+
+---
+
+## Stream Reconnection
+
+xTeVe can be configured to automatically reconnect to a stream if the connection is interrupted. This is useful for IPTV providers that use connection breaks to disrupt service. This feature works for both HLS and TS streams, and will attempt to reconnect both on initial connection and if the stream is interrupted mid-stream.
+
+To enable this feature, go to `Settings -> Streaming` and check the `Enable Stream Retry` box. You can also configure the maximum number of retries and the delay between retries.

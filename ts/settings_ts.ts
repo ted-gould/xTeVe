@@ -33,6 +33,34 @@ class SettingsCategory {
         setting.appendChild(tdRight)
         break
 
+      case "stream.max.retries":
+        var tdLeft = document.createElement("TD")
+        tdLeft.innerHTML = "{{.settings.streamMaxRetries.title}}" + ":"
+
+        var tdRight = document.createElement("TD")
+        var input = content.createInput("text", "stream.max.retries", data)
+        input.setAttribute("placeholder", "{{.settings.streamMaxRetries.placeholder}}")
+        input.setAttribute("onchange", "javascript: this.className = 'changed'")
+        tdRight.appendChild(input)
+
+        setting.appendChild(tdLeft)
+        setting.appendChild(tdRight)
+        break
+
+      case "stream.retry.delay":
+        var tdLeft = document.createElement("TD")
+        tdLeft.innerHTML = "{{.settings.streamRetryDelay.title}}" + ":"
+
+        var tdRight = document.createElement("TD")
+        var input = content.createInput("text", "stream.retry.delay", data)
+        input.setAttribute("placeholder", "{{.settings.streamRetryDelay.placeholder}}")
+        input.setAttribute("onchange", "javascript: this.className = 'changed'")
+        tdRight.appendChild(input)
+
+        setting.appendChild(tdLeft)
+        setting.appendChild(tdRight)
+        break
+
       case "backup.path":
         var tdLeft = document.createElement("TD")
         tdLeft.innerHTML = "{{.settings.backupPath.title}}" + ":"
@@ -289,6 +317,20 @@ class SettingsCategory {
       case "storeBufferInRAM":
         var tdLeft = document.createElement("TD")
         tdLeft.innerHTML = "{{.settings.storeBufferInRAM.title}}" + ":"
+
+        var tdRight = document.createElement("TD")
+        var input = content.createCheckbox(settingsKey)
+        input.checked = data
+        input.setAttribute("onchange", "javascript: this.className = 'changed'")
+        tdRight.appendChild(input)
+
+        setting.appendChild(tdLeft)
+        setting.appendChild(tdRight)
+        break
+
+      case "stream.retry.enabled":
+        var tdLeft = document.createElement("TD")
+        tdLeft.innerHTML = "{{.settings.streamRetryEnabled.title}}" + ":"
 
         var tdRight = document.createElement("TD")
         var input = content.createCheckbox(settingsKey)
@@ -562,6 +604,18 @@ class SettingsCategory {
         text = "{{.settings.bufferTimeout.description}}"
         break
 
+      case "stream.retry.enabled":
+        text = "{{.settings.streamRetryEnabled.description}}"
+        break
+
+      case "stream.max.retries":
+        text = "{{.settings.streamMaxRetries.description}}"
+        break
+
+      case "stream.retry.delay":
+        text = "{{.settings.streamRetryDelay.description}}"
+        break
+
       case "user.agent":
         text = "{{.settings.userAgent.description}}"
         break
@@ -656,6 +710,17 @@ class SettingsCategory {
   }
 
 }
+
+// Settings
+var settingsCategory = new Array()
+settingsCategory.push(new SettingsCategoryItem("{{.settings.general.title}}", "hostIP,hostName,port,tuner,epgSource,api,ssdp,tlsMode"))
+settingsCategory.push(new SettingsCategoryItem("{{.settings.files.title}}", "files.update,update,cache.images,xepg.replace.missing.images,clearXMLTVCache"))
+settingsCategory.push(new SettingsCategoryItem("{{.settings.streaming.title}}", "buffer,buffer.size.kb,storeBufferInRAM,buffer.timeout,stream.retry.enabled,stream.max.retries,stream.retry.delay,user.agent,udpxy"))
+settingsCategory.push(new SettingsCategoryItem("FFmpeg", "ffmpeg.path,ffmpeg.options"))
+settingsCategory.push(new SettingsCategoryItem("VLC", "vlc.path,vlc.options"))
+settingsCategory.push(new SettingsCategoryItem("{{.settings.backup.title}}", "backup.path,backup.keep"))
+settingsCategory.push(new SettingsCategoryItem("{{.settings.authentication.title}}", "authentication.web,authentication.pms,authentication.m3u,authentication.xml,authentication.api"))
+settingsCategory.push(new SettingsCategoryItem("{{.settings.misc.title}}", "defaultMissingEPG,enableMappedChannels,disallowURLDuplicates"))
 
 class SettingsCategoryItem extends SettingsCategory {
   headline:string
