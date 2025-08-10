@@ -23,7 +23,7 @@ parts:
       npm install -g typescript
       make build
       mkdir -p $CRAFT_PART_INSTALL/bin
-      cp xteve $CRAFT_PART_INSTALL/bin/
+      cp bin/* $CRAFT_PART_INSTALL/bin/
     override-stage: |
       snapcraftctl stage
       snapcraftctl set-version `$SNAPCRAFT_STAGE/bin/xteve -version`

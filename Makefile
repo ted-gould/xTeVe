@@ -5,8 +5,11 @@ all: build
 
 # Build the application
 build: js
-	@echo "Building Go application..."
-	@go build -o xteve
+	@echo "Building Go commands..."
+	@mkdir -p bin
+	@go build -v -o ./bin/xteve .
+	@go build -v -o ./bin/xteve-inactive ./cmd/xteve-inactive
+	@go build -v -o ./bin/xteve-status ./cmd/xteve-status
 
 # Run tests
 test: js
@@ -21,5 +24,5 @@ js:
 # Clean up build artifacts
 clean:
 	@echo "Cleaning up..."
-	@rm -f xteve
+	@rm -rf bin
 	@rm -rf src/html/js
