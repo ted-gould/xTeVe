@@ -112,14 +112,17 @@ func runTests() error {
 	fmt.Println("Adding filter...")
 	filterData := map[string]interface{}{
 		"0": map[string]interface{}{
-			"active":        true,
-			"caseSensitive": true,
-			"description":   "Filter out CSPAN 2",
-			"exclude":       "",
-			"filter":        "CSPAN 2",
-			"include":       "",
-			"name":          "CSPAN2-Filter",
-			"type":          "group-title",
+			"active":          true,
+			"caseSensitive":   true,
+			"description":     "Filter out CSPAN 2",
+			"exclude":         "",
+			"filter":          "CSPAN 2",
+			"include":         "",
+			"name":            "CSPAN2-Filter",
+			"type":            "group-title",
+			"preserveMapping": true,
+			"rule":            "",
+			"startingChannel": 1000,
 		},
 	}
 
