@@ -49,7 +49,6 @@ func FilterThisStream(s any) (status bool) {
 	}
 
 	// Cache raw stream values. Normalize _values once.
-	rawStreamName, streamNameOK := stream["name"]
 	rawStreamGroup, streamGroupOK := stream["group-title"]
 	rawStreamValues, streamValuesOK := stream["_values"]
 	if streamValuesOK {
@@ -67,7 +66,6 @@ func FilterThisStream(s any) (status bool) {
 		var searchTarget string // This will hold the stream value to search within (e.g., name or _values)
 
 		// Determine effective stream and rule values based on case sensitivity
-		var effectiveStreamName = rawStreamName
 		var effectiveStreamGroup = rawStreamGroup
 		var effectiveStreamValues = rawStreamValues
 		var effectiveMainFilterRulePart string // Declare, assign after baseFilterRule is processed
@@ -95,9 +93,6 @@ func FilterThisStream(s any) (status bool) {
 			exclude = strings.ToLower(exclude) // Lowercase exclude if filter is case-insensitive
 			include = strings.ToLower(include) // Lowercase include if filter is case-insensitive
 
-			if streamNameOK {
-				effectiveStreamName = strings.ToLower(rawStreamName)
-			}
 			if streamGroupOK {
 				effectiveStreamGroup = strings.ToLower(rawStreamGroup)
 			}
@@ -109,7 +104,7 @@ func FilterThisStream(s any) (status bool) {
 		// Perform the match based on filter type
 		switch filter.Type {
 		case "group-title":
-			searchTarget = effectiveStreamName // For group-title, conditions check against stream name
+			searchTarget = effectiveStreamGroup // For group-title, conditions check against stream group
 			if streamGroupOK && effectiveStreamGroup == effectiveMainFilterRulePart {
 				match = true
 				stream["_preserve-mapping"] = strconv.FormatBool(filter.PreserveMapping)
