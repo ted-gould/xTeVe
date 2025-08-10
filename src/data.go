@@ -371,90 +371,88 @@ func deleteLocalProviderFiles(dataID, fileType string) {
 
 // Save Filter Settings (WebUI)
 func saveFilter(request RequestStruct) (settings SettingsStruct, err error) {
-	var defaultFilter FilterStruct
-	var newFilter = false
-
-	defaultFilter.Active = true
-	defaultFilter.CaseSensitive = false
-	defaultFilter.PreserveMapping = true
-	defaultFilter.StartingChannel = strconv.FormatFloat(Settings.MappingFirstChannel, 'f', -1, 64) // 1000
-
-	filterMap := Settings.Filter // Use short declaration and assign directly
-	newData := request.Filter   // Use short declaration and assign directly
-
-	// Ensure filterMap is not nil if Settings.Filter could be nil
-	if filterMap == nil {
-		filterMap = make(map[int64]any)
-		// If Settings.Filter was nil, we need to update it after modifications
-		// This is a bit tricky as filterMap is a copy. The original Settings.Filter
-		// is modified directly in the loop by dataID.
-		// For now, we assume Settings.Filter is initialized elsewhere if it needs to be.
-		// However, if Settings.Filter can be nil, this function should probably update Settings.Filter
-		// with the new map if one is created.
-		// A safer approach is to ensure Settings.Filter is always initialized.
-		// For the purpose of fixing ineffassign, we assume Settings.Filter is a valid map.
+	if Settings.Filter == nil {
+		Settings.Filter = make(map[int64]any)
 	}
 
-
+	// Create a new ID for a new filter
 	var createNewID = func() (id int64) {
 	newID:
-		if _, ok := filterMap[id]; ok {
+		if _, ok := Settings.Filter[id]; ok {
 			id++
 			goto newID
 		}
 		return id
 	}
 
-	for dataID, data := range newData {
-		if dataID == -1 {
-			// New Filter
-			newFilter = true
-			dataID = createNewID()
-			filterMap[dataID] = jsonToMap(mapToJSON(defaultFilter))
+	for idStr, data := range request.Filter {
+		filterProperties, ok := data.(map[string]any)
+		if !ok {
+			return Settings, fmt.Errorf("invalid filter data format for ID %s", idStr)
 		}
 
-		// Update / delete filters
-		for key, value := range data.(map[string]any) {
-			// Clear Filters
-			if _, ok := data.(map[string]any)["delete"]; ok {
-				delete(filterMap, dataID)
-				break
-			}
+		// Validate required fields before processing
+		if name, ok := filterProperties["name"].(string); !ok || name == "" {
+			return Settings, errors.New("filter 'name' is a required field and cannot be empty")
+		}
+		if filterType, ok := filterProperties["type"].(string); !ok || filterType == "" {
+			return Settings, errors.New("filter 'type' is a required field and cannot be empty")
+		}
 
-			if filter, ok := data.(map[string]any)["filter"].(string); ok {
-				if len(filter) == 0 {
-					err = errors.New(getErrMsg(1014))
-					if newFilter {
-						delete(filterMap, dataID)
-					}
-					return
+		id, err := strconv.ParseInt(idStr, 10, 64)
+		if err != nil {
+			return Settings, fmt.Errorf("invalid filter ID: %s", idStr)
+		}
+
+		// Handle deletion
+		if _, deleteFilter := filterProperties["delete"]; deleteFilter {
+			delete(Settings.Filter, id)
+			continue
+		}
+
+		// Handle new filter
+		if id == -1 {
+			newID := createNewID()
+			// Create a default filter structure
+			defaultFilter := FilterStruct{
+				Active:          true,
+				CaseSensitive:   false,
+				PreserveMapping: true,
+				StartingChannel: int(Settings.MappingFirstChannel),
+			}
+			// Convert to map and merge with provided properties
+			newFilterMap := jsonToMap(mapToJSON(defaultFilter))
+			for k, v := range filterProperties {
+				newFilterMap[k] = v
+			}
+			Settings.Filter[newID] = newFilterMap
+		} else {
+			// Handle update
+			if existingFilter, ok := Settings.Filter[id].(map[string]any); ok {
+				for k, v := range filterProperties {
+					existingFilter[k] = v
 				}
-			}
-
-			if oldData, ok := filterMap[dataID].(map[string]any); ok {
-				oldData[key] = value
+			} else {
+				// If it doesn't exist, treat it as an addition (though unusual for existing IDs)
+				Settings.Filter[id] = filterProperties
 			}
 		}
 	}
 
-	err = saveSettings(Settings)
-	if err != nil {
-		return
+	if err := saveSettings(Settings); err != nil {
+		return Settings, err
 	}
 
-	settings = Settings
-
-	err = buildDatabaseDVR()
-	if err != nil {
-		return
+	if err := buildDatabaseDVR(); err != nil {
+		return Settings, err
 	}
 
-	if errBuild := buildXEPG(false); errBuild != nil {
-		// log.Printf("Error building XEPG after saving filter: %v", errBuild)
-		ShowError(errBuild, 0)
-		// Potentially return errBuild if this is critical
+	if err := buildXEPG(false); err != nil {
+		// Log the error but don't fail the entire operation, consistent with other parts of the codebase
+		ShowError(err, 0)
 	}
-	return
+
+	return Settings, nil
 }
 
 // Save XEPG Mapping

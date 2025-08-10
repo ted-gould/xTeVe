@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -12,6 +13,12 @@ import (
 
 	"github.com/gorilla/websocket"
 )
+
+// WebSocketResponse defines the structure of a response from the server.
+type WebSocketResponse struct {
+	Status bool   `json:"status"`
+	Error  string `json:"err,omitempty"`
+}
 
 func main() {
 	// 1. Start the xteve server
@@ -76,6 +83,25 @@ func waitForServerReady(url string) error {
 	return fmt.Errorf("server is not ready after 30 seconds")
 }
 
+// sendRequest sends a JSON request to the WebSocket and returns the server's response.
+func sendRequest(conn *websocket.Conn, request map[string]interface{}) (*WebSocketResponse, error) {
+	if err := conn.WriteJSON(request); err != nil {
+		return nil, fmt.Errorf("failed to send request: %w", err)
+	}
+
+	_, msg, err := conn.ReadMessage()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	var response WebSocketResponse
+	if err := json.Unmarshal(msg, &response); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	return &response, nil
+}
+
 func runTests() error {
 	fmt.Println("Running tests...")
 
@@ -87,7 +113,31 @@ func runTests() error {
 	}
 	defer conn.Close()
 
-	// 2. Add an M3U playlist
+	// 2. Test: Add an invalid filter (should fail gracefully)
+	fmt.Println("Testing invalid filter...")
+	invalidFilterData := map[string]interface{}{
+		"0": map[string]interface{}{
+			"type": "group-title", // Missing "name"
+		},
+	}
+	invalidFilterRequest := map[string]interface{}{
+		"cmd":  "saveFilter",
+		"data": invalidFilterData,
+	}
+
+	resp, err := sendRequest(conn, invalidFilterRequest)
+	if err != nil {
+		return fmt.Errorf("error testing invalid filter: %w", err)
+	}
+	if resp.Status {
+		return fmt.Errorf("expected status false for invalid filter, but got true")
+	}
+	if !strings.Contains(resp.Error, "filter 'name' is a required field") {
+		return fmt.Errorf("expected error message for invalid filter, but got: %s", resp.Error)
+	}
+	fmt.Println("Server correctly handled invalid filter.")
+
+	// 3. Test: Add a valid M3U playlist
 	fmt.Println("Adding M3U playlist...")
 	m3uData := map[string]interface{}{
 		"0": map[string]string{
@@ -95,22 +145,14 @@ func runTests() error {
 			"url":  "https://raw.githubusercontent.com/freearhey/iptv-usa/main/c-span.us.m3u",
 		},
 	}
-	m3uRequest := map[string]interface{}{
-		"cmd":  "saveFilesM3U",
-		"data": m3uData,
-	}
-	if err := conn.WriteJSON(m3uRequest); err != nil {
-		return fmt.Errorf("failed to send M3U save request: %w", err)
-	}
-	// Read response to confirm
-	_, _, err = conn.ReadMessage()
-	if err != nil {
-		return fmt.Errorf("failed to read M3U save response: %w", err)
+	m3uRequest := map[string]interface{}{"cmd": "saveFilesM3U", "data": m3uData}
+	if _, err := sendRequest(conn, m3uRequest); err != nil {
+		return fmt.Errorf("failed to add M3U playlist: %w", err)
 	}
 
-	// 3. Add a filter
-	fmt.Println("Adding filter...")
-	filterData := map[string]interface{}{
+	// 4. Test: Add a valid filter
+	fmt.Println("Adding valid filter...")
+	validFilterData := map[string]interface{}{
 		"0": map[string]interface{}{
 			"active":          true,
 			"caseSensitive":   true,
@@ -125,43 +167,28 @@ func runTests() error {
 			"startingChannel": 1000,
 		},
 	}
-
-	filterRequest := map[string]interface{}{
-		"cmd":  "saveFilter",
-		"data": filterData,
+	validFilterRequest := map[string]interface{}{"cmd": "saveFilter", "data": validFilterData}
+	if _, err := sendRequest(conn, validFilterRequest); err != nil {
+		return fmt.Errorf("failed to add valid filter: %w", err)
 	}
 
-	if err := conn.WriteJSON(filterRequest); err != nil {
-		return fmt.Errorf("failed to send filter save request: %w", err)
-	}
-	// Read response to confirm
-	_, _, err = conn.ReadMessage()
-	if err != nil {
-		return fmt.Errorf("failed to read filter save response: %w", err)
-	}
-
-	// 4. Verify the M3U output
+	// 5. Test: Verify the M3U output
 	fmt.Println("Verifying M3U output...")
-	// Need to trigger an update for the filter to apply
 	updateRequest := map[string]interface{}{"cmd": "update.m3u"}
-	if err := conn.WriteJSON(updateRequest); err != nil {
+	if _, err := sendRequest(conn, updateRequest); err != nil {
 		return fmt.Errorf("failed to send M3U update request: %w", err)
-	}
-	_, _, err = conn.ReadMessage()
-	if err != nil {
-		return fmt.Errorf("failed to read M3U update response: %w", err)
 	}
 
 	// Wait for the update to process
 	time.Sleep(5 * time.Second)
 
-	resp, err := http.Get("http://localhost:34400/m3u/xteve.m3u")
+	httpResp, err := http.Get("http://localhost:34400/m3u/xteve.m3u")
 	if err != nil {
 		return fmt.Errorf("failed to get M3U file: %w", err)
 	}
-	defer resp.Body.Close()
+	defer httpResp.Body.Close()
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := ioutil.ReadAll(httpResp.Body)
 	if err != nil {
 		return fmt.Errorf("failed to read M3U file body: %w", err)
 	}

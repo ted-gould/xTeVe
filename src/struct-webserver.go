@@ -58,7 +58,7 @@ type RequestStruct struct {
 	Filename string `json:"filename,omitempty"`
 
 	// Filter
-	Filter map[int64]any `json:"filter,omitempty"`
+	Filter map[string]any `json:"filter,omitempty"`
 
 	// Files (M3U, HDHR, XMLTV)
 	Files struct {
