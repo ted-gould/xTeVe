@@ -472,8 +472,8 @@ func connectWithRetry(client *http.Client, req *http.Request) (*http.Response, e
 		if err != nil {
 			if Settings.StreamRetryEnabled && retries < Settings.StreamMaxRetries {
 				retries++
-				showInfo(fmt.Sprintf("Stream Error (%s). Retry %d/%d in %d seconds.", err.Error(), retries, Settings.StreamMaxRetries, Settings.StreamRetryDelay))
-				time.Sleep(time.Duration(Settings.StreamRetryDelay) * time.Second)
+				showInfo(fmt.Sprintf("Stream Error (%s). Retry %d/%d in %d milliseconds.", err.Error(), retries, Settings.StreamMaxRetries, Settings.StreamRetryDelay))
+				time.Sleep(time.Duration(Settings.StreamRetryDelay) * time.Millisecond)
 				continue
 			}
 			return nil, err
@@ -482,8 +482,8 @@ func connectWithRetry(client *http.Client, req *http.Request) (*http.Response, e
 		if resp.StatusCode != http.StatusOK {
 			if Settings.StreamRetryEnabled && retries < Settings.StreamMaxRetries {
 				retries++
-				showInfo(fmt.Sprintf("Stream HTTP Status Error (%s). Retry %d/%d in %d seconds.", http.StatusText(resp.StatusCode), retries, Settings.StreamMaxRetries, Settings.StreamRetryDelay))
-				time.Sleep(time.Duration(Settings.StreamRetryDelay) * time.Second)
+				showInfo(fmt.Sprintf("Stream HTTP Status Error (%s). Retry %d/%d in %d milliseconds.", http.StatusText(resp.StatusCode), retries, Settings.StreamMaxRetries, Settings.StreamRetryDelay))
+				time.Sleep(time.Duration(Settings.StreamRetryDelay) * time.Millisecond)
 				continue
 			}
 			return resp, fmt.Errorf("bad status: %s", resp.Status)

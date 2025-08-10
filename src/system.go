@@ -124,6 +124,9 @@ func loadSettings() (settings SettingsStruct, err error) {
 	defaults["vlc.options"] = System.VLC.DefaultOptions
 	defaults["xepg.replace.missing.images"] = true
 	defaults["xteveAutoUpdate"] = true
+	defaults["stream.retry.enabled"] = true
+	defaults["stream.max.retries"] = 5
+	defaults["stream.retry.delay"] = 100
 
 	// Set Default Values
 	for key, value := range defaults {

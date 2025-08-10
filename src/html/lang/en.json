@@ -435,6 +435,23 @@
       "description": "User Agent for HTTP requests. For every HTTP connection, this value is used for the user agent. Should only be changed if xTeVe is blocked.",
       "placeholder": "xTeVe"
     },
+
+		"streamRetryEnabled": {
+			"title": "Enable Stream Retry",
+			"description": "If this option is enabled, xTeVe will try to reconnect to a stream if the connection is interrupted."
+		},
+
+		"streamMaxRetries": {
+			"title": "Max Retries",
+			"description": "The maximum number of times xTeVe will try to reconnect to a stream.",
+			"placeholder": "5"
+		},
+
+		"streamRetryDelay": {
+			"title": "Retry Delay (ms)",
+			"description": "The delay in milliseconds between each retry.",
+			"placeholder": "100"
+		},
     "backupPath": {
       "title": "Location for automatic backups",
       "placeholder": "/mnt/data/backup/xteve/",
