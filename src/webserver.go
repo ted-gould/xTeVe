@@ -337,7 +337,7 @@ func DataImages(w http.ResponseWriter, r *http.Request) {
 
 // WS : Web Sockets /ws/
 func WS(w http.ResponseWriter, r *http.Request) {
-
+	var err error
 	// if r.Header.Get("Origin") != "http://" + r.Host {
 	// 	httpStatusError(w, r, 403)
 	// 	return
@@ -378,214 +378,214 @@ func WS(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Received command: %s", request.Cmd)
 
 		if !System.ConfigurationWizard {
-		switch Settings.AuthenticationWEB {
-		// Token Authentication
-		case true:
-			var token string
-			tokens, ok := r.URL.Query()["Token"]
+			switch Settings.AuthenticationWEB {
+			// Token Authentication
+			case true:
+				var token string
+				tokens, ok := r.URL.Query()["Token"]
 
-			if !ok || len(tokens[0]) < 1 {
-				token = "-"
-			} else {
-				token = tokens[0]
-			}
-
-			newToken, err := tokenAuthentication(token)
-			if err != nil {
-				response.Status = false
-				response.Reload = true
-				response.Error = err.Error()
-				request.Cmd = "-"
-
-				if errWrite := conn.WriteJSON(response); errWrite != nil {
-					log.Printf("Error writing JSON response (token auth failed): %v", errWrite)
-					break // Exit loop
-				}
-				continue // Continue to next message
-			}
-			response.Token = newToken
-			response.Users, _ = authentication.GetAllUserData()
-		}
-	}
-
-	switch request.Cmd {
-	// Read Data
-	case "getServerConfig":
-		// response.Config = Settings
-	case "updateLog":
-		response = setDefaultResponseData(response, false)
-		if errWrite := conn.WriteJSON(response); errWrite != nil {
-			log.Printf("Error writing JSON response (updateLog): %v", errWrite)
-			break // Exit loop
-		}
-		continue
-	case "loadFiles":
-		// response.Response = Settings.Files
-
-	// Save Data
-	case "saveSettings":
-		var authenticationUpdate = Settings.AuthenticationWEB
-		var previousTLSMode = Settings.TLSMode
-		var previousHostIP = Settings.HostIP
-		var previousHostName = Settings.HostName
-		var previousStoreBufferInRAM = Settings.StoreBufferInRAM
-		var previousClearXMLTVCache = Settings.ClearXMLTVCache
-
-		response.Settings, err = updateServerSettings(request)
-		if err == nil {
-			response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "settings"))
-
-			if Settings.AuthenticationWEB && !authenticationUpdate {
-				response.Reload = true
-			}
-
-			if Settings.TLSMode != previousTLSMode {
-				showInfo("Web server:" + "Toggling TLS mode")
-				reinitialize()
-				response.OpenLink = System.URLBase + "/web/"
-				restartWebserver <- true
-			}
-
-			if Settings.HostIP != previousHostIP {
-				showInfo("Web server:" + fmt.Sprintf("Changing host IP to %s", Settings.HostIP))
-				reinitialize()
-				response.OpenLink = System.URLBase + "/web/"
-				restartWebserver <- true
-			}
-
-			if Settings.HostName != previousHostName {
-				Settings.HostIP = previousHostName
-				showInfo("Web server:" + fmt.Sprintf("Changing host name to %s", Settings.HostName))
-				reinitialize()
-				response.OpenLink = System.URLBase + "/web/"
-				restartWebserver <- true
-			}
-
-			if Settings.StoreBufferInRAM != previousStoreBufferInRAM {
-				initBufferVFS(Settings.StoreBufferInRAM)
-			}
-
-			if Settings.ClearXMLTVCache && !previousClearXMLTVCache {
-				clearXMLTVCache()
-			}
-		}
-	case "saveFilesM3U":
-		err = saveFiles(request, "m3u")
-		if err == nil {
-			response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "playlist"))
-		}
-	case "updateFileM3U":
-		err = updateFile(request, "m3u")
-		if err == nil {
-			response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "playlist"))
-		}
-	case "saveFilesHDHR":
-		err = saveFiles(request, "hdhr")
-		if err == nil {
-			response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "playlist"))
-		}
-	case "updateFileHDHR":
-		err = updateFile(request, "hdhr")
-		if err == nil {
-			response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "playlist"))
-		}
-	case "saveFilesXMLTV":
-		err = saveFiles(request, "xmltv")
-		if err == nil {
-			response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "xmltv"))
-		}
-	case "updateFileXMLTV":
-		err = updateFile(request, "xmltv")
-		if err == nil {
-			response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "xmltv"))
-		}
-	case "saveFilter":
-		response.Settings, err = saveFilter(request)
-		if err == nil {
-			response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "filter"))
-		}
-	case "saveEpgMapping":
-		err = saveXEpgMapping(request)
-	case "saveUserData":
-		err = saveUserData(request)
-		if err == nil {
-			response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "users"))
-		}
-	case "saveNewUser":
-		err = saveNewUser(request)
-		if err == nil {
-			response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "users"))
-		}
-	case "resetLogs":
-		WebScreenLog.Log = make([]string, 0)
-		WebScreenLog.Errors = 0
-		WebScreenLog.Warnings = 0
-		response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "log"))
-	case "xteveBackup":
-		file, errNew := xteveBackup()
-		err = errNew
-		if err == nil {
-			response.OpenLink = fmt.Sprintf("%s://%s/download/%s", System.ServerProtocol.WEB, System.Domain, file)
-		}
-	case "xteveRestore":
-		WebScreenLog.Log = make([]string, 0)
-		WebScreenLog.Errors = 0
-		WebScreenLog.Warnings = 0
-
-		if len(request.Base64) > 0 {
-			newWebURL, err := xteveRestoreFromWeb(request.Base64)
-			if err != nil {
-				ShowError(err, 000)
-				response.Alert = err.Error()
-			}
-
-			if err == nil {
-				if len(newWebURL) > 0 {
-					response.Alert = "Backup was successfully restored.\nThe port of the sTeVe URL has changed, you have to restart xTeVe.\nAfter a restart, xTeVe can be reached again at the following URL:\n" + newWebURL
+				if !ok || len(tokens[0]) < 1 {
+					token = "-"
 				} else {
-					response.Alert = "Backup was successfully restored."
+					token = tokens[0]
+				}
+
+				newToken, err := tokenAuthentication(token)
+				if err != nil {
+					response.Status = false
+					response.Reload = true
+					response.Error = err.Error()
+					request.Cmd = "-"
+
+					if errWrite := conn.WriteJSON(response); errWrite != nil {
+						log.Printf("Error writing JSON response (token auth failed): %v", errWrite)
+						break // Exit loop
+					}
+					continue // Continue to next message
+				}
+				response.Token = newToken
+				response.Users, _ = authentication.GetAllUserData()
+			}
+		}
+
+		switch request.Cmd {
+		// Read Data
+		case "getServerConfig":
+			// response.Config = Settings
+		case "updateLog":
+			response = setDefaultResponseData(response, false)
+			if errWrite := conn.WriteJSON(response); errWrite != nil {
+				log.Printf("Error writing JSON response (updateLog): %v", errWrite)
+				break // Exit loop
+			}
+			continue
+		case "loadFiles":
+			// response.Response = Settings.Files
+
+		// Save Data
+		case "saveSettings":
+			var authenticationUpdate = Settings.AuthenticationWEB
+			var previousTLSMode = Settings.TLSMode
+			var previousHostIP = Settings.HostIP
+			var previousHostName = Settings.HostName
+			var previousStoreBufferInRAM = Settings.StoreBufferInRAM
+			var previousClearXMLTVCache = Settings.ClearXMLTVCache
+
+			response.Settings, err = updateServerSettings(request)
+			if err == nil {
+				response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "settings"))
+
+				if Settings.AuthenticationWEB && !authenticationUpdate {
 					response.Reload = true
 				}
-				showInfo("xTeVe:" + "Backup successfully restored.")
-			}
-		}
-	case "uploadLogo":
-		if len(request.Base64) > 0 {
-			response.LogoURL, err = uploadLogo(request.Base64, request.Filename)
 
-			if err == nil {
-				if errWrite := conn.WriteJSON(response); errWrite != nil {
-					log.Printf("Error writing JSON response (uploadLogo): %v", errWrite)
-					break
+				if Settings.TLSMode != previousTLSMode {
+					showInfo("Web server:" + "Toggling TLS mode")
+					reinitialize()
+					response.OpenLink = System.URLBase + "/web/"
+					restartWebserver <- true
 				}
-				continue
-			}
-			// If err from uploadLogo was not nil, it will be handled by the generic error handling below.
-		}
-	case "saveWizard":
-		nextStep, errNew := saveWizard(request)
 
-		err = errNew
-		if err == nil {
-			if nextStep == 10 {
-				System.ConfigurationWizard = false
-				response.Reload = true
-			} else {
-				response.Wizard = nextStep
+				if Settings.HostIP != previousHostIP {
+					showInfo("Web server:" + fmt.Sprintf("Changing host IP to %s", Settings.HostIP))
+					reinitialize()
+					response.OpenLink = System.URLBase + "/web/"
+					restartWebserver <- true
+				}
+
+				if Settings.HostName != previousHostName {
+					Settings.HostIP = previousHostName
+					showInfo("Web server:" + fmt.Sprintf("Changing host name to %s", Settings.HostName))
+					reinitialize()
+					response.OpenLink = System.URLBase + "/web/"
+					restartWebserver <- true
+				}
+
+				if Settings.StoreBufferInRAM != previousStoreBufferInRAM {
+					initBufferVFS(Settings.StoreBufferInRAM)
+				}
+
+				if Settings.ClearXMLTVCache && !previousClearXMLTVCache {
+					clearXMLTVCache()
+				}
+			}
+		case "saveFilesM3U":
+			err = saveFiles(request, "m3u")
+			if err == nil {
+				response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "playlist"))
+			}
+		case "updateFileM3U":
+			err = updateFile(request, "m3u")
+			if err == nil {
+				response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "playlist"))
+			}
+		case "saveFilesHDHR":
+			err = saveFiles(request, "hdhr")
+			if err == nil {
+				response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "playlist"))
+			}
+		case "updateFileHDHR":
+			err = updateFile(request, "hdhr")
+			if err == nil {
+				response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "playlist"))
+			}
+		case "saveFilesXMLTV":
+			err = saveFiles(request, "xmltv")
+			if err == nil {
+				response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "xmltv"))
+			}
+		case "updateFileXMLTV":
+			err = updateFile(request, "xmltv")
+			if err == nil {
+				response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "xmltv"))
+			}
+		case "saveFilter":
+			response.Settings, err = saveFilter(request)
+			if err == nil {
+				response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "filter"))
+			}
+		case "saveEpgMapping":
+			err = saveXEpgMapping(request)
+		case "saveUserData":
+			err = saveUserData(request)
+			if err == nil {
+				response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "users"))
+			}
+		case "saveNewUser":
+			err = saveNewUser(request)
+			if err == nil {
+				response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "users"))
+			}
+		case "resetLogs":
+			WebScreenLog.Log = make([]string, 0)
+			WebScreenLog.Errors = 0
+			WebScreenLog.Warnings = 0
+			response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "log"))
+		case "xteveBackup":
+			file, errNew := xteveBackup()
+			err = errNew
+			if err == nil {
+				response.OpenLink = fmt.Sprintf("%s://%s/download/%s", System.ServerProtocol.WEB, System.Domain, file)
+			}
+		case "xteveRestore":
+			WebScreenLog.Log = make([]string, 0)
+			WebScreenLog.Errors = 0
+			WebScreenLog.Warnings = 0
+
+			if len(request.Base64) > 0 {
+				newWebURL, err := xteveRestoreFromWeb(request.Base64)
+				if err != nil {
+					ShowError(err, 000)
+					response.Alert = err.Error()
+				}
+
+				if err == nil {
+					if len(newWebURL) > 0 {
+						response.Alert = "Backup was successfully restored.\nThe port of the sTeVe URL has changed, you have to restart xTeVe.\nAfter a restart, xTeVe can be reached again at the following URL:\n" + newWebURL
+					} else {
+						response.Alert = "Backup was successfully restored."
+						response.Reload = true
+					}
+					showInfo("xTeVe:" + "Backup successfully restored.")
+				}
+			}
+		case "uploadLogo":
+			if len(request.Base64) > 0 {
+				response.LogoURL, err = uploadLogo(request.Base64, request.Filename)
+
+				if err == nil {
+					if errWrite := conn.WriteJSON(response); errWrite != nil {
+						log.Printf("Error writing JSON response (uploadLogo): %v", errWrite)
+						break
+					}
+					continue
+				}
+				// If err from uploadLogo was not nil, it will be handled by the generic error handling below.
+			}
+		case "saveWizard":
+			nextStep, errNew := saveWizard(request)
+
+			err = errNew
+			if err == nil {
+				if nextStep == 10 {
+					System.ConfigurationWizard = false
+					response.Reload = true
+				} else {
+					response.Wizard = nextStep
+				}
+			}
+		// case "wizardCompleted":
+		// 	System.ConfigurationWizard = false
+		// 	response.Reload = true
+		default:
+			fmt.Println("+ + + + + + + + + + +", request.Cmd)
+
+			var requestMap = make(map[string]any) // Debug
+			_ = requestMap
+			if System.Dev {
+				fmt.Println(mapToJSON(requestMap))
 			}
 		}
-	// case "wizardCompleted":
-	// 	System.ConfigurationWizard = false
-	// 	response.Reload = true
-	default:
-		fmt.Println("+ + + + + + + + + + +", request.Cmd)
-
-		var requestMap = make(map[string]any) // Debug
-		_ = requestMap
-		if System.Dev {
-			fmt.Println(mapToJSON(requestMap))
-		}
-	}
 
 		if err != nil {
 			response.Status = false
