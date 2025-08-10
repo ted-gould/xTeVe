@@ -15,8 +15,13 @@ parts:
   xteve:
     plugin: go
     source: .
+    build-packages:
+      - ffmpeg
     build-snaps:
       - go
+    override-build: |
+      ./build/generate_video.sh
+      snapcraftctl build
     override-stage: |
       snapcraftctl stage
       snapcraftctl set-version `$SNAPCRAFT_STAGE/bin/xteve -version`
