@@ -337,11 +337,6 @@ func DataImages(w http.ResponseWriter, r *http.Request) {
 
 // WS : Web Sockets /ws/
 func WS(w http.ResponseWriter, r *http.Request) {
-	var request RequestStruct
-	var response ResponseStruct
-	response.Status = true
-
-	var newToken string
 
 	// if r.Header.Get("Origin") != "http://" + r.Host {
 	// 	httpStatusError(w, r, 403)
@@ -361,20 +356,28 @@ func WS(w http.ResponseWriter, r *http.Request) {
 
 	setGlobalDomain(r.Host)
 
-	select {
-	case response.Alert = <-webAlerts:
-	//
-	default:
+	for {
+		var request RequestStruct
+		var response ResponseStruct
+		response.Status = true
+
+		select {
+		case response.Alert = <-webAlerts:
 		//
-	}
+		default:
+			//
+		}
 
-	err = conn.ReadJSON(&request)
+		err = conn.ReadJSON(&request)
+		if err != nil {
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+				log.Printf("Error reading websocket message: %v", err)
+			}
+			break // Exit the loop on error
+		}
+		log.Printf("Received command: %s", request.Cmd)
 
-	if err != nil {
-		return
-	}
-
-	if !System.ConfigurationWizard {
+		if !System.ConfigurationWizard {
 		switch Settings.AuthenticationWEB {
 		// Token Authentication
 		case true:
@@ -387,7 +390,7 @@ func WS(w http.ResponseWriter, r *http.Request) {
 				token = tokens[0]
 			}
 
-			newToken, err = tokenAuthentication(token)
+			newToken, err := tokenAuthentication(token)
 			if err != nil {
 				response.Status = false
 				response.Reload = true
@@ -396,11 +399,9 @@ func WS(w http.ResponseWriter, r *http.Request) {
 
 				if errWrite := conn.WriteJSON(response); errWrite != nil {
 					log.Printf("Error writing JSON response (token auth failed): %v", errWrite)
-					// ShowError(errWrite, 1102) // Original logging
-					// If we can't even write the error message, best to close connection.
-					return // Return from the handler for this client
+					break // Exit loop
 				}
-				return // Successfully wrote error, now return
+				continue // Continue to next message
 			}
 			response.Token = newToken
 			response.Users, _ = authentication.GetAllUserData()
@@ -415,10 +416,9 @@ func WS(w http.ResponseWriter, r *http.Request) {
 		response = setDefaultResponseData(response, false)
 		if errWrite := conn.WriteJSON(response); errWrite != nil {
 			log.Printf("Error writing JSON response (updateLog): %v", errWrite)
-			// ShowError(errWrite, 1022) // Original logging
-			return // Return from the handler for this client
+			break // Exit loop
 		}
-		return
+		continue
 	case "loadFiles":
 		// response.Response = Settings.Files
 
@@ -556,11 +556,9 @@ func WS(w http.ResponseWriter, r *http.Request) {
 			if err == nil {
 				if errWrite := conn.WriteJSON(response); errWrite != nil {
 					log.Printf("Error writing JSON response (uploadLogo): %v", errWrite)
-					// ShowError(errWrite, 1022) // Original logging
-					return // Error writing this specific response, terminate for this client.
+					break
 				}
-				// Successfully wrote the logo response, so return from the handler.
-				return
+				continue
 			}
 			// If err from uploadLogo was not nil, it will be handled by the generic error handling below.
 		}
@@ -589,20 +587,21 @@ func WS(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err != nil {
-		response.Status = false
-		response.Error = err.Error()
-		response.Settings = Settings
-	}
+		if err != nil {
+			response.Status = false
+			response.Error = err.Error()
+			response.Settings = Settings
+		}
 
-	response = setDefaultResponseData(response, true)
-	if System.ConfigurationWizard {
-		response.ConfigurationWizard = System.ConfigurationWizard
-	}
+		response = setDefaultResponseData(response, true)
+		if System.ConfigurationWizard {
+			response.ConfigurationWizard = System.ConfigurationWizard
+		}
 
-	if errWrite := conn.WriteJSON(response); errWrite != nil {
-		log.Printf("Error writing main JSON response in WS handler: %v", errWrite)
-		// ShowError(errWrite, 1022) // Original logging
+		if errWrite := conn.WriteJSON(response); errWrite != nil {
+			log.Printf("Error writing main JSON response in WS handler: %v", errWrite)
+			break
+		}
 	}
 }
 
