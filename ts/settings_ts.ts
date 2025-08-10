@@ -775,45 +775,6 @@ class SettingsCategory {
   }
 }
 
-// Settings
-var settingsCategory = new Array();
-settingsCategory.push(
-  new SettingsCategoryItem(
-    "{{.settings.general.title}}",
-    "hostIP,hostName,port,tuner,epgSource,api,ssdp,tlsMode",
-  ),
-);
-settingsCategory.push(
-  new SettingsCategoryItem(
-    "{{.settings.files.title}}",
-    "files.update,update,cache.images,xepg.replace.missing.images,clearXMLTVCache",
-  ),
-);
-settingsCategory.push(
-  new SettingsCategoryItem(
-    "{{.settings.streaming.title}}",
-    "buffer,buffer.size.kb,storeBufferInRAM,buffer.timeout,stream.retry.enabled,stream.max.retries,stream.retry.delay,user.agent,udpxy",
-  ),
-);
-settingsCategory.push(
-  new SettingsCategoryItem(
-    "{{.settings.backup.title}}",
-    "backup.path,backup.keep",
-  ),
-);
-settingsCategory.push(
-  new SettingsCategoryItem(
-    "{{.settings.authentication.title}}",
-    "authentication.web,authentication.pms,authentication.m3u,authentication.xml,authentication.api",
-  ),
-);
-settingsCategory.push(
-  new SettingsCategoryItem(
-    "{{.settings.misc.title}}",
-    "defaultMissingEPG,enableMappedChannels,disallowURLDuplicates",
-  ),
-);
-
 class SettingsCategoryItem extends SettingsCategory {
   headline: string;
   settingsKeys: string;
@@ -861,6 +822,45 @@ class SettingsCategoryItem extends SettingsCategory {
     doc.appendChild(this.createHR());
   }
 }
+
+// Settings
+var settingsCategory = new Array();
+settingsCategory.push(
+  new SettingsCategoryItem(
+    "{{.settings.general.title}}",
+    "hostIP,hostName,port,tuner,epgSource,api,ssdp,tlsMode",
+  ),
+);
+settingsCategory.push(
+  new SettingsCategoryItem(
+    "{{.settings.files.title}}",
+    "files.update,update,cache.images,xepg.replace.missing.images,clearXMLTVCache",
+  ),
+);
+settingsCategory.push(
+  new SettingsCategoryItem(
+    "{{.settings.streaming.title}}",
+    "buffer,buffer.size.kb,storeBufferInRAM,buffer.timeout,stream.retry.enabled,stream.max.retries,stream.retry.delay,user.agent,udpxy",
+  ),
+);
+settingsCategory.push(
+  new SettingsCategoryItem(
+    "{{.settings.backup.title}}",
+    "backup.path,backup.keep",
+  ),
+);
+settingsCategory.push(
+  new SettingsCategoryItem(
+    "{{.settings.authentication.title}}",
+    "authentication.web,authentication.pms,authentication.m3u,authentication.xml,authentication.api",
+  ),
+);
+settingsCategory.push(
+  new SettingsCategoryItem(
+    "{{.settings.misc.title}}",
+    "defaultMissingEPG,enableMappedChannels,disallowURLDuplicates",
+  ),
+);
 
 function showSettings() {
   for (let i = 0; i < settingsCategory.length; i++) {
