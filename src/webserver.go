@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log" // Added for log.Printf
 	"net"
 	"net/http"
@@ -605,12 +606,30 @@ func WS(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+var webHandler http.Handler
+
+func init() {
+	htmlFS, err := fs.Sub(webUI, "html")
+	if err != nil {
+		log.Fatal("Failed to create sub-filesystem for embedded resources: ", err)
+	}
+	fileServer := http.FileServer(http.FS(htmlFS))
+	webHandler = http.StripPrefix("/web/", fileServer)
+}
+
 // Web : Web Server /web/
 func Web(w http.ResponseWriter, r *http.Request) {
+	var path = r.URL.Path
+
+	// Serve static assets using the file server
+	if !strings.HasSuffix(path, ".js") && !strings.HasSuffix(path, ".html") && path != "/web/" && path != "/web" {
+		webHandler.ServeHTTP(w, r)
+		return
+	}
+
 	var lang = make(map[string]any)
 	var err error
 
-	var path = r.URL.Path
 	if path == "/web" {
 		path = "/web/"
 	}
@@ -624,9 +643,9 @@ func Web(w http.ResponseWriter, r *http.Request) {
 	setGlobalDomain(r.Host)
 
 	// Load language file
-	var languageFile = fmt.Sprintf("lang/%s.json", Settings.Language)
+	var languageFile = fmt.Sprintf("html/lang/%s.json", Settings.Language)
 	if System.Dev {
-		lang, err = loadJSONFileToMap("src/html/" + languageFile)
+		lang, err = loadJSONFileToMap("src/" + languageFile)
 		if err != nil {
 			ShowError(err, 0)
 		}
@@ -634,7 +653,7 @@ func Web(w http.ResponseWriter, r *http.Request) {
 		contentBytes, err = webUI.ReadFile(languageFile)
 		if err != nil {
 			// Fallback to English if language file is not found
-			languageFile = "lang/en.json"
+			languageFile = "html/lang/en.json"
 			contentBytes, err = webUI.ReadFile(languageFile)
 			if err != nil {
 				ShowError(err, 0)
@@ -752,8 +771,7 @@ func Web(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		embeddedPath := strings.TrimPrefix(requestFile, "html/")
-		contentBytes, err = webUI.ReadFile(embeddedPath)
+		contentBytes, err = webUI.ReadFile(requestFile)
 		if err != nil {
 			httpStatusError(w, r, 404)
 			return
@@ -1067,6 +1085,10 @@ func getContentType(filename string) (contentType string) {
 		contentType = "audio/mp3"
 	} else if strings.HasSuffix(filename, ".wav") {
 		contentType = "audio/wav"
+	} else if strings.HasSuffix(filename, ".ico") {
+		contentType = "image/x-icon"
+	} else if strings.HasSuffix(filename, ".json") {
+		contentType = "application/json"
 	} else {
 		contentType = "text/plain"
 	}
