@@ -722,6 +722,7 @@ settingsCategory.push(new SettingsCategoryItem("{{.settings.backup.title}}", "ba
 settingsCategory.push(new SettingsCategoryItem("{{.settings.authentication.title}}", "authentication.web,authentication.pms,authentication.m3u,authentication.xml,authentication.api"))
 settingsCategory.push(new SettingsCategoryItem("{{.settings.misc.title}}", "defaultMissingEPG,enableMappedChannels,disallowURLDuplicates"))
 
+
 class SettingsCategoryItem extends SettingsCategory {
   headline:string
   settingsKeys:string
