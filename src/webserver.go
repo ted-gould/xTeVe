@@ -3,6 +3,7 @@ package src
 import (
 	"context"
 	"encoding/json"
+	"mime"
 	"errors"
 	"fmt"
 	"io"
@@ -24,6 +25,11 @@ import (
 // webAlerts channel to send to client
 var webAlerts = make(chan string, 3)
 var restartWebserver = make(chan bool, 1)
+
+func init() {
+	// Fix for MIME type issue with .js files
+	_ = mime.AddExtensionType(".js", "application/javascript")
+}
 
 // StartWebserver : Start the Webserver
 func StartWebserver() (err error) {
