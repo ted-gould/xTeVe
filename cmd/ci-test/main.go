@@ -140,7 +140,7 @@ func runTests() error {
 	// 3. Test: Add a valid M3U playlist
 	fmt.Println("Adding M3U playlist...")
 	m3uData := map[string]interface{}{
-		"0": map[string]string{
+		"-": map[string]string{ // Use "-" to indicate a new file
 			"name": "CSPAN",
 			"url":  "https://raw.githubusercontent.com/freearhey/iptv-usa/main/c-span.us.m3u",
 		},
