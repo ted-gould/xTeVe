@@ -110,10 +110,17 @@ func Index(w http.ResponseWriter, r *http.Request) {
 
 	switch path {
 	case "/favicon.ico":
-		if value, ok := webUI["html"+path].(string); ok {
-			response = []byte(GetHTMLString(value))
-			w.Header().Set("Content-Type", "image/x-icon")
+		response, err = webUI.ReadFile("favicon.ico")
+		if err != nil {
+			httpStatusError(w, r, 404)
+			return
 		}
+		w.Header().Set("Content-Type", "image/x-icon")
+		w.WriteHeader(200)
+		if _, writeErr := w.Write(response); writeErr != nil {
+			log.Printf("Error writing response in Index handler: %v", writeErr)
+		}
+		return
 	case "/discover.json":
 		response, err = getDiscover()
 		w.Header().Set("Content-Type", "application/json")
@@ -608,29 +615,42 @@ func Web(w http.ResponseWriter, r *http.Request) {
 	var err error
 
 	var requestFile = strings.Replace(r.URL.Path, "/web", "html", -1)
-	var content, contentType, file string
+	var content string
+	var contentBytes []byte
+	var contentType, file string
 
 	var language LanguageUI
 
 	setGlobalDomain(r.Host)
 
+	// Load language file
+	var languageFile = fmt.Sprintf("lang/%s.json", Settings.Language)
 	if System.Dev {
-		lang, err = loadJSONFileToMap(fmt.Sprintf("html/lang/%s.json", Settings.Language))
+		lang, err = loadJSONFileToMap("src/html/" + languageFile)
 		if err != nil {
-			ShowError(err, 000)
+			ShowError(err, 0)
 		}
 	} else {
-		var languageFile = "html/lang/en.json"
-
-		if value, ok := webUI[languageFile].(string); ok {
-			content = GetHTMLString(value)
-			lang = jsonToMap(content)
+		contentBytes, err = webUI.ReadFile(languageFile)
+		if err != nil {
+			// Fallback to English if language file is not found
+			languageFile = "lang/en.json"
+			contentBytes, err = webUI.ReadFile(languageFile)
+			if err != nil {
+				ShowError(err, 0)
+				httpStatusError(w, r, 500)
+				return
+			}
+		}
+		err = json.Unmarshal(contentBytes, &lang)
+		if err != nil {
+			ShowError(err, 0)
 		}
 	}
 
 	err = json.Unmarshal([]byte(mapToJSON(lang)), &language)
 	if err != nil {
-		ShowError(err, 000)
+		ShowError(err, 0)
 		return
 	}
 
@@ -713,7 +733,7 @@ func Web(w http.ResponseWriter, r *http.Request) {
 
 			allUserData, err := authentication.GetAllUserData()
 			if err != nil {
-				ShowError(err, 000)
+				ShowError(err, 0)
 				httpStatusError(w, r, 403)
 				return
 			}
@@ -723,45 +743,34 @@ func Web(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		requestFile = file
+	}
 
-		if _, ok := webUI[requestFile]; ok {
-			//content = GetHTMLString(value.(string))
-			if contentType == "text/plain" {
-				w.Header().Set("Content-Disposition", "attachment; filename="+getFilenameFromPath(requestFile))
-			}
-		} else {
+	if System.Dev {
+		contentBytes, err = os.ReadFile("src/" + requestFile)
+		if err != nil {
+			httpStatusError(w, r, 404)
+			return
+		}
+	} else {
+		embeddedPath := strings.TrimPrefix(requestFile, "html/")
+		contentBytes, err = webUI.ReadFile(embeddedPath)
+		if err != nil {
 			httpStatusError(w, r, 404)
 			return
 		}
 	}
 
-	if value, ok := webUI[requestFile].(string); ok {
-		content = GetHTMLString(value)
-		contentType = getContentType(requestFile)
-
-		if contentType == "text/plain" {
-			w.Header().Set("Content-Disposition", "attachment; filename="+getFilenameFromPath(requestFile))
-		}
-	} else {
-		httpStatusError(w, r, 404)
-		return
-	}
-
 	contentType = getContentType(requestFile)
-
-	if System.Dev {
-		// Local web server Files are loaded, only for Development
-		content, _ = readStringFromFile(requestFile)
-	}
-
 	w.Header().Add("Content-Type", contentType)
-	w.WriteHeader(200)
 
 	if contentType == "text/html" || contentType == "application/javascript" {
+		content = string(contentBytes)
 		content = parseTemplate(content, lang)
+		contentBytes = []byte(content)
 	}
 
-	if _, writeErr := w.Write([]byte(content)); writeErr != nil {
+	w.WriteHeader(200)
+	if _, writeErr := w.Write(contentBytes); writeErr != nil {
 		log.Printf("Error writing response in Web handler: %v", writeErr)
 	}
 }

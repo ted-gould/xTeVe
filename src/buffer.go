@@ -139,16 +139,15 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 			if len(playlist.Streams) >= playlist.Tuner {
 				showInfo(fmt.Sprintf("Streaming Status:Playlist: %s - No new connections available. Tuner = %d", playlist.PlaylistName, playlist.Tuner))
 
-				if value, ok := webUI["html/video/stream-limit.ts"]; ok {
-					var content string = GetHTMLString(value.(string))
-
+				content, err := webUI.ReadFile("video/stream-limit.ts")
+				if err == nil {
 					w.WriteHeader(200)
 					w.Header().Set("Content-type", "video/mpeg")
 					w.Header().Set("Content-Length:", "0")
 
 					for i := 1; i < 60; i++ {
 						_ = i
-						if _, errWrite := w.Write([]byte(content)); errWrite != nil {
+						if _, errWrite := w.Write(content); errWrite != nil {
 							// Log error and break, client connection is likely gone
 							// log.Printf("Error writing stream-limit content to client: %v", errWrite)
 							return
