@@ -2,19 +2,16 @@ package src
 
 /*
   Render Tuner Stream-Limit image as Video [ffmpeg]
-  -loop 1 -i stream-limit.jpg -c:v libx264 -t 1 -pix_fmt yuv420p -vf scale=1920:1080  stream-limit.ts
+  -loop 1 -i stream-limit.jpg -c:v libx264 -t 1 -pix_fmt yuv420p -vf scale=1920:1080  stream-limit.bin
 */
 
 import (
-	"bufio"
-	"bytes"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
 	"path"
 	"sort"
 	"strconv"
@@ -139,7 +136,7 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 			if len(playlist.Streams) >= playlist.Tuner {
 				showInfo(fmt.Sprintf("Streaming Status:Playlist: %s - No new connections available. Tuner = %d", playlist.PlaylistName, playlist.Tuner))
 
-				content, err := webUI.ReadFile("video/stream-limit.ts")
+				content, err := webUI.ReadFile("video/stream-limit.bin")
 				if err == nil {
 					w.WriteHeader(200)
 					w.Header().Set("Content-type", "video/mpeg")
@@ -193,8 +190,6 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 		switch Settings.Buffer {
 		case "xteve":
 			go connectToStreamingServer(streamID, playlistID)
-		case "ffmpeg", "vlc":
-			go thirdPartyBuffer(streamID, playlistID)
 		default:
 			break
 		}
@@ -461,6 +456,41 @@ func clientConnection(stream ThisStream) (status bool) {
 	return
 }
 
+func connectWithRetry(client *http.Client, req *http.Request) (*http.Response, error) {
+	var resp *http.Response
+	var err error
+	var retries = 0
+
+	for {
+		resp, err = client.Do(req)
+
+		if err != nil {
+			if resp != nil {
+				debugResponse(resp)
+			}
+			if Settings.StreamRetryEnabled && retries < Settings.StreamMaxRetries {
+				retries++
+				showInfo(fmt.Sprintf("Stream Error (%s). Retry %d/%d in %d milliseconds.", err.Error(), retries, Settings.StreamMaxRetries, Settings.StreamRetryDelay))
+				time.Sleep(time.Duration(Settings.StreamRetryDelay) * time.Millisecond)
+				continue
+			}
+			return nil, err
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			if Settings.StreamRetryEnabled && retries < Settings.StreamMaxRetries {
+				retries++
+				showInfo(fmt.Sprintf("Stream HTTP Status Error (%s). Retry %d/%d in %d milliseconds.", http.StatusText(resp.StatusCode), retries, Settings.StreamMaxRetries, Settings.StreamRetryDelay))
+				time.Sleep(time.Duration(Settings.StreamRetryDelay) * time.Millisecond)
+				continue
+			}
+			return resp, fmt.Errorf("bad status: %s", resp.Status)
+		}
+
+		return resp, nil
+	}
+}
+
 func connectToStreamingServer(streamID int, playlistID string) {
 	if p, ok := BufferInformation.Load(playlistID); ok {
 		var playlist = p.(Playlist)
@@ -560,7 +590,6 @@ func connectToStreamingServer(streamID int, playlistID string) {
 			}
 
 			var segment = stream.Segment[0]
-
 			var currentURL = strings.Trim(segment.URL, "\r\n")
 
 			if len(currentURL) == 0 {
@@ -570,12 +599,12 @@ func connectToStreamingServer(streamID int, playlistID string) {
 			debug = fmt.Sprintf("Connection to:%s", currentURL)
 			showDebug(debug, 2)
 
+			var retries = 0
 			// Jump for redirect (301 <---> 308)
 		Redirect:
 			req, _ := http.NewRequest("GET", currentURL, nil)
 			req.Header.Set("User-Agent", Settings.UserAgent)
 			req.Header.Set("Connection", "close")
-			//req.Header.Set("Range", "bytes=0-")
 			req.Header.Set("Accept", "*/*")
 			debugRequest(req)
 
@@ -584,34 +613,15 @@ func connectToStreamingServer(streamID int, playlistID string) {
 				return errors.New("Redirect")
 			}
 
-			resp, err := client.Do(req)
-
-			if resp != nil && err != nil {
-				debugResponse(resp)
-			}
+			resp, err := connectWithRetry(client, req)
 
 			if err != nil {
-				if resp == nil {
-					err = errors.New("no response from streaming server")
-					fmt.Println("Current URL:", currentURL)
-					ShowError(err, 0)
-
-					addErrorToStream(err)
-
-					killClientConnection(streamID, playlistID, true)
-					clientConnection(stream)
-					return
-				}
-
 				// Redirect
-				if resp.StatusCode >= 301 && resp.StatusCode <= 308 {
+				if resp != nil && resp.StatusCode >= 301 && resp.StatusCode <= 308 {
 					debug = fmt.Sprintf("Streaming Status:HTTP response status [%d] %s", resp.StatusCode, http.StatusText(resp.StatusCode))
 					showDebug(debug, 2)
-
 					currentURL = strings.Trim(resp.Header.Get("Location"), "\r\n")
-
 					stream.Location = currentURL
-
 					if len(currentURL) > 0 {
 						debug = fmt.Sprintf("HTTP Redirect:%s", stream.Location)
 						showDebug(debug, 2)
@@ -621,44 +631,22 @@ func connectToStreamingServer(streamID int, playlistID string) {
 						err = errors.New("streaming server")
 						ShowError(err, 4002)
 						addErrorToStream(err)
-
 						defer resp.Body.Close()
 						return
 					}
-				} else {
-					ShowError(err, 0)
-					addErrorToStream(err)
-
-					defer resp.Body.Close()
-					return
 				}
+
+				ShowError(err, 0)
+				addErrorToStream(err)
+				if resp != nil {
+					defer resp.Body.Close()
+				}
+				return
 			}
 			defer resp.Body.Close()
 
 			// Check HTTP Status, in case of errors the stream is terminated
 			var contentType = resp.Header.Get("Content-Type")
-			var httpStatusCode = resp.StatusCode
-			var httpStatusInfo = fmt.Sprintf("HTTP Response Status [%d] %s", httpStatusCode, http.StatusText(resp.StatusCode))
-
-			if resp.StatusCode != http.StatusOK {
-				showInfo("Content Type:" + contentType)
-				showInfo("Streaming Status:" + httpStatusInfo)
-				showInfo("Error with this URL:" + currentURL)
-
-				var err = errors.New(http.StatusText(resp.StatusCode))
-				ShowError(err, 4004)
-
-				debug = fmt.Sprintf("Streaming Status:Playlist: %s - Tuner: %d / %d", playlist.PlaylistName, len(playlist.Streams), playlist.Tuner)
-				showDebug(debug, 1)
-
-				BufferInformation.Store(playlist.PlaylistID, playlist)
-				addErrorToStream(err)
-
-				killClientConnection(streamID, playlistID, true)
-				clientConnection(stream)
-				resp.Body.Close()
-				return
-			}
 
 			// Read out information about the streaming server
 			if !stream.Status {
@@ -667,7 +655,7 @@ func connectToStreamingServer(streamID int, playlistID string) {
 					p, _ := url.Parse(currentURL)
 
 					stream.URLScheme = u.Scheme
-					stream.URLHost = req.Host
+					stream.URLHost = u.Host
 					stream.URLPath = p.Path
 					stream.URLFile = path.Base(p.Path)
 
@@ -712,6 +700,53 @@ func connectToStreamingServer(streamID int, playlistID string) {
 					ShowError(err, 4050)
 					addErrorToStream(err)
 				}
+
+				if stream.HLS {
+					client := &http.Client{}
+					client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+						return errors.New("Redirect")
+					}
+
+					for _, segment := range stream.Segment {
+						req, _ := http.NewRequest("GET", segment.URL, nil)
+						req.Header.Set("User-Agent", Settings.UserAgent)
+						req.Header.Set("Connection", "close")
+						req.Header.Set("Accept", "*/*")
+						debugRequest(req)
+
+						resp, err := connectWithRetry(client, req)
+						if err != nil {
+							ShowError(err, 0)
+							addErrorToStream(err)
+							return
+						}
+						defer resp.Body.Close()
+
+						body, err := io.ReadAll(resp.Body)
+						if err != nil {
+							ShowError(err, 0)
+							addErrorToStream(err)
+						}
+
+						tmpFile := fmt.Sprintf("%s%d.ts", tmpFolder, tmpSegment)
+						bufferFile, err := bufferVFS.Create(tmpFile)
+						if err != nil {
+							addErrorToStream(err)
+							bufferFile.Close()
+							resp.Body.Close()
+							return
+						}
+
+						if _, err := bufferFile.Write(body); err != nil {
+							ShowError(err, 0)
+							addErrorToStream(err)
+							resp.Body.Close()
+							return
+						}
+						bufferFile.Close()
+						tmpSegment++
+					}
+				}
 			// Video Stream (TS)
 			case "video/mpeg", "video/mp4", "video/mp2t", "video/m2ts", "application/octet-stream", "binary/octet-stream", "application/mp2t", "video/x-matroska":
 				var fileSize int
@@ -748,14 +783,29 @@ func connectToStreamingServer(streamID int, playlistID string) {
 					}
 
 					timeOut = 0
+					var n int
 					// Fill the Buffer with data from the Server
-					n, err := resp.Body.Read(buffer)
+					for {
+						n, err = resp.Body.Read(buffer)
 
-					if err != nil && err != io.EOF {
-						ShowError(err, 0)
-						addErrorToStream(err)
-						resp.Body.Close()
-						return
+						if err != nil && err != io.EOF {
+							if Settings.StreamRetryEnabled && retries < Settings.StreamMaxRetries {
+								retries++
+								showInfo(fmt.Sprintf("Stream Read Error (%s). Retry %d/%d in %d seconds.", err.Error(), retries, Settings.StreamMaxRetries, Settings.StreamRetryDelay))
+								time.Sleep(time.Duration(Settings.StreamRetryDelay) * time.Second)
+								resp.Body.Close()
+								goto Redirect
+							}
+							ShowError(err, 0)
+							addErrorToStream(err)
+							resp.Body.Close()
+							return
+						}
+						retries = 0 // Reset retries on successful read
+
+						if n == 0 {
+							break
+						}
 					}
 					defer resp.Body.Close()
 
@@ -1119,332 +1169,11 @@ func switchBandwidth(stream *ThisStream) (err error) {
 	return
 }
 
-// Buffer with FFMPEG
-func thirdPartyBuffer(streamID int, playlistID string) {
-	if p, ok := BufferInformation.Load(playlistID); ok {
-		var playlist = p.(Playlist)
-		var debug, path, options, bufferType string
-		var tmpSegment = 1
-		var bufferSize = Settings.BufferSize * 1024
-		var stream = playlist.Streams[streamID]
-		var buf bytes.Buffer
-		var fileSize = 0
-		var streamStatus = make(chan bool)
-		//var dir_file_mode os.FileMode = fs.ModeDir
-		var tmpFolder = playlist.Streams[streamID].Folder
-		var url = playlist.Streams[streamID].URL
-
-		stream.Status = false
-
-		bufferType = strings.ToUpper(Settings.Buffer)
-
-		switch Settings.Buffer {
-		case "ffmpeg":
-			path = Settings.FFmpegPath
-			options = Settings.FFmpegOptions
-		case "vlc":
-			path = Settings.VLCPath
-			options = Settings.VLCOptions
-		default:
-			return
-		}
-
-		var addErrorToStream = func(err error) {
-			var stream = playlist.Streams[streamID]
-
-			if c, ok := BufferClients.Load(playlistID + stream.MD5); ok {
-				var clients = c.(ClientConnection)
-				clients.Error = err
-				BufferClients.Store(playlistID+stream.MD5, clients)
-			}
-		}
-
-		if err := bufferVFS.RemoveAll(getPlatformPath(tmpFolder)); err != nil {
-			ShowError(err, 4005)
-		}
-
-		err := checkVFSFolder(tmpFolder, bufferVFS)
-		if err != nil {
-			ShowError(err, 0)
-			addErrorToStream(err)
-			return
-		}
-
-		err = checkFile(path)
-		if err != nil {
-			ShowError(err, 0)
-			addErrorToStream(err)
-			return
-		}
-
-		showInfo(fmt.Sprintf("%s path:%s", bufferType, path))
-		showInfo("Streaming URL:" + stream.URL)
-
-		var tmpFile = fmt.Sprintf("%s%d.ts", tmpFolder, tmpSegment)
-
-		f, err := bufferVFS.Create(tmpFile)
-		f.Close()
-		if err != nil {
-			addErrorToStream(err)
-			return
-		}
-
-		//args = strings.Replace(args, "[USER-AGENT]", Settings.UserAgent, -1)
-
-		// Set User-Agent
-		var args []string
-
-		for i, a := range strings.Split(options, " ") {
-			switch bufferType {
-			case "FFMPEG":
-				a = strings.Replace(a, "[URL]", url, -1)
-				if i == 0 {
-					if len(Settings.UserAgent) != 0 {
-						args = []string{"-user_agent", Settings.UserAgent}
-					}
-				}
-				args = append(args, a)
-			case "VLC":
-				if a == "[URL]" {
-					a = strings.Replace(a, "[URL]", url, -1)
-					args = append(args, a)
-
-					if len(Settings.UserAgent) != 0 {
-						args = append(args, fmt.Sprintf(":http-user-agent=%s", Settings.UserAgent))
-					}
-				} else {
-					args = append(args, a)
-				}
-			}
-		}
-
-		var cmd = exec.Command(path, args...)
-
-		debug = fmt.Sprintf("%s:%s %s", bufferType, path, args)
-		showDebug(debug, 1)
-
-		// Byte-Data from the Process
-		stdOut, err := cmd.StdoutPipe()
-		if err != nil {
-			ShowError(err, 0)
-			if killErr := cmd.Process.Kill(); killErr != nil {
-				ShowError(killErr, 0)
-			}
-			if waitErr := cmd.Wait(); waitErr != nil {
-				ShowError(waitErr, 0)
-			}
-			addErrorToStream(err)
-			return
-		}
-
-		// Log-Data from the Process
-		logOut, err := cmd.StderrPipe()
-		if err != nil {
-			ShowError(err, 0)
-			if killErr := cmd.Process.Kill(); killErr != nil {
-				ShowError(killErr, 0)
-			}
-			if waitErr := cmd.Wait(); waitErr != nil {
-				ShowError(waitErr, 0)
-			}
-			addErrorToStream(err)
-			return
-		}
-
-		if len(buf.Bytes()) == 0 && !stream.Status {
-			showInfo(bufferType + ":Processing data")
-		}
-
-		if err := cmd.Start(); err != nil {
-			ShowError(err, 0)
-			addErrorToStream(err)
-			// No need to Kill/Wait if Start fails, process likely didn't start
-			return
-		}
-		defer func() {
-			if err := cmd.Wait(); err != nil {
-				ShowError(err, 0)
-			}
-		}()
-
-		go func() {
-			// Show Log Data from the Process in Debug Mode 1.
-			scanner := bufio.NewScanner(logOut)
-			scanner.Split(bufio.ScanLines)
-
-			for scanner.Scan() {
-				debug = fmt.Sprintf("%s log:%s", bufferType, strings.TrimSpace(scanner.Text()))
-
-				select {
-				case <-streamStatus:
-					showDebug(debug, 1)
-				default:
-					showInfo(debug)
-				}
-				time.Sleep(time.Duration(10) * time.Millisecond)
-			}
-		}()
-
-		f, err = bufferVFS.OpenFile(tmpFile, os.O_APPEND|os.O_WRONLY, 0600)
-		if err != nil {
-			panic(err)
-		}
-		defer f.Close()
-
-		buffer := make([]byte, 1024*4)
-
-		reader := bufio.NewReader(stdOut)
-
-		t := make(chan int)
-
-		go func() {
-			var timeout = 0
-			for {
-				time.Sleep(time.Duration(1000) * time.Millisecond)
-				timeout++
-
-				select {
-				case <-t:
-					return
-				default:
-					t <- timeout
-				}
-			}
-		}()
-
-		for {
-			select {
-			case timeout := <-t:
-				if timeout >= 20 && tmpSegment == 1 {
-					if killErr := cmd.Process.Kill(); killErr != nil {
-						ShowError(killErr, 0)
-					}
-					err = errors.New("Timout")
-					ShowError(err, 4006)
-					addErrorToStream(err)
-					if waitErr := cmd.Wait(); waitErr != nil {
-						ShowError(waitErr, 0)
-					}
-					f.Close()
-					return
-				}
-			default:
-			}
-
-			if fileSize == 0 && !stream.Status {
-				showInfo("Streaming Status:Receive data from " + bufferType)
-			}
-
-			if !clientConnection(stream) {
-				if killErr := cmd.Process.Kill(); killErr != nil {
-					ShowError(killErr, 0)
-				}
-				f.Close()
-				if waitErr := cmd.Wait(); waitErr != nil {
-					ShowError(waitErr, 0)
-				}
-				return
-			}
-
-			n, err := reader.Read(buffer)
-			if err == io.EOF {
-				break
-			}
-			if err != nil { // Handle error from reader.Read
-				ShowError(err, 0)
-				if killErr := cmd.Process.Kill(); killErr != nil {
-					ShowError(killErr, 0)
-				}
-				addErrorToStream(err) // Propagate the read error
-				if waitErr := cmd.Wait(); waitErr != nil {
-					ShowError(waitErr, 0)
-				}
-				f.Close()
-				return
-			}
-
-
-			fileSize = fileSize + len(buffer[:n])
-
-			if _, errWrite := f.Write(buffer[:n]); errWrite != nil {
-				if killErr := cmd.Process.Kill(); killErr != nil {
-					ShowError(killErr, 0)
-				}
-				ShowError(errWrite, 0)
-				addErrorToStream(errWrite)
-				if waitErr := cmd.Wait(); waitErr != nil {
-					ShowError(waitErr, 0)
-				}
-				f.Close()
-				return
-			}
-
-			if fileSize >= bufferSize/2 {
-				if tmpSegment == 1 && !stream.Status {
-					close(t)
-					close(streamStatus)
-					showInfo(fmt.Sprintf("Streaming Status:Buffering data from %s", bufferType))
-				}
-
-				f.Close()
-				tmpSegment++
-
-				if !stream.Status {
-					Lock.Lock()
-					stream.Status = true
-					playlist.Streams[streamID] = stream
-					BufferInformation.Store(playlistID, playlist)
-					Lock.Unlock()
-				}
-
-				tmpFile = fmt.Sprintf("%s%d.ts", tmpFolder, tmpSegment)
-
-				fileSize = 0
-
-				var errCreate, errOpen error
-				_, errCreate = bufferVFS.Create(tmpFile)
-				f, errOpen = bufferVFS.OpenFile(tmpFile, os.O_APPEND|os.O_WRONLY, 0600)
-				if errCreate != nil || errOpen != nil {
-					if killErr := cmd.Process.Kill(); killErr != nil {
-						ShowError(killErr, 0)
-					}
-					// ShowError expects the actual error, not the potentially nil 'err' from before
-					if errCreate != nil {
-						ShowError(errCreate, 0)
-						addErrorToStream(errCreate)
-					} else {
-						ShowError(errOpen, 0)
-						addErrorToStream(errOpen)
-					}
-					if waitErr := cmd.Wait(); waitErr != nil {
-						ShowError(waitErr, 0)
-					}
-					f.Close() // f might be nil if OpenFile failed, but Close handles nil receiver
-					return
-				}
-			}
-		}
-
-		if killErr := cmd.Process.Kill(); killErr != nil {
-			ShowError(killErr, 0)
-		}
-		// The existing cmd.Wait() is deferred and will handle waiting.
-
-		err = errors.New(bufferType + " error") // This seems to indicate the process ended, possibly unexpectedly
-		addErrorToStream(err)
-		ShowError(err, 1204)
-
-		time.Sleep(time.Duration(500) * time.Millisecond)
-		clientConnection(stream)
-		return
-	}
-}
-
 func getTuner(id, playlistType string) (tuner int) {
 	switch Settings.Buffer {
 	case "-":
 		tuner = Settings.Tuner
-	case "xteve", "ffmpeg", "vlc":
+	case "xteve":
 		i, err := strconv.Atoi(getProviderParameter(id, playlistType, "tuner"))
 		if err == nil {
 			tuner = i

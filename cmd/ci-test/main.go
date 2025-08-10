@@ -154,7 +154,7 @@ func runTests() error {
 	m3uData := map[string]interface{}{
 		"-": map[string]interface{}{ // Use "-" to indicate a new file
 			"name": "CSPAN",
-			"url":  "src/testdata/c-span.us.m3u",
+			"url":  "https://raw.githubusercontent.com/ted-gould/xTeVe/main/src/testdata/c-span.us.m3u",
 		},
 	}
 	// Correct key is "files" with a nested "m3u" map
@@ -168,15 +168,14 @@ func runTests() error {
 	validFilterData := map[string]interface{}{
 		"0": map[string]interface{}{
 			"active":          true,
-			"caseSensitive":   true,
+			"caseSensitive":   false,
 			"description":     "Filter out CSPAN 2",
-			"exclude":         "",
-			"filter":          "CSPAN 2",
+			"exclude":         "CSPAN 2",
+			"filter":          "News",
 			"include":         "",
-			"name":            "CSPAN2-Filter",
+			"name":            "CSPAN-Filter",
 			"type":            "group-title",
 			"preserveMapping": true,
-			"rule":            "",
 			"startingChannel": "1000",
 		},
 	}

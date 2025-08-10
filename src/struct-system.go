@@ -2,6 +2,7 @@ package src
 
 import (
 	"net"
+	"regexp"
 	"xteve/src/internal/imgcache"
 )
 
@@ -26,15 +27,6 @@ type SystemStruct struct {
 	Domain              string
 	PlexChannelLimit    int
 
-	FFmpeg struct {
-		DefaultOptions string
-		Path           string
-	}
-
-	VLC struct {
-		DefaultOptions string
-		Path           string
-	}
 
 	File struct {
 		Authentication    string
@@ -202,6 +194,8 @@ type XEPGChannelStruct struct {
 	XUpdateChannelGroup           bool   `json:"x-update-channel-group"`
 	XDescription                  string `json:"x-description"`
 	XTimeshift                    string `json:"x-timeshift"`
+	CompiledNameRegex             *regexp.Regexp `json:"-"`
+	CompiledGroupRegex            *regexp.Regexp `json:"-"`
 }
 
 // M3UChannelStructXEPG : M3U Structure for XEPG
@@ -273,16 +267,15 @@ type SettingsStruct struct {
 	Buffer                string   `json:"buffer"`
 	BufferSize            int      `json:"buffer.size.kb"`
 	BufferTimeout         float64  `json:"buffer.timeout"`
+	StreamRetryEnabled    bool     `json:"stream.retry.enabled"`
+	StreamMaxRetries      int      `json:"stream.max.retries"`
+	StreamRetryDelay      int      `json:"stream.retry.delay"`
 	CacheImages           bool     `json:"cache.images"`
 	ClearXMLTVCache       bool     `json:"clearXMLTVCache"`
 	DefaultMissingEPG     string   `json:"defaultMissingEPG"`
 	DisallowURLDuplicates bool     `json:"disallowURLDuplicates"`
 	EnableMappedChannels  bool     `json:"enableMappedChannels"`
 	EpgSource             string   `json:"epgSource"`
-	FFmpegOptions         string   `json:"ffmpeg.options"`
-	FFmpegPath            string   `json:"ffmpeg.path"`
-	VLCOptions            string   `json:"vlc.options"`
-	VLCPath               string   `json:"vlc.path"`
 	FileM3U               []string `json:"file,omitempty"`  // In the Wizard, the M3U is saved in a Slice
 	FileXMLTV             []string `json:"xmltv,omitempty"` // Old Storage System of the provider XML File Slice (Required for the conversion to the new one)
 

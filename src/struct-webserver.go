@@ -34,10 +34,6 @@ type RequestStruct struct {
 		DisallowURLDuplicates    *bool     `json:"disallowURLDuplicates,omitempty"`
 		EnableMappedChannels     *bool     `json:"enableMappedChannels,omitempty"`
 		EpgSource                *string   `json:"epgSource,omitempty"`
-		FFmpegOptions            *string   `json:"ffmpeg.options,omitempty"`
-		FFmpegPath               *string   `json:"ffmpeg.path,omitempty"`
-		VLCOptions               *string   `json:"vlc.options,omitempty"`
-		VLCPath                  *string   `json:"vlc.path,omitempty"`
 		FilesUpdate              *bool     `json:"files.update,omitempty"`
 		HostIP                   *string   `json:"hostIP,omitempty"` // IP chosen in web client. Used to form m3u and xml files.
 		HostName                 *string   `json:"hostName"`         // Hostname chosen in web client. Used to form m3u and xml files.

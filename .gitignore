@@ -7,9 +7,11 @@ prime/
 stage/
 xteve*.snap
 html/js/
+src/html/video/stream-limit.bin
 /.idea/*
 .xteve/
 __debug_bin
 xteve_test_binary*
 src/html/js/
 bin/
+node_modules/

@@ -1,60 +1,64 @@
 class Server {
-  protocol:string
-  cmd:string
+  protocol: string;
+  cmd: string;
 
-  constructor(cmd:string) {
-    this.cmd = cmd
+  constructor(cmd: string) {
+    this.cmd = cmd;
   }
 
-  request(data:Object):any {
-
+  request(data: Object): any {
     if (SERVER_CONNECTION == true) {
-      return
+      return;
     }
 
-    SERVER_CONNECTION = true
+    SERVER_CONNECTION = true;
 
     if (this.cmd != "updateLog") {
-      showElement("loading", true)
-      UNDO = new Object()
-    }
-    
-    switch(window.location.protocol) {
-      case "http:": 
-        this.protocol = "ws://"
-        break
-      case "https:": 
-        this.protocol = "wss://"
-        break
+      showElement("loading", true);
+      UNDO = new Object();
     }
 
-    var url = this.protocol + window.location.hostname + ":" + window.location.port + "/data/" + "?Token=" + getCookie("Token")
+    switch (window.location.protocol) {
+      case "http:":
+        this.protocol = "ws://";
+        break;
+      case "https:":
+        this.protocol = "wss://";
+        break;
+    }
 
-    data["cmd"] = this.cmd
-    var ws = new WebSocket(url)
-    ws.onopen = function() {
+    var url =
+      this.protocol +
+      window.location.hostname +
+      ":" +
+      window.location.port +
+      "/data/" +
+      "?Token=" +
+      getCookie("Token");
 
-      WS_AVAILABLE = true
+    data["cmd"] = this.cmd;
+    var ws = new WebSocket(url);
+    ws.onopen = function () {
+      WS_AVAILABLE = true;
       this.send(JSON.stringify(data));
+    };
 
-    }
-
-    ws.onerror = function(wsErrEvt) {
-      
-      console.log("No websocket connection to xTeVe could be established. Check your network configuration.")
-      SERVER_CONNECTION = false
+    ws.onerror = function (wsErrEvt) {
+      console.log(
+        "No websocket connection to xTeVe could be established. Check your network configuration.",
+      );
+      SERVER_CONNECTION = false;
 
       if (WS_AVAILABLE == false) {
-        alert("No websocket connection to xTeVe could be established. Check your network configuration.")
+        alert(
+          "No websocket connection to xTeVe could be established. Check your network configuration.",
+        );
       }
-
-    }
-
+    };
 
     ws.onmessage = function (wsMessageEvt) {
-      
-      SERVER_CONNECTION = false
-      showElement("loading", false)
+      SERVER_CONNECTION = false;
+      showElement("loading", false);
 
       const response: Object = JSON.parse(wsMessageEvt.data);
 
@@ -67,8 +71,8 @@ class Server {
         return;
       }
 
-      if (response.hasOwnProperty('openLink')) {
-        window.location = response['openLink'];
+      if (response.hasOwnProperty("openLink")) {
+        window.location = response["openLink"];
       }
 
       if (response.hasOwnProperty("reload")) {
@@ -80,48 +84,45 @@ class Server {
       }
 
       if (response.hasOwnProperty("logoURL")) {
-        var div = (document.getElementById("channel-icon") as HTMLInputElement)
-        div.value = response["logoURL"]
-        div.className = "changed"
-        return
+        var div = document.getElementById("channel-icon") as HTMLInputElement;
+        div.value = response["logoURL"];
+        div.className = "changed";
+        return;
       }
 
       switch (data["cmd"]) {
         case "updateLog":
-          SERVER["log"] = response["log"]
+          SERVER["log"] = response["log"];
           if (document.getElementById("content_log")) {
-            showLogs(false)
+            showLogs(false);
           }
-          return
-        
+          return;
+
         default:
-          SERVER = new Object()
-          SERVER = response
+          SERVER = new Object();
+          SERVER = response;
           break;
       }
 
       if (response.hasOwnProperty("openMenu")) {
-        var menu = document.getElementById(response["openMenu"])
-        menu.click()
-        showElement("popup", false)
+        var menu = document.getElementById(response["openMenu"]);
+        menu.click();
+        showElement("popup", false);
       }
 
       if (response.hasOwnProperty("reload")) {
-        location.reload()
+        location.reload();
       }
 
       if (response.hasOwnProperty("wizard")) {
-        createLayout()
-        configurationWizard[response["wizard"]].createWizard()
-        return
+        createLayout();
+        configurationWizard[response["wizard"]].createWizard();
+        return;
       }
 
-      createLayout()
-
-    }
-  
+      createLayout();
+    };
   }
-  
 }
 
 function getCookie(name) {

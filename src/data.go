@@ -71,14 +71,6 @@ func updateServerSettings(request RequestStruct) (settings SettingsStruct, err e
 				}
 			case "temp.path":
 				value = getValidTempDir(value.(string))
-			case "ffmpeg.path", "vlc.path":
-				var path = value.(string)
-				if len(path) > 0 {
-					err = checkFile(path)
-					if err != nil {
-						return
-					}
-				}
 			case "scheme.m3u", "scheme.xml":
 				createXEPGFiles = true
 			case "defaultMissingEPG":
@@ -125,27 +117,6 @@ func updateServerSettings(request RequestStruct) (settings SettingsStruct, err e
 		Settings.AuthenticationXML = false
 	}
 
-	// Check Buffer Settings
-	if len(Settings.FFmpegOptions) == 0 {
-		Settings.FFmpegOptions = System.FFmpeg.DefaultOptions
-	}
-
-	if len(Settings.VLCOptions) == 0 {
-		Settings.VLCOptions = System.VLC.DefaultOptions
-	}
-
-	switch Settings.Buffer {
-	case "ffmpeg":
-		if len(Settings.FFmpegPath) == 0 {
-			err = errors.New(getErrMsg(2020))
-			return
-		}
-	case "vlc":
-		if len(Settings.VLCPath) == 0 {
-			err = errors.New(getErrMsg(2021))
-			return
-		}
-	}
 
 	err = saveSettings(Settings)
 	if err == nil {
@@ -255,8 +226,13 @@ func saveFiles(request RequestStruct, fileType string) (err error) {
 		if dataID == "-" {
 			// New Provider File
 			dataID = indicator + randomString(19)
-			data.(map[string]any)["new"] = true
-			filesMap[dataID] = data
+			dMap := data.(map[string]any)
+			dMap["new"] = true
+			if url, ok := dMap["url"]; ok {
+				dMap["file.source"] = url
+				delete(dMap, "url")
+			}
+			filesMap[dataID] = dMap
 		} else {
 			// Existing Provider File
 			for key, value := range data.(map[string]any) {

@@ -13,8 +13,15 @@ confinement: strict
 
 parts:
   xteve:
-    plugin: dump
-    source: bin
+    plugin: go
+    source: .
+    build-packages:
+      - ffmpeg
+    build-snaps:
+      - go
+    override-build: |
+      ./build/generate_video.sh
+      snapcraftctl build
     override-stage: |
       snapcraftctl stage
       snapcraftctl set-version `$SNAPCRAFT_STAGE/bin/xteve -version`
@@ -23,12 +30,6 @@ parts:
     source: snap/local/scripts
     organize:
       '*': bin/
-# vlc:
-#   plugin: nil
-#   stage-packages: [ "vlc-bin" ]
-  ffmpeg:
-    plugin: nil
-    stage-packages: [ "ffmpeg" ]
 
 apps:
   xteve:
