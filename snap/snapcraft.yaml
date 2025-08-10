@@ -15,9 +15,12 @@ parts:
   xteve:
     plugin: go
     source: .
+    build-packages:
+      - npm
     build-snaps:
       - go
     override-build: |
+      npm install -g typescript
       make build
       mkdir -p $CRAFT_PART_INSTALL/bin
       cp xteve $CRAFT_PART_INSTALL/bin/
