@@ -11,3 +11,4 @@ html/js/
 .xteve/
 __debug_bin
 xteve_test_binary*
+node_modules/

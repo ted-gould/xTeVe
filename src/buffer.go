@@ -2,7 +2,7 @@ package src
 
 /*
   Render Tuner Stream-Limit image as Video [ffmpeg]
-  -loop 1 -i stream-limit.jpg -c:v libx264 -t 1 -pix_fmt yuv420p -vf scale=1920:1080  stream-limit.ts
+  -loop 1 -i stream-limit.jpg -c:v libx264 -t 1 -pix_fmt yuv420p -vf scale=1920:1080  stream-limit.bin
 */
 
 import (
@@ -139,7 +139,7 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 			if len(playlist.Streams) >= playlist.Tuner {
 				showInfo(fmt.Sprintf("Streaming Status:Playlist: %s - No new connections available. Tuner = %d", playlist.PlaylistName, playlist.Tuner))
 
-				content, err := webUI.ReadFile("video/stream-limit.ts")
+				content, err := webUI.ReadFile("video/stream-limit.bin")
 				if err == nil {
 					w.WriteHeader(200)
 					w.Header().Set("Content-type", "video/mpeg")
