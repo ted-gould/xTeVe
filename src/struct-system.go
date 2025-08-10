@@ -2,6 +2,7 @@ package src
 
 import (
 	"net"
+	"regexp"
 	"xteve/src/internal/imgcache"
 )
 
@@ -202,6 +203,8 @@ type XEPGChannelStruct struct {
 	XUpdateChannelGroup           bool   `json:"x-update-channel-group"`
 	XDescription                  string `json:"x-description"`
 	XTimeshift                    string `json:"x-timeshift"`
+	CompiledNameRegex             *regexp.Regexp `json:"-"`
+	CompiledGroupRegex            *regexp.Regexp `json:"-"`
 }
 
 // M3UChannelStructXEPG : M3U Structure for XEPG

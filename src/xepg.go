@@ -256,6 +256,20 @@ func createXEPGDatabase() (err error) {
 		if err != nil {
 			return
 		}
+
+		if len(channel.UpdateChannelNameRegex) > 0 {
+			channel.CompiledNameRegex, err = regexp.Compile(channel.UpdateChannelNameRegex)
+			if err != nil {
+				ShowError(err, 1018)
+			}
+		}
+
+		if len(channel.UpdateChannelNameByGroupRegex) > 0 {
+			channel.CompiledGroupRegex, err = regexp.Compile(channel.UpdateChannelNameByGroupRegex)
+			if err != nil {
+				ShowError(err, 1018)
+			}
+		}
 		channelHash := generateChannelHash(channel.FileM3UID, channel.Name, channel.GroupTitle, channel.TvgID, channel.TvgName, channel.UUIDKey, channel.UUIDValue)
 		xepgChannelsValuesMap[channelHash] = channel
 	}
@@ -313,21 +327,17 @@ func createXEPGDatabase() (err error) {
 					if dxc.Name == m3uChannel.Name {
 						continue
 					}
-					nameRx, err := regexp.Compile(dxc.UpdateChannelNameRegex)
-					if err != nil {
-						ShowError(err, 1018)
+
+					if dxc.CompiledNameRegex == nil {
 						continue
 					}
-					if !nameRx.MatchString(m3uChannel.Name) {
+
+					if !dxc.CompiledNameRegex.MatchString(m3uChannel.Name) {
 						continue
 					}
-					if len(dxc.UpdateChannelNameByGroupRegex) > 0 {
-						groupRx, err := regexp.Compile(dxc.UpdateChannelNameByGroupRegex)
-						if err != nil {
-							ShowError(err, 1018)
-							continue
-						}
-						if !groupRx.MatchString(dxc.XGroupTitle) {
+
+					if dxc.CompiledGroupRegex != nil {
+						if !dxc.CompiledGroupRegex.MatchString(dxc.XGroupTitle) {
 							// Found the channel name to update but it has wrong group
 							continue
 						}
