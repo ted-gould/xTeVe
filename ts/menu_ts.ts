@@ -1,1783 +1,1996 @@
-
 class MainMenu {
-  DocumentID:string = "main-menu"
-  HTMLTag:string = "LI"
-  ImagePath:string = "img/"
-  
-  createIMG(src):any {
-    let element = document.createElement("IMG")
-    element.setAttribute("src", this.ImagePath + src)
-    element.setAttribute("alt", src)
-    return element
+  DocumentID: string = "main-menu";
+  HTMLTag: string = "LI";
+  ImagePath: string = "img/";
+
+  createIMG(src): any {
+    let element = document.createElement("IMG");
+    element.setAttribute("src", this.ImagePath + src);
+    element.setAttribute("alt", src);
+    return element;
   }
 
-  createValue(value):any {
-    let element = document.createElement("P")
-    element.innerHTML = value
-    return element
+  createValue(value): any {
+    let element = document.createElement("P");
+    element.innerHTML = value;
+    return element;
   }
 }
 
 class MainMenuItem extends MainMenu {
-  menuKey:string
-  value:string
-  imgSrc:string
-  headline:string
-  id:string
-  tableHeader:string[]
+  menuKey: string;
+  value: string;
+  imgSrc: string;
+  headline: string;
+  id: string;
+  tableHeader: string[];
 
-  constructor(menuKey:string, value:string, image:string, headline:string) {
-    super()
-    this.menuKey = menuKey
-    this.value = value
-    this.imgSrc = image
-    this.headline = headline
+  constructor(menuKey: string, value: string, image: string, headline: string) {
+    super();
+    this.menuKey = menuKey;
+    this.value = value;
+    this.imgSrc = image;
+    this.headline = headline;
   }
 
-  createItem():void {
-    let item = document.createElement("LI")
-    item.setAttribute("onclick", "javascript: openThisMenu(this)")
-    item.setAttribute("id", this.id)
-    let img = this.createIMG(this.imgSrc)
-    let value = this.createValue(this.value)
-    
-    item.appendChild(img)
-    item.appendChild(value)
+  createItem(): void {
+    let item = document.createElement("LI");
+    item.setAttribute("onclick", "javascript: openThisMenu(this)");
+    item.setAttribute("id", this.id);
+    let img = this.createIMG(this.imgSrc);
+    let value = this.createValue(this.value);
 
-    let doc = document.getElementById(this.DocumentID)
-    doc.appendChild(item)
+    item.appendChild(img);
+    item.appendChild(value);
 
-    switch(this.menuKey) {
-      case "playlist": 
-        this.tableHeader = ["{{.playlist.table.playlist}}", "{{.playlist.table.tuner}}", "{{.playlist.table.lastUpdate}}", "{{.playlist.table.availability}} %", "{{.playlist.table.type}}", "{{.playlist.table.streams}}", "{{.playlist.table.groupTitle}} %", "{{.playlist.table.tvgID}} %", "{{.playlist.table.uniqueID}} %"]
-        break
-      
-      case "xmltv": 
-        this.tableHeader = ["{{.xmltv.table.guide}}", "{{.xmltv.table.lastUpdate}}", "{{.xmltv.table.availability}} %", "{{.xmltv.table.channels}}", "{{.xmltv.table.programs}}"]
-        break
+    let doc = document.getElementById(this.DocumentID);
+    doc.appendChild(item);
 
-      case "filter": 
-        this.tableHeader = ["{{.filter.table.startingChannel}}", "{{.filter.table.name}}", "{{.filter.table.type}}", "{{.filter.table.filter}}"]
-        break
+    switch (this.menuKey) {
+      case "playlist":
+        this.tableHeader = [
+          "{{.playlist.table.playlist}}",
+          "{{.playlist.table.tuner}}",
+          "{{.playlist.table.lastUpdate}}",
+          "{{.playlist.table.availability}} %",
+          "{{.playlist.table.type}}",
+          "{{.playlist.table.streams}}",
+          "{{.playlist.table.groupTitle}} %",
+          "{{.playlist.table.tvgID}} %",
+          "{{.playlist.table.uniqueID}} %",
+        ];
+        break;
 
-      case "users": 
-        this.tableHeader = ["{{.users.table.username}}", "{{.users.table.password}}", "{{.users.table.web}}", "{{.users.table.pms}}", "{{.users.table.m3u}}", "{{.users.table.xml}}", "{{.users.table.api}}"]
-        break
+      case "xmltv":
+        this.tableHeader = [
+          "{{.xmltv.table.guide}}",
+          "{{.xmltv.table.lastUpdate}}",
+          "{{.xmltv.table.availability}} %",
+          "{{.xmltv.table.channels}}",
+          "{{.xmltv.table.programs}}",
+        ];
+        break;
+
+      case "filter":
+        this.tableHeader = [
+          "{{.filter.table.startingChannel}}",
+          "{{.filter.table.name}}",
+          "{{.filter.table.type}}",
+          "{{.filter.table.filter}}",
+        ];
+        break;
+
+      case "users":
+        this.tableHeader = [
+          "{{.users.table.username}}",
+          "{{.users.table.password}}",
+          "{{.users.table.web}}",
+          "{{.users.table.pms}}",
+          "{{.users.table.m3u}}",
+          "{{.users.table.xml}}",
+          "{{.users.table.api}}",
+        ];
+        break;
 
       case "mapping":
-        this.tableHeader = ["BULK", "{{.mapping.table.chNo}}", "{{.mapping.table.logo}}", "{{.mapping.table.channelName}}", "{{.mapping.table.updateChannelNameRegex}}", "{{.mapping.table.playlist}}", "{{.mapping.table.groupTitle}}", "{{.mapping.table.xmltvFile}}", "{{.mapping.table.xmltvID}}", "{{.mapping.table.timeshift}}"]
-        break
-
+        this.tableHeader = [
+          "BULK",
+          "{{.mapping.table.chNo}}",
+          "{{.mapping.table.logo}}",
+          "{{.mapping.table.channelName}}",
+          "{{.mapping.table.updateChannelNameRegex}}",
+          "{{.mapping.table.playlist}}",
+          "{{.mapping.table.groupTitle}}",
+          "{{.mapping.table.xmltvFile}}",
+          "{{.mapping.table.xmltvID}}",
+          "{{.mapping.table.timeshift}}",
+        ];
+        break;
     }
-    
   }
 }
 
 class Content {
+  DocumentID: string = "content";
+  TableID: string = "content_table";
+  DivID: string;
+  headerClass: string = "content_table_header";
+  interactionID: string = "content-interaction";
 
-  DocumentID:string = "content"
-  TableID:string = "content_table"
-  DivID:string
-  headerClass:string = "content_table_header"
-  interactionID:string = "content-interaction"
-
-  createHeadline(value):any {
-    let element = document.createElement("H3")
-    element.innerHTML = value
-    return element
+  createHeadline(value): any {
+    let element = document.createElement("H3");
+    element.innerHTML = value;
+    return element;
   }
 
-  createHR():any {
-    return document.createElement("HR")
+  createHR(): any {
+    return document.createElement("HR");
   }
 
-  createInteraction():any {
-    let element = document.createElement("DIV")
-    element.setAttribute("id", this.interactionID)
-    return element
+  createInteraction(): any {
+    let element = document.createElement("DIV");
+    element.setAttribute("id", this.interactionID);
+    return element;
   }
 
-  createDIV():any {
-    let element = document.createElement("DIV")
-    element.id = this.DivID
-    return element
+  createDIV(): any {
+    let element = document.createElement("DIV");
+    element.id = this.DivID;
+    return element;
   }
 
-  createTABLE():any {
-    let element = document.createElement("TABLE")
-    element.id = this.TableID
-    return element
+  createTABLE(): any {
+    let element = document.createElement("TABLE");
+    element.id = this.TableID;
+    return element;
   }
 
-  createTableRow():any {
-    let element = document.createElement("TR")
-    element.className = this.headerClass
-    return element
+  createTableRow(): any {
+    let element = document.createElement("TR");
+    element.className = this.headerClass;
+    return element;
   }
 
-  createTableContent(menuKey:string):string[] {
+  createTableContent(menuKey: string): string[] {
+    let data = {};
+    let rows = [];
+    let fileTypes = [];
 
-    let data = {}
-    let rows = []
-    let fileTypes = []
-
-    switch(menuKey) {
+    switch (menuKey) {
       case "playlist":
-        fileTypes = ["m3u", "hdhr"]
+        fileTypes = ["m3u", "hdhr"];
 
-        fileTypes.forEach(fileType => {
-          
-          data = SERVER["settings"]["files"][fileType]
-        
-          var keys = getOwnObjProps(data)
-          
-          keys.forEach(key => {
-            var tr = document.createElement("TR")
-            tr.id = key
-            
-            tr.setAttribute('onclick', 'javascript: openPopUp("' + fileType + '", this)')
+        fileTypes.forEach((fileType) => {
+          data = SERVER["settings"]["files"][fileType];
 
-            var cell:Cell = new Cell()
-            cell.child = true
-            cell.childType = "P"
-            cell.value = data[key]["name"] 
-            tr.appendChild(cell.createCell())
+          var keys = getOwnObjProps(data);
 
-            var cell:Cell = new Cell()
-            cell.child = true
-            cell.childType = "P"
+          keys.forEach((key) => {
+            var tr = document.createElement("TR");
+            tr.id = key;
+
+            tr.setAttribute(
+              "onclick",
+              'javascript: openPopUp("' + fileType + '", this)',
+            );
+
+            var cell: Cell = new Cell();
+            cell.child = true;
+            cell.childType = "P";
+            cell.value = data[key]["name"];
+            tr.appendChild(cell.createCell());
+
+            var cell: Cell = new Cell();
+            cell.child = true;
+            cell.childType = "P";
             if (SERVER["settings"]["buffer"] != "-") {
-              cell.value = data[key]["tuner"] 
+              cell.value = data[key]["tuner"];
             } else {
-              cell.value = "-"
+              cell.value = "-";
             }
-            
-            tr.appendChild(cell.createCell())
-            
-            var cell:Cell = new Cell()
-            cell.child = true
-            cell.childType = "P"
-            cell.value = data[key]["last.update"]
-            tr.appendChild(cell.createCell())
-            
-            var cell:Cell = new Cell()
-            cell.child = true
-            cell.childType = "P"
-            cell.value = data[key]["provider.availability"]
-            tr.appendChild(cell.createCell())
-            
-            var cell:Cell = new Cell()
-            cell.child = true
-            cell.childType = "P"
+
+            tr.appendChild(cell.createCell());
+
+            var cell: Cell = new Cell();
+            cell.child = true;
+            cell.childType = "P";
+            cell.value = data[key]["last.update"];
+            tr.appendChild(cell.createCell());
+
+            var cell: Cell = new Cell();
+            cell.child = true;
+            cell.childType = "P";
+            cell.value = data[key]["provider.availability"];
+            tr.appendChild(cell.createCell());
+
+            var cell: Cell = new Cell();
+            cell.child = true;
+            cell.childType = "P";
             cell.value = data[key]["type"].toUpperCase();
-            tr.appendChild(cell.createCell())
-            
-            var cell:Cell = new Cell()
-            cell.child = true
-            cell.childType = "P"
-            cell.value = data[key]["compatibility"]["streams"]
-            tr.appendChild(cell.createCell())
-            
-            var cell:Cell = new Cell()
-            cell.child = true
-            cell.childType = "P"
-            cell.value = data[key]["compatibility"]["group.title"]
-            tr.appendChild(cell.createCell())
-            
-            var cell:Cell = new Cell()
-            cell.child = true
-            cell.childType = "P"
-            cell.value = data[key]["compatibility"]["tvg.id"]
-            tr.appendChild(cell.createCell())
-            
-            var cell:Cell = new Cell()
-            cell.child = true
-            cell.childType = "P"
-            cell.value = data[key]["compatibility"]["stream.id"]
-            tr.appendChild(cell.createCell())
-            
-            rows.push(tr)
+            tr.appendChild(cell.createCell());
+
+            var cell: Cell = new Cell();
+            cell.child = true;
+            cell.childType = "P";
+            cell.value = data[key]["compatibility"]["streams"];
+            tr.appendChild(cell.createCell());
+
+            var cell: Cell = new Cell();
+            cell.child = true;
+            cell.childType = "P";
+            cell.value = data[key]["compatibility"]["group.title"];
+            tr.appendChild(cell.createCell());
+
+            var cell: Cell = new Cell();
+            cell.child = true;
+            cell.childType = "P";
+            cell.value = data[key]["compatibility"]["tvg.id"];
+            tr.appendChild(cell.createCell());
+
+            var cell: Cell = new Cell();
+            cell.child = true;
+            cell.childType = "P";
+            cell.value = data[key]["compatibility"]["stream.id"];
+            tr.appendChild(cell.createCell());
+
+            rows.push(tr);
           });
-        
         });
-        break
-      
+        break;
+
       case "filter":
-        delete SERVER["settings"]["filter"][-1]
-        data = SERVER["settings"]["filter"]
-        var keys = getOwnObjProps(data)
-        keys.forEach(key => {
-          var tr = document.createElement("TR")
-          tr.id = key
+        delete SERVER["settings"]["filter"][-1];
+        data = SERVER["settings"]["filter"];
+        var keys = getOwnObjProps(data);
+        keys.forEach((key) => {
+          var tr = document.createElement("TR");
+          tr.id = key;
 
-          tr.setAttribute('onclick', 'javascript: openPopUp("' + data[key]["type"] + '", this)')
+          tr.setAttribute(
+            "onclick",
+            'javascript: openPopUp("' + data[key]["type"] + '", this)',
+          );
 
-          var cell:Cell = new Cell()
-          cell.child = true
-          cell.childType = "P"
-          cell.value = data[key]["startingChannel"]
-          tr.appendChild(cell.createCell())
+          var cell: Cell = new Cell();
+          cell.child = true;
+          cell.childType = "P";
+          cell.value = data[key]["startingChannel"];
+          tr.appendChild(cell.createCell());
 
-          var cell:Cell = new Cell()
-          cell.child = true
-          cell.childType = "P"
-          cell.value = data[key]["name"]
-          tr.appendChild(cell.createCell())
+          var cell: Cell = new Cell();
+          cell.child = true;
+          cell.childType = "P";
+          cell.value = data[key]["name"];
+          tr.appendChild(cell.createCell());
 
-          var cell:Cell = new Cell()
-          cell.child = true
-          cell.childType = "P"
+          var cell: Cell = new Cell();
+          cell.child = true;
+          cell.childType = "P";
           switch (data[key]["type"]) {
             case "custom-filter":
-              cell.value = "{{.filter.custom}}"
+              cell.value = "{{.filter.custom}}";
               break;
 
             case "group-title":
-              cell.value = "{{.filter.group}}"
+              cell.value = "{{.filter.group}}";
               break;
 
             default:
               break;
           }
 
-          tr.appendChild(cell.createCell())
+          tr.appendChild(cell.createCell());
 
-          var cell:Cell = new Cell()
-          cell.child = true
-          cell.childType = "P"
-          cell.value = data[key]["filter"]
-          tr.appendChild(cell.createCell())
+          var cell: Cell = new Cell();
+          cell.child = true;
+          cell.childType = "P";
+          cell.value = data[key]["filter"];
+          tr.appendChild(cell.createCell());
 
-          rows.push(tr)
-
+          rows.push(tr);
         });
-        break
+        break;
 
       case "xmltv":
-        fileTypes = new Array("xmltv")
+        fileTypes = new Array("xmltv");
 
-        fileTypes.forEach(fileType => {
+        fileTypes.forEach((fileType) => {
+          data = SERVER["settings"]["files"][fileType];
 
-          data = SERVER["settings"]["files"][fileType]
+          var keys = getOwnObjProps(data);
 
-          var keys = getOwnObjProps(data)
+          keys.forEach((key) => {
+            var tr = document.createElement("TR");
 
-          keys.forEach(key => {
-            var tr = document.createElement("TR")
+            tr.id = key;
+            tr.setAttribute(
+              "onclick",
+              'javascript: openPopUp("' + fileType + '", this)',
+            );
 
-            tr.id = key
-            tr.setAttribute('onclick', 'javascript: openPopUp("' + fileType + '", this)')
+            var cell: Cell = new Cell();
+            cell.child = true;
+            cell.childType = "P";
+            cell.value = data[key]["name"];
+            tr.appendChild(cell.createCell());
 
-            var cell:Cell = new Cell()
-            cell.child = true
-            cell.childType = "P"
-            cell.value = data[key]["name"]
-            tr.appendChild(cell.createCell())
+            var cell: Cell = new Cell();
+            cell.child = true;
+            cell.childType = "P";
+            cell.value = data[key]["last.update"];
+            tr.appendChild(cell.createCell());
 
-            var cell:Cell = new Cell()
-            cell.child = true
-            cell.childType = "P"
-            cell.value = data[key]["last.update"]
-            tr.appendChild(cell.createCell())
+            var cell: Cell = new Cell();
+            cell.child = true;
+            cell.childType = "P";
+            cell.value = data[key]["provider.availability"];
+            tr.appendChild(cell.createCell());
 
-            var cell:Cell = new Cell()
-            cell.child = true
-            cell.childType = "P"
-            cell.value = data[key]["provider.availability"]
-            tr.appendChild(cell.createCell())
+            var cell: Cell = new Cell();
+            cell.child = true;
+            cell.childType = "P";
+            cell.value = data[key]["compatibility"]["xmltv.channels"];
+            tr.appendChild(cell.createCell());
 
-            var cell:Cell = new Cell()
-            cell.child = true
-            cell.childType = "P"
-            cell.value = data[key]["compatibility"]["xmltv.channels"]
-            tr.appendChild(cell.createCell())
+            var cell: Cell = new Cell();
+            cell.child = true;
+            cell.childType = "P";
+            cell.value = data[key]["compatibility"]["xmltv.programs"];
+            tr.appendChild(cell.createCell());
 
-            var cell:Cell = new Cell()
-            cell.child = true
-            cell.childType = "P"
-            cell.value = data[key]["compatibility"]["xmltv.programs"]
-            tr.appendChild(cell.createCell())
-
-            rows.push(tr)
+            rows.push(tr);
           });
-
         });
-        break
+        break;
 
       case "users":
-        fileTypes = new Array("users")
+        fileTypes = new Array("users");
 
-        fileTypes.forEach(fileType => {
-          data = SERVER[fileType]
-      
-          var keys = getOwnObjProps(data)
-    
-          keys.forEach(key => {
-            var tr = document.createElement("TR")
-            tr.id = key
-            tr.setAttribute('onclick', 'javascript: openPopUp("' + fileType + '", this)')
+        fileTypes.forEach((fileType) => {
+          data = SERVER[fileType];
 
-            var cell:Cell = new Cell()
-            cell.child = true
-            cell.childType = "P"
-            cell.value = data[key]["data"]["username"] 
-            tr.appendChild(cell.createCell())
-            
-            var cell:Cell = new Cell()
-            cell.child = true
-            cell.childType = "P"
-            cell.value = "******"
-            tr.appendChild(cell.createCell())
-            
-            var cell:Cell = new Cell()
-            cell.child = true
-            cell.childType = "P"
+          var keys = getOwnObjProps(data);
+
+          keys.forEach((key) => {
+            var tr = document.createElement("TR");
+            tr.id = key;
+            tr.setAttribute(
+              "onclick",
+              'javascript: openPopUp("' + fileType + '", this)',
+            );
+
+            var cell: Cell = new Cell();
+            cell.child = true;
+            cell.childType = "P";
+            cell.value = data[key]["data"]["username"];
+            tr.appendChild(cell.createCell());
+
+            var cell: Cell = new Cell();
+            cell.child = true;
+            cell.childType = "P";
+            cell.value = "******";
+            tr.appendChild(cell.createCell());
+
+            var cell: Cell = new Cell();
+            cell.child = true;
+            cell.childType = "P";
             if (data[key]["data"]["authentication.web"] == true) {
-              cell.value = "✓"
+              cell.value = "✓";
             } else {
-              cell.value = "-"
+              cell.value = "-";
             }
-            tr.appendChild(cell.createCell())
-            
-            var cell:Cell = new Cell()
-            cell.child = true
-            cell.childType = "P"
+            tr.appendChild(cell.createCell());
+
+            var cell: Cell = new Cell();
+            cell.child = true;
+            cell.childType = "P";
             if (data[key]["data"]["authentication.pms"] == true) {
-              cell.value = "✓"
+              cell.value = "✓";
             } else {
-              cell.value = "-"
+              cell.value = "-";
             }
-            tr.appendChild(cell.createCell())
-            
-            var cell:Cell = new Cell()
-            cell.child = true
-            cell.childType = "P"
+            tr.appendChild(cell.createCell());
+
+            var cell: Cell = new Cell();
+            cell.child = true;
+            cell.childType = "P";
             if (data[key]["data"]["authentication.m3u"] == true) {
-              cell.value = "✓"
+              cell.value = "✓";
             } else {
-              cell.value = "-"
+              cell.value = "-";
             }
-            tr.appendChild(cell.createCell())
+            tr.appendChild(cell.createCell());
 
-            var cell:Cell = new Cell()
-            cell.child = true
-            cell.childType = "P"
+            var cell: Cell = new Cell();
+            cell.child = true;
+            cell.childType = "P";
             if (data[key]["data"]["authentication.xml"] == true) {
-              cell.value = "✓"
+              cell.value = "✓";
             } else {
-              cell.value = "-"
+              cell.value = "-";
             }
-            tr.appendChild(cell.createCell())
+            tr.appendChild(cell.createCell());
 
-            var cell:Cell = new Cell()
-            cell.child = true
-            cell.childType = "P"
+            var cell: Cell = new Cell();
+            cell.child = true;
+            cell.childType = "P";
             if (data[key]["data"]["authentication.api"] == true) {
-              cell.value = "✓"
+              cell.value = "✓";
             } else {
-              cell.value = "-"
+              cell.value = "-";
             }
-            tr.appendChild(cell.createCell())
-            
-            rows.push(tr)
+            tr.appendChild(cell.createCell());
+
+            rows.push(tr);
           });
-        
         });
-        break
+        break;
 
       case "mapping":
-        BULK_EDIT = false
-        createSearchObj()
-        checkUndo("epgMapping")
-        data = SERVER["xepg"]["epgMapping"]
+        BULK_EDIT = false;
+        createSearchObj();
+        checkUndo("epgMapping");
+        data = SERVER["xepg"]["epgMapping"];
 
-        var keys = getOwnObjProps(data)
-        keys.forEach(key => {
-          var tr = document.createElement("TR")
-          tr.id = key
+        var keys = getOwnObjProps(data);
+        keys.forEach((key) => {
+          var tr = document.createElement("TR");
+          tr.id = key;
 
           switch (data[key]["x-active"]) {
             case true:
-              tr.className = "activeEPG"
+              tr.className = "activeEPG";
               break;
-          
+
             case false:
-              tr.className = "notActiveEPG"
+              tr.className = "notActiveEPG";
               break;
           }
-          
+
           // Bulk
-          var cell:Cell = new Cell()
-          cell.child = true
-          cell.childType = "BULK"
-          cell.value = false
-          tr.appendChild(cell.createCell())
+          var cell: Cell = new Cell();
+          cell.child = true;
+          cell.childType = "BULK";
+          cell.value = false;
+          tr.appendChild(cell.createCell());
 
           // Channel number
-          var cell:Cell = new Cell()
-          cell.child = true
-          cell.childType = "INPUTCHANNEL"
-          cell.value = data[key]["x-channelID"]
-          tr.appendChild(cell.createCell())
+          var cell: Cell = new Cell();
+          cell.child = true;
+          cell.childType = "INPUTCHANNEL";
+          cell.value = data[key]["x-channelID"];
+          tr.appendChild(cell.createCell());
 
           // Logo
-          var cell:Cell = new Cell()
-          cell.child = true
-          cell.childType = "IMG"
-          cell.imageURL = data[key]["tvg-logo"]
-          var td = cell.createCell()
-          td.setAttribute('onclick', 'javascript: openPopUp("mapping", this)')
-          td.id = key
+          var cell: Cell = new Cell();
+          cell.child = true;
+          cell.childType = "IMG";
+          cell.imageURL = data[key]["tvg-logo"];
+          var td = cell.createCell();
+          td.setAttribute("onclick", 'javascript: openPopUp("mapping", this)');
+          td.id = key;
 
-          tr.appendChild(td)
-  
+          tr.appendChild(td);
+
           // Channel name
-          var cell:Cell = new Cell()
-          cell.child = true
-          cell.childType = "P"
-          cell.className = data[key]["x-category"]
-          cell.value = data[key]["x-name"]
-          var td = cell.createCell()
-          td.setAttribute('onclick', 'javascript: openPopUp("mapping", this)')
-          td.id = key          
-          tr.appendChild(td)
+          var cell: Cell = new Cell();
+          cell.child = true;
+          cell.childType = "P";
+          cell.className = data[key]["x-category"];
+          cell.value = data[key]["x-name"];
+          var td = cell.createCell();
+          td.setAttribute("onclick", 'javascript: openPopUp("mapping", this)');
+          td.id = key;
+          tr.appendChild(td);
 
           // Update channel name regex
-          var cell:Cell = new Cell()
-          cell.child = true
-          cell.childType = "P"
-          cell.value = data[key]["update-channel-name-regex"]
-          var td = cell.createCell()
-          td.setAttribute('onclick', 'javascript: openPopUp("mapping", this)')
-          td.id = key          
-          tr.appendChild(td)
+          var cell: Cell = new Cell();
+          cell.child = true;
+          cell.childType = "P";
+          cell.value = data[key]["update-channel-name-regex"];
+          var td = cell.createCell();
+          td.setAttribute("onclick", 'javascript: openPopUp("mapping", this)');
+          td.id = key;
+          tr.appendChild(td);
 
           // Playlist
-          var cell:Cell = new Cell()
-          cell.child = true
-          cell.childType = "P"
-          cell.value = getValueFromProviderFile(data[key]["_file.m3u.id"], "m3u", "name")
-          var td = cell.createCell()
-          td.setAttribute('onclick', 'javascript: openPopUp("mapping", this)')
-          td.id = key
-          tr.appendChild(td)
-          
+          var cell: Cell = new Cell();
+          cell.child = true;
+          cell.childType = "P";
+          cell.value = getValueFromProviderFile(
+            data[key]["_file.m3u.id"],
+            "m3u",
+            "name",
+          );
+          var td = cell.createCell();
+          td.setAttribute("onclick", 'javascript: openPopUp("mapping", this)');
+          td.id = key;
+          tr.appendChild(td);
 
           // Group (group-title)
-          var cell:Cell = new Cell()
-          cell.child = true
-          cell.childType = "P"
-          cell.value = data[key]["x-group-title"] 
-          var td = cell.createCell()
-          td.setAttribute('onclick', 'javascript: openPopUp("mapping", this)')
-          td.id = key
-          tr.appendChild(td)
+          var cell: Cell = new Cell();
+          cell.child = true;
+          cell.childType = "P";
+          cell.value = data[key]["x-group-title"];
+          var td = cell.createCell();
+          td.setAttribute("onclick", 'javascript: openPopUp("mapping", this)');
+          td.id = key;
+          tr.appendChild(td);
 
           // XMLTV file
-          var cell:Cell = new Cell()
-          cell.child = true
-          cell.childType = "P"
+          var cell: Cell = new Cell();
+          cell.child = true;
+          cell.childType = "P";
 
-          if (data[key]["x-xmltv-file"] != "-") {            
-            cell.value = getValueFromProviderFile(data[key]["x-xmltv-file"], "xmltv", "name") 
+          if (data[key]["x-xmltv-file"] != "-") {
+            cell.value = getValueFromProviderFile(
+              data[key]["x-xmltv-file"],
+              "xmltv",
+              "name",
+            );
           } else {
-            cell.value = data[key]["x-xmltv-file"]
+            cell.value = data[key]["x-xmltv-file"];
           }
-          
-          var td = cell.createCell()
-          td.setAttribute('onclick', 'javascript: openPopUp("mapping", this)')
-          td.id = key
-          tr.appendChild(td)          
+
+          var td = cell.createCell();
+          td.setAttribute("onclick", 'javascript: openPopUp("mapping", this)');
+          td.id = key;
+          tr.appendChild(td);
 
           // XMLTV Channel
-          var cell:Cell = new Cell()
-          cell.child = true
-          cell.childType = "P"
-          var value = data[key]["x-mapping"]
+          var cell: Cell = new Cell();
+          cell.child = true;
+          cell.childType = "P";
+          var value = data[key]["x-mapping"];
           if (value.length > 20) {
-            value = data[key]["x-mapping"].substring(0, 20) + "..."
+            value = data[key]["x-mapping"].substring(0, 20) + "...";
           }
-          cell.value = value
-          var td = cell.createCell()
-          td.setAttribute('onclick', 'javascript: openPopUp("mapping", this)')
-          td.id = key
-          tr.appendChild(td)
+          cell.value = value;
+          var td = cell.createCell();
+          td.setAttribute("onclick", 'javascript: openPopUp("mapping", this)');
+          td.id = key;
+          tr.appendChild(td);
 
           // TimeShift
-          var cell:Cell = new Cell()
-          cell.child = true
-          cell.childType = "P"
-          cell.value = data[key]["x-timeshift"]
-          var td = cell.createCell()
-          td.setAttribute('onclick', 'javascript: openPopUp("mapping", this)')
-          td.id = key
-          tr.appendChild(td)
+          var cell: Cell = new Cell();
+          cell.child = true;
+          cell.childType = "P";
+          cell.value = data[key]["x-timeshift"];
+          var td = cell.createCell();
+          td.setAttribute("onclick", 'javascript: openPopUp("mapping", this)');
+          td.id = key;
+          tr.appendChild(td);
 
-          rows.push(tr)
+          rows.push(tr);
         });
 
-        break
+        break;
 
       case "settings":
-        alert()
-        break
+        alert();
+        break;
 
       default:
-        break
-
+        break;
     }
 
-    return rows
-
+    return rows;
   }
 
-  return
+  return;
 }
 
 class Cell {
-  child:Boolean
-  childType:string
-  value:any
-  className:string
-  tdClassName:string
-  imageURL:string
-  onclick:boolean
-  onclickFunction:string
+  child: Boolean;
+  childType: string;
+  value: any;
+  className: string;
+  tdClassName: string;
+  imageURL: string;
+  onclick: boolean;
+  onclickFunction: string;
 
-  createCell():any {
-    let td = document.createElement("TD")
-
+  createCell(): any {
+    let td = document.createElement("TD");
 
     if (this.child == true) {
-      var element:any
+      var element: any;
 
-      switch(this.childType){
-        case "P": 
+      switch (this.childType) {
+        case "P":
           element = document.createElement(this.childType);
-          element.innerHTML = this.value
-          element.className = this.className
-          break
-        
+          element.innerHTML = this.value;
+          element.className = this.className;
+          break;
+
         case "INPUT":
           element = document.createElement(this.childType);
           (element as HTMLInputElement).value = this.value;
           (element as HTMLInputElement).type = "text";
-          break
+          break;
 
         case "INPUTCHANNEL":
           element = document.createElement("INPUT");
-          (element as HTMLInputElement).setAttribute("onchange", "javscript: changeChannelNumber(this)");
+          (element as HTMLInputElement).setAttribute(
+            "onchange",
+            "javscript: changeChannelNumber(this)",
+          );
           (element as HTMLInputElement).value = this.value;
           (element as HTMLInputElement).type = "text";
-          break
+          break;
 
         case "BULK":
           element = document.createElement("INPUT");
           (element as HTMLInputElement).checked = this.value;
           (element as HTMLInputElement).type = "checkbox";
           (element as HTMLInputElement).className = "bulk hideBulk";
-          break
+          break;
 
         case "BULK_HEAD":
           element = document.createElement("INPUT");
           (element as HTMLInputElement).checked = this.value;
           (element as HTMLInputElement).type = "checkbox";
           (element as HTMLInputElement).className = "bulk hideBulk";
-          (element as HTMLInputElement).setAttribute("onclick", "javascript: selectAllChannels()")
-          break
+          (element as HTMLInputElement).setAttribute(
+            "onclick",
+            "javascript: selectAllChannels()",
+          );
+          break;
 
         case "IMG":
           element = document.createElement(this.childType);
-          element.setAttribute("src", this.imageURL)  
+          element.setAttribute("src", this.imageURL);
           if (this.imageURL != "") {
-            element.setAttribute("onerror", "javascript: this.onerror=null;this.src=''" )
+            element.setAttribute(
+              "onerror",
+              "javascript: this.onerror=null;this.src=''",
+            );
             //onerror="this.onerror=null;this.src='missing.gif';"
           }
       }
-      
-      td.appendChild(element)
-      
+
+      td.appendChild(element);
     } else {
-      td.innerHTML = this.value
+      td.innerHTML = this.value;
     }
 
     if (this.onclick == true) {
-      td.setAttribute("onclick", this.onclickFunction)
-      td.className = "pointer"
+      td.setAttribute("onclick", this.onclickFunction);
+      td.className = "pointer";
     }
 
     if (this.tdClassName != undefined) {
-      td.className = this.tdClassName
+      td.className = this.tdClassName;
     }
-  
-    return td
+
+    return td;
   }
 
-  return
+  return;
 }
 
 class ShowContent extends Content {
-  menuID:number
+  menuID: number;
 
-  constructor(menuID:number) {
-    super()
-    this.menuID = menuID
+  constructor(menuID: number) {
+    super();
+    this.menuID = menuID;
   }
 
-  createInput(type:string, name:string, value:string,):any {
-    
-    let input = document.createElement("INPUT")
-    input.setAttribute("type", type)
-    input.setAttribute("name", name)
-    input.setAttribute("value", value)
-    return input
+  createInput(type: string, name: string, value: string): any {
+    let input = document.createElement("INPUT");
+    input.setAttribute("type", type);
+    input.setAttribute("name", name);
+    input.setAttribute("value", value);
+    return input;
   }
 
-  show():void {
-    COLUMN_TO_SORT = -1
+  show(): void {
+    COLUMN_TO_SORT = -1;
     // Delete old content
-    let doc = document.getElementById(this.DocumentID)
-    doc.innerHTML = ""
-    showPreview(false)
+    let doc = document.getElementById(this.DocumentID);
+    doc.innerHTML = "";
+    showPreview(false);
 
     // Headline
-    let headline:string[] = menuItems[this.menuID].headline
-    
-    let menuKey = menuItems[this.menuID].menuKey
-    let h = this.createHeadline(headline)
-    doc.appendChild(h)
+    let headline: string[] = menuItems[this.menuID].headline;
 
-    let hr = this.createHR()
-    doc.appendChild(hr)
+    let menuKey = menuItems[this.menuID].menuKey;
+    let h = this.createHeadline(headline);
+    doc.appendChild(h);
+
+    let hr = this.createHR();
+    doc.appendChild(hr);
 
     // Interaction
-    let div =this.createInteraction()
-    doc.appendChild(div)
-    let interaction = document.getElementById(this.interactionID)
+    let div = this.createInteraction();
+    doc.appendChild(div);
+    let interaction = document.getElementById(this.interactionID);
     switch (menuKey) {
       case "playlist":
-        var input = this.createInput("button", menuKey, "{{.button.new}}")
-        input.setAttribute("id", "-")
-        input.setAttribute("onclick", 'javascript: openPopUp("playlist")')
-        interaction.appendChild(input)
+        var input = this.createInput("button", menuKey, "{{.button.new}}");
+        input.setAttribute("id", "-");
+        input.setAttribute("onclick", 'javascript: openPopUp("playlist")');
+        interaction.appendChild(input);
         break;
 
       case "filter":
-        var input = this.createInput("button", menuKey, "{{.button.new}}")
-        input.setAttribute("id", -1)
-        input.setAttribute("onclick", 'javascript: openPopUp("filter", this)')
-        interaction.appendChild(input)
+        var input = this.createInput("button", menuKey, "{{.button.new}}");
+        input.setAttribute("id", -1);
+        input.setAttribute("onclick", 'javascript: openPopUp("filter", this)');
+        interaction.appendChild(input);
         break;
 
-        
       case "xmltv":
-        var input = this.createInput("button", menuKey, "{{.button.new}}")
-        input.setAttribute("id", "xmltv")
-        input.setAttribute("onclick", 'javascript: openPopUp("xmltv")')
-        interaction.appendChild(input)
+        var input = this.createInput("button", menuKey, "{{.button.new}}");
+        input.setAttribute("id", "xmltv");
+        input.setAttribute("onclick", 'javascript: openPopUp("xmltv")');
+        interaction.appendChild(input);
         break;
 
       case "users":
-        var input = this.createInput("button", menuKey, "{{.button.new}}")
-        input.setAttribute("id", "users")
-        input.setAttribute("onclick", 'javascript: openPopUp("users")')
-        interaction.appendChild(input)
+        var input = this.createInput("button", menuKey, "{{.button.new}}");
+        input.setAttribute("id", "users");
+        input.setAttribute("onclick", 'javascript: openPopUp("users")');
+        interaction.appendChild(input);
         break;
 
       case "mapping":
-        showElement("loading", true)
-        var input = this.createInput("button", menuKey, "{{.button.save}}")
-        input.setAttribute("onclick", 'javascript: savePopupData("mapping", "", "")')
-        interaction.appendChild(input)
+        showElement("loading", true);
+        var input = this.createInput("button", menuKey, "{{.button.save}}");
+        input.setAttribute(
+          "onclick",
+          'javascript: savePopupData("mapping", "", "")',
+        );
+        interaction.appendChild(input);
 
-        var input = this.createInput("button", menuKey, "{{.button.bulkEdit}}")
-        input.setAttribute("onclick", 'javascript: bulkEdit()')
-        interaction.appendChild(input)
+        var input = this.createInput("button", menuKey, "{{.button.bulkEdit}}");
+        input.setAttribute("onclick", "javascript: bulkEdit()");
+        interaction.appendChild(input);
 
-        var input = this.createInput("search", "search", "")
-        input.setAttribute("id", "searchMapping")
-        input.setAttribute("placeholder", "{{.button.search}}")
-        input.className = "search"
-        input.setAttribute("onchange", 'javascript: searchInMapping()')
-        interaction.appendChild(input)
+        var input = this.createInput("search", "search", "");
+        input.setAttribute("id", "searchMapping");
+        input.setAttribute("placeholder", "{{.button.search}}");
+        input.className = "search";
+        input.setAttribute("onchange", "javascript: searchInMapping()");
+        interaction.appendChild(input);
         break;
 
       case "settings":
-        var input = this.createInput("button", menuKey, "{{.button.save}}")
-        input.setAttribute("onclick", 'javascript: saveSettings();')
-        interaction.appendChild(input)
+        var input = this.createInput("button", menuKey, "{{.button.save}}");
+        input.setAttribute("onclick", "javascript: saveSettings();");
+        interaction.appendChild(input);
 
-        var input = this.createInput("button", menuKey, "{{.button.backup}}")
-        input.setAttribute("onclick", 'javascript: backup();')
-        interaction.appendChild(input)
+        var input = this.createInput("button", menuKey, "{{.button.backup}}");
+        input.setAttribute("onclick", "javascript: backup();");
+        interaction.appendChild(input);
 
-        var input = this.createInput("button", menuKey, "{{.button.restore}}")
-        input.setAttribute("onclick", 'javascript: restore();')
-        interaction.appendChild(input)
+        var input = this.createInput("button", menuKey, "{{.button.restore}}");
+        input.setAttribute("onclick", "javascript: restore();");
+        interaction.appendChild(input);
 
-        var wrapper = document.createElement("DIV")
-        wrapper.setAttribute("id", "box-wrapper")
-        doc.appendChild(wrapper)
+        var wrapper = document.createElement("DIV");
+        wrapper.setAttribute("id", "box-wrapper");
+        doc.appendChild(wrapper);
 
-        this.DivID = "content_settings"
-        var settings = this.createDIV()
-        wrapper.appendChild(settings)
+        this.DivID = "content_settings";
+        var settings = this.createDIV();
+        wrapper.appendChild(settings);
 
-        showSettings()
-        
-        return
+        showSettings();
+
+        return;
 
       case "log":
-        var input = this.createInput("button", menuKey, "{{.button.resetLogs}}")
-        input.setAttribute("onclick", 'javascript: resetLogs();')
-        interaction.appendChild(input)
+        var input = this.createInput(
+          "button",
+          menuKey,
+          "{{.button.resetLogs}}",
+        );
+        input.setAttribute("onclick", "javascript: resetLogs();");
+        interaction.appendChild(input);
 
-        var wrapper = document.createElement("DIV")
-        wrapper.setAttribute("id", "box-wrapper")
-        doc.appendChild(wrapper)
+        var wrapper = document.createElement("DIV");
+        wrapper.setAttribute("id", "box-wrapper");
+        doc.appendChild(wrapper);
 
-        this.DivID = "content_log"
-        var logs = this.createDIV()
-        wrapper.appendChild(logs)
+        this.DivID = "content_log";
+        var logs = this.createDIV();
+        wrapper.appendChild(logs);
 
-        showLogs(true)
+        showLogs(true);
 
-        return
+        return;
 
       case "logout":
-        location.reload()
-        document.cookie = "Token= ; expires = Thu, 01 Jan 1970 00:00:00 GMT"
-        break
+        location.reload();
+        document.cookie = "Token= ; expires = Thu, 01 Jan 1970 00:00:00 GMT";
+        break;
 
       default:
         break;
     }
-    
+
     // Create table (if needed)
-    var tableHeader:string[] = menuItems[this.menuID].tableHeader
+    var tableHeader: string[] = menuItems[this.menuID].tableHeader;
     if (tableHeader.length > 0) {
-      var wrapper = document.createElement("DIV")
-      doc.appendChild(wrapper)
-      wrapper.setAttribute("id", "box-wrapper")
+      var wrapper = document.createElement("DIV");
+      doc.appendChild(wrapper);
+      wrapper.setAttribute("id", "box-wrapper");
 
-      var table = this.createTABLE()
-      wrapper.appendChild(table)
+      var table = this.createTABLE();
+      wrapper.appendChild(table);
 
-      var header = this.createTableRow()
-      table.appendChild(header)
+      var header = this.createTableRow();
+      table.appendChild(header);
 
       // Table header
-      tableHeader.forEach(element => {
-        var cell:Cell = new Cell()
-        cell.child = true
-        cell.childType = "P"
-        cell.value = element
+      tableHeader.forEach((element) => {
+        var cell: Cell = new Cell();
+        cell.child = true;
+        cell.childType = "P";
+        cell.value = element;
         if (element == "BULK") {
           cell.childType = "BULK_HEAD";
-          cell.value = false
+          cell.value = false;
         }
 
         if (menuKey == "mapping") {
-          
           if (element == "{{.mapping.table.chNo}}") {
-            cell.onclick = true
-            cell.onclickFunction = "javascript: sortTable(1);"
-            cell.tdClassName = "sortThis"
+            cell.onclick = true;
+            cell.onclickFunction = "javascript: sortTable(1);";
+            cell.tdClassName = "sortThis";
           }
-          
+
           if (element == "{{.mapping.table.channelName}}") {
-            cell.onclick = true
-            cell.onclickFunction = "javascript: sortTable(3);"
+            cell.onclick = true;
+            cell.onclickFunction = "javascript: sortTable(3);";
           }
 
           if (element == "{{.mapping.table.updateChannelNameRegex}}") {
-            cell.onclick = true
-            cell.onclickFunction = "javascript: sortTable(4);"
+            cell.onclick = true;
+            cell.onclickFunction = "javascript: sortTable(4);";
           }
-  
+
           if (element == "{{.mapping.table.playlist}}") {
-            cell.onclick = true
-            cell.onclickFunction = "javascript: sortTable(5);"
+            cell.onclick = true;
+            cell.onclickFunction = "javascript: sortTable(5);";
           }
-  
+
           if (element == "{{.mapping.table.groupTitle}}") {
-            cell.onclick = true
-            cell.onclickFunction = "javascript: sortTable(6);"
+            cell.onclick = true;
+            cell.onclickFunction = "javascript: sortTable(6);";
           }
-  
+
           if (element == "{{.mapping.table.timeshift}}") {
-            cell.onclick = true
-            cell.onclickFunction = "javascript: sortTable(9);"
+            cell.onclick = true;
+            cell.onclickFunction = "javascript: sortTable(9);";
           }
-
         }
-        
-        if (menuKey == "filter") {
 
+        if (menuKey == "filter") {
           if (element == "{{.filter.table.startingChannel}}") {
-            cell.onclick = true
-            cell.onclickFunction = "javascript: sortTable(0);"
-            cell.tdClassName = "sortThis"
+            cell.onclick = true;
+            cell.onclickFunction = "javascript: sortTable(0);";
+            cell.tdClassName = "sortThis";
           }
 
           if (element == "{{.filter.table.name}}") {
-            cell.onclick = true
-            cell.onclickFunction = "javascript: sortTable(1);"
+            cell.onclick = true;
+            cell.onclickFunction = "javascript: sortTable(1);";
           }
 
           if (element == "{{.filter.table.type}}") {
-            cell.onclick = true
-            cell.onclickFunction = "javascript: sortTable(2);"
+            cell.onclick = true;
+            cell.onclickFunction = "javascript: sortTable(2);";
           }
 
           if (element == "{{.filter.table.filter}}") {
-            cell.onclick = true
-            cell.onclickFunction = "javascript: sortTable(3);"
+            cell.onclick = true;
+            cell.onclickFunction = "javascript: sortTable(3);";
           }
-
         }
 
-        header.appendChild(cell.createCell())
+        header.appendChild(cell.createCell());
       });
 
-      table.appendChild(header)
+      table.appendChild(header);
 
       // Content of the table
-      var rows:any = this.createTableContent(menuKey) 
-      rows.forEach(tr => {
-        table.appendChild(tr)
+      var rows: any = this.createTableContent(menuKey);
+      rows.forEach((tr) => {
+        table.appendChild(tr);
       });
-      
     }
 
     switch (menuKey) {
       case "mapping":
-        sortTable(1)
+        sortTable(1);
         break;
 
       case "filter":
-        showPreview(true)
-        sortTable(0)
-        break
-      
+        showPreview(true);
+        sortTable(0);
+        break;
+
       default:
-        COLUMN_TO_SORT = -1
-        sortTable(0)
+        COLUMN_TO_SORT = -1;
+        sortTable(0);
         break;
     }
 
-    showElement("loading", false)
+    showElement("loading", false);
   }
-  
 }
 
 function PageReady() {
+  let server: Server = new Server("getServerConfig");
+  server.request({});
 
-  let server:Server = new Server("getServerConfig")
-  server.request({})
+  window.addEventListener(
+    "resize",
+    function () {
+      calculateWrapperHeight();
+    },
+    true,
+  );
 
-  window.addEventListener("resize", function(){
-    calculateWrapperHeight();
-  }, true);
-
-  setInterval(function(){ 
-    updateLog()
+  setInterval(function () {
+    updateLog();
   }, 10000);
- 
 
-  return
+  return;
 }
 
 function createLayout() {
-
   // Client Info
-  let obj = SERVER["clientInfo"]
+  let obj = SERVER["clientInfo"];
   let keys = getOwnObjProps(obj);
   for (var i = 0; i < keys.length; i++) {
-     
     if (document.getElementById(keys[i])) {
       document.getElementById(keys[i]).innerHTML = obj[keys[i]];
-      if (location.protocol === 'https:') {
-        if (keys[i] === "xepg-url" || keys[i] === "m3u-url"  || keys[i] === "DVR") {          
-          document.getElementById(keys[i]).addEventListener('click', function (event) {
-            const target = event.target as HTMLElement;        
-            navigator.clipboard.writeText(target.innerText.split(" ")[0]).then(() => {});
-          },false);
+      if (location.protocol === "https:") {
+        if (
+          keys[i] === "xepg-url" ||
+          keys[i] === "m3u-url" ||
+          keys[i] === "DVR"
+        ) {
+          document.getElementById(keys[i]).addEventListener(
+            "click",
+            function (event) {
+              const target = event.target as HTMLElement;
+              navigator.clipboard
+                .writeText(target.innerText.split(" ")[0])
+                .then(() => {});
+            },
+            false,
+          );
         }
-      }      
+      }
     }
   }
 
   if (!document.getElementById("main-menu")) {
-    return
+    return;
   }
 
-
-
   // Create menu
-  document.getElementById("main-menu").innerHTML = ""
+  document.getElementById("main-menu").innerHTML = "";
   for (let i = 0; i < menuItems.length; i++) {
-    
-    menuItems[i].id = i
+    menuItems[i].id = i;
 
     switch (menuItems[i]["menuKey"]) {
-
       case "users":
       case "logout":
         if (SERVER["settings"]["authentication.web"] == true) {
-          menuItems[i].createItem()
+          menuItems[i].createItem();
         }
-        break
+        break;
 
       case "mapping":
       case "xmltv":
         if (SERVER["clientInfo"]["epgSource"] == "XEPG") {
-          menuItems[i].createItem()          
+          menuItems[i].createItem();
         }
-        break
+        break;
 
       default:
-        menuItems[i].createItem()
-        break
+        menuItems[i].createItem();
+        break;
     }
-     
   }
 
-  return
+  return;
 }
 
 function openThisMenu(element) {
-  let id = element.id
-  let content:ShowContent = new ShowContent(id)
-  content.show()
-  calculateWrapperHeight()
+  let id = element.id;
+  let content: ShowContent = new ShowContent(id);
+  content.show();
+  calculateWrapperHeight();
 
-  return
+  return;
 }
 
 class PopupWindow {
-  DocumentID:string = "popup-custom"
-  InteractionID:string = "interaction"
-  doc = document.getElementById(this.DocumentID)
+  DocumentID: string = "popup-custom";
+  InteractionID: string = "interaction";
+  doc = document.getElementById(this.DocumentID);
 
-  createTitle(title:string):any {
-    let td = document.createElement("TD")
-    td.className = "left"
-    td.innerHTML = title + ":"
-    return td
+  createTitle(title: string): any {
+    let td = document.createElement("TD");
+    td.className = "left";
+    td.innerHTML = title + ":";
+    return td;
   }
 
-  createContent(element):any {
-    let td = document.createElement("TD")
-    td.appendChild(element)
-    return td
+  createContent(element): any {
+    let td = document.createElement("TD");
+    td.appendChild(element);
+    return td;
   }
 
-  createInteraction():any {
-    let div = document.createElement("div")
-    div.setAttribute("id", "popup-interaction")
-    div.className = "interaction"
-    this.doc.appendChild(div)
+  createInteraction(): any {
+    let div = document.createElement("div");
+    div.setAttribute("id", "popup-interaction");
+    div.className = "interaction";
+    this.doc.appendChild(div);
   }
 }
 
-class PopupContent extends PopupWindow{
-  
-  table = document.createElement("TABLE")
+class PopupContent extends PopupWindow {
+  table = document.createElement("TABLE");
 
-  createHeadline(headline):void {
-    this.doc.innerHTML = ""
-    var element = document.createElement("H3")
-    element.innerHTML = headline.toUpperCase()
-    this.doc.appendChild(element)
+  createHeadline(headline): void {
+    this.doc.innerHTML = "";
+    var element = document.createElement("H3");
+    element.innerHTML = headline.toUpperCase();
+    this.doc.appendChild(element);
 
     // Create table
-    this.table = document.createElement("TABLE")
-    this.doc.appendChild(this.table)
+    this.table = document.createElement("TABLE");
+    this.doc.appendChild(this.table);
   }
 
-  appendRow(title:string, element:any):void {
-    let tr = document.createElement("TR")
-    
+  appendRow(title: string, element: any): void {
+    let tr = document.createElement("TR");
+
     // Title
     if (title.length != 0) {
-      tr.appendChild(this.createTitle(title))
+      tr.appendChild(this.createTitle(title));
     }
-    
 
     // Content
-    tr.appendChild(this.createContent(element))
-    this.table.appendChild(tr)
+    tr.appendChild(this.createContent(element));
+    this.table.appendChild(tr);
   }
 
-
-  createInput(type:string, name:string, value:string):any {
-
-    let input = document.createElement("INPUT")
+  createInput(type: string, name: string, value: string): any {
+    let input = document.createElement("INPUT");
     if (value == undefined) {
-      value = ""
+      value = "";
     }
-    
-    input.setAttribute("type", type)
-    input.setAttribute("name", name)
-    input.setAttribute("value", value)
-    return input
+
+    input.setAttribute("type", type);
+    input.setAttribute("name", name);
+    input.setAttribute("value", value);
+    return input;
   }
 
-  createCheckbox(name:string):any {
-    let input = document.createElement("INPUT")
+  createCheckbox(name: string): any {
+    let input = document.createElement("INPUT");
 
-    input.setAttribute("type", "checkbox")
-    input.setAttribute("name", name)
-    return input
+    input.setAttribute("type", "checkbox");
+    input.setAttribute("name", name);
+    return input;
   }
 
   // Creates a selection of multiple options values with text descriptions
-  createSelect(text:string[], values:string[], set:string, dbKey:string):any {
-    let select = document.createElement("SELECT")
-    select.setAttribute("name", dbKey)
+  createSelect(
+    text: string[],
+    values: string[],
+    set: string,
+    dbKey: string,
+  ): any {
+    let select = document.createElement("SELECT");
+    select.setAttribute("name", dbKey);
     for (let i = 0; i < text.length; i++) {
-      let option = document.createElement("OPTION")
-      option.setAttribute("value", values[i])
-      option.innerText = text[i]
-      select.appendChild(option)
+      let option = document.createElement("OPTION");
+      option.setAttribute("value", values[i]);
+      option.innerText = text[i];
+      select.appendChild(option);
     }
-    if(set != "") {
-      (select as HTMLSelectElement).value = set
+    if (set != "") {
+      (select as HTMLSelectElement).value = set;
     }
 
     if (set == undefined) {
-      (select as HTMLSelectElement).value = values[0]
+      (select as HTMLSelectElement).value = values[0];
     }
 
-    return select
+    return select;
   }
 
-  selectOption(select:any, value:string):any {
+  selectOption(select: any, value: string): any {
     //select.selectedOptions = value
-    let s:HTMLSelectElement = (select as HTMLSelectElement)
-    s.options[s.selectedIndex].value = value 
-    return select
+    let s: HTMLSelectElement = select as HTMLSelectElement;
+    s.options[s.selectedIndex].value = value;
+    return select;
   }
 
-  description(value:string):any {
-    let tr = document.createElement("TR")
-    let td = document.createElement("TD")
-    let span = document.createElement("PRE")
+  description(value: string): any {
+    let tr = document.createElement("TR");
+    let td = document.createElement("TD");
+    let span = document.createElement("PRE");
 
-    span.innerHTML = value
+    span.innerHTML = value;
 
-    tr.appendChild(td)
+    tr.appendChild(td);
 
-    tr.appendChild(this.createContent(span))
-    
-    this.table.appendChild(tr)
+    tr.appendChild(this.createContent(span));
+
+    this.table.appendChild(tr);
   }
 
   // Interaction
-  addInteraction(element:any) {
-    let interaction = document.getElementById("popup-interaction")
-    interaction.appendChild(element)
+  addInteraction(element: any) {
+    let interaction = document.getElementById("popup-interaction");
+    interaction.appendChild(element);
   }
 }
 
 function openPopUp(dataType, element) {
-
-  let data:object = {};
-  let id:any
+  let data: object = {};
+  let id: any;
   switch (element) {
     case undefined:
-
       switch (dataType) {
         case "group-title":
           if (id == undefined) {
-            id = -1
-          }  
-          data = getLocalData("filter", id)
-          data["type"] = "group-title"
+            id = -1;
+          }
+          data = getLocalData("filter", id);
+          data["type"] = "group-title";
           break;
 
         case "custom-filter":
           if (id == undefined) {
-            id = -1
+            id = -1;
           }
-          data = getLocalData("filter", id)
-          data["type"] = "custom-filter"
+          data = getLocalData("filter", id);
+          data["type"] = "custom-filter";
           break;
-      
+
         default:
-          data["id.provider"] = "-"
-          data["type"] = dataType
-          id = "-"
+          data["id.provider"] = "-";
+          data["type"] = dataType;
+          id = "-";
           break;
       }
 
-      break
-  
+      break;
+
     default:
-      id = element.id
-      data = getLocalData(dataType, id)      
+      id = element.id;
+      data = getLocalData(dataType, id);
       break;
   }
 
-  let content:PopupContent = new PopupContent()
-  
+  let content: PopupContent = new PopupContent();
+
   switch (dataType) {
-    case "playlist": 
-      content.createHeadline("{{.playlist.playlistType.title}}")
+    case "playlist":
+      content.createHeadline("{{.playlist.playlistType.title}}");
       // Type
-      var text:string[] = ["M3U", "HDHomeRun"]
-      var values:string[] = ["javascript: openPopUp('m3u')", "javascript: openPopUp('hdhr')"]
-      var select = content.createSelect(text, values, "", "type")
-      select.setAttribute("id", "type")
-      select.setAttribute("onchange", 'javascript: changeButtonAction(this, "next", "onclick")') // changeButtonAction
-      content.appendRow("{{.playlist.type.title}}", select)
+      var text: string[] = ["M3U", "HDHomeRun"];
+      var values: string[] = [
+        "javascript: openPopUp('m3u')",
+        "javascript: openPopUp('hdhr')",
+      ];
+      var select = content.createSelect(text, values, "", "type");
+      select.setAttribute("id", "type");
+      select.setAttribute(
+        "onchange",
+        'javascript: changeButtonAction(this, "next", "onclick")',
+      ); // changeButtonAction
+      content.appendRow("{{.playlist.type.title}}", select);
 
       // Interaction
-      content.createInteraction()
+      content.createInteraction();
       // Abort
-      var input = content.createInput("button", "cancel", "{{.button.cancel}}")
-      input.setAttribute("onclick", 'javascript: showElement("popup", false);')
-      content.addInteraction(input)
+      var input = content.createInput("button", "cancel", "{{.button.cancel}}");
+      input.setAttribute("onclick", 'javascript: showElement("popup", false);');
+      content.addInteraction(input);
 
       // Next
-      var input = content.createInput("button", "next", "{{.button.next}}")
-      input.setAttribute("onclick", 'javascript: openPopUp("m3u")')
-      input.setAttribute("id", 'next')
-      content.addInteraction(input)
-      break
+      var input = content.createInput("button", "next", "{{.button.next}}");
+      input.setAttribute("onclick", 'javascript: openPopUp("m3u")');
+      input.setAttribute("id", "next");
+      content.addInteraction(input);
+      break;
 
     case "m3u":
-      content.createHeadline(dataType)
+      content.createHeadline(dataType);
       // Name
-      var dbKey:string = "name"
-      var input = content.createInput("text", dbKey, data[dbKey])
-      input.setAttribute("placeholder", "{{.playlist.name.placeholder}}")
-      content.appendRow("{{.playlist.name.title}}", input)
+      var dbKey: string = "name";
+      var input = content.createInput("text", dbKey, data[dbKey]);
+      input.setAttribute("placeholder", "{{.playlist.name.placeholder}}");
+      content.appendRow("{{.playlist.name.title}}", input);
 
       // Description
-      var dbKey:string = "description"
-      var input = content.createInput("text", dbKey, data[dbKey])
-      input.setAttribute("placeholder", "{{.playlist.description.placeholder}}")
-      content.appendRow("{{.playlist.description.title}}", input)
-      
+      var dbKey: string = "description";
+      var input = content.createInput("text", dbKey, data[dbKey]);
+      input.setAttribute(
+        "placeholder",
+        "{{.playlist.description.placeholder}}",
+      );
+      content.appendRow("{{.playlist.description.title}}", input);
+
       // URL
-      var dbKey:string = "file.source"
-      var input = content.createInput("text", dbKey, data[dbKey])
-      input.setAttribute("placeholder", "{{.playlist.fileM3U.placeholder}}")
-      content.appendRow("{{.playlist.fileM3U.title}}", input)
+      var dbKey: string = "file.source";
+      var input = content.createInput("text", dbKey, data[dbKey]);
+      input.setAttribute("placeholder", "{{.playlist.fileM3U.placeholder}}");
+      content.appendRow("{{.playlist.fileM3U.title}}", input);
 
       // Tuner
       if (SERVER["settings"]["buffer"] != "-") {
-        var text:string[] = []
-        var values:string[] = []
+        var text: string[] = [];
+        var values: string[] = [];
 
         for (var i = 1; i <= 100; i++) {
-          text.push(i.toString())
-          values.push(i.toString())
+          text.push(i.toString());
+          values.push(i.toString());
         }
 
-        var dbKey:string = "tuner"
-        var select = content.createSelect(text, values, data[dbKey], dbKey)
-        select.setAttribute("onfocus", "javascript: return;")
-        content.appendRow("{{.playlist.tuner.title}}", select)
+        var dbKey: string = "tuner";
+        var select = content.createSelect(text, values, data[dbKey], dbKey);
+        select.setAttribute("onfocus", "javascript: return;");
+        content.appendRow("{{.playlist.tuner.title}}", select);
       } else {
-        var dbKey:string = "tuner"
+        var dbKey: string = "tuner";
         if (data[dbKey] == undefined) {
-          data[dbKey] = 1
+          data[dbKey] = 1;
         }
-        var input = content.createInput("text", dbKey, data[dbKey])
-        input.setAttribute("readonly", "true")
-        input.className = "notAvailable"
-        content.appendRow("{{.playlist.tuner.title}}", input)
+        var input = content.createInput("text", dbKey, data[dbKey]);
+        input.setAttribute("readonly", "true");
+        input.className = "notAvailable";
+        content.appendRow("{{.playlist.tuner.title}}", input);
       }
 
-      content.description("{{.playlist.tuner.description}}")
+      content.description("{{.playlist.tuner.description}}");
 
       // Interation
-      content.createInteraction()
+      content.createInteraction();
       // Delete
-      if (data["id.provider"]!= "-") {
-        var input = content.createInput("button", "delete", "{{.button.delete}}")
-        input.className = "delete"
-        input.setAttribute('onclick', 'javascript: savePopupData("m3u", "' + id + '", true, 0)')
-        content.addInteraction(input)     
+      if (data["id.provider"] != "-") {
+        var input = content.createInput(
+          "button",
+          "delete",
+          "{{.button.delete}}",
+        );
+        input.className = "delete";
+        input.setAttribute(
+          "onclick",
+          'javascript: savePopupData("m3u", "' + id + '", true, 0)',
+        );
+        content.addInteraction(input);
       } else {
-        var input = content.createInput("button", "back", "{{.button.back}}")
-        input.setAttribute("onclick", 'javascript: openPopUp("playlist")')
-        content.addInteraction(input)     
+        var input = content.createInput("button", "back", "{{.button.back}}");
+        input.setAttribute("onclick", 'javascript: openPopUp("playlist")');
+        content.addInteraction(input);
       }
-    
+
       // Abort
-      var input = content.createInput("button", "cancel", "{{.button.cancel}}")
-      input.setAttribute("onclick", 'javascript: showElement("popup", false);')
-      content.addInteraction(input)
-      
+      var input = content.createInput("button", "cancel", "{{.button.cancel}}");
+      input.setAttribute("onclick", 'javascript: showElement("popup", false);');
+      content.addInteraction(input);
+
       // Update
-      if (data["id.provider"]!= "-") {
-        var input = content.createInput("button", "update", "{{.button.update}}")
-        input.setAttribute('onclick', 'javascript: savePopupData("m3u", "' + id + '", false, 1)')
-        content.addInteraction(input)
+      if (data["id.provider"] != "-") {
+        var input = content.createInput(
+          "button",
+          "update",
+          "{{.button.update}}",
+        );
+        input.setAttribute(
+          "onclick",
+          'javascript: savePopupData("m3u", "' + id + '", false, 1)',
+        );
+        content.addInteraction(input);
       }
-    
+
       // Save
-      var input = content.createInput("button", "save", "{{.button.save}}")
-      input.setAttribute('onclick', 'javascript: savePopupData("m3u", "' + id + '", false, 0)')
-      content.addInteraction(input)
-      break
+      var input = content.createInput("button", "save", "{{.button.save}}");
+      input.setAttribute(
+        "onclick",
+        'javascript: savePopupData("m3u", "' + id + '", false, 0)',
+      );
+      content.addInteraction(input);
+      break;
 
     case "hdhr":
-      content.createHeadline(dataType)
+      content.createHeadline(dataType);
       // Name
-      var dbKey:string = "name"
-      var input = content.createInput("text", dbKey, data[dbKey])
-      input.setAttribute("placeholder", "{{.playlist.name.placeholder}}")
-      content.appendRow("{{.playlist.name.title}}", input)
+      var dbKey: string = "name";
+      var input = content.createInput("text", dbKey, data[dbKey]);
+      input.setAttribute("placeholder", "{{.playlist.name.placeholder}}");
+      content.appendRow("{{.playlist.name.title}}", input);
 
       // Description
-      var dbKey:string = "description"
-      var input = content.createInput("text", dbKey, data[dbKey])
-      input.setAttribute("placeholder", "{{.playlist.description.placeholder}}")
-      content.appendRow("{{.playlist.description.placeholder}}", input)
-      
+      var dbKey: string = "description";
+      var input = content.createInput("text", dbKey, data[dbKey]);
+      input.setAttribute(
+        "placeholder",
+        "{{.playlist.description.placeholder}}",
+      );
+      content.appendRow("{{.playlist.description.placeholder}}", input);
+
       // URL
-      var dbKey:string = "file.source"
-      var input = content.createInput("text", dbKey, data[dbKey])
-      input.setAttribute("placeholder", "{{.playlist.fileHDHR.placeholder}}")
-      content.appendRow("{{.playlist.fileHDHR.title}}", input)
+      var dbKey: string = "file.source";
+      var input = content.createInput("text", dbKey, data[dbKey]);
+      input.setAttribute("placeholder", "{{.playlist.fileHDHR.placeholder}}");
+      content.appendRow("{{.playlist.fileHDHR.title}}", input);
 
       // Tuner
       if (SERVER["settings"]["buffer"] != "-") {
-        var text:string[] = []
-        var values:string[] = []
+        var text: string[] = [];
+        var values: string[] = [];
 
         for (var i = 1; i <= 100; i++) {
-          text.push(i.toString())
-          values.push(i.toString())
+          text.push(i.toString());
+          values.push(i.toString());
         }
 
-        var dbKey:string = "tuner"
-        var select = content.createSelect(text, values, data[dbKey], dbKey)
-        select.setAttribute("onfocus", "javascript: return;")
-        content.appendRow("{{.playlist.tuner.title}}", select)
+        var dbKey: string = "tuner";
+        var select = content.createSelect(text, values, data[dbKey], dbKey);
+        select.setAttribute("onfocus", "javascript: return;");
+        content.appendRow("{{.playlist.tuner.title}}", select);
       } else {
-        var dbKey:string = "tuner"
+        var dbKey: string = "tuner";
         if (data[dbKey] == undefined) {
-          data[dbKey] = 1
+          data[dbKey] = 1;
         }
-        var input = content.createInput("text", dbKey, data[dbKey])
-        input.setAttribute("readonly", "true")
-        input.className = "notAvailable"
-        content.appendRow("{{.playlist.tuner.title}}", input)
+        var input = content.createInput("text", dbKey, data[dbKey]);
+        input.setAttribute("readonly", "true");
+        input.className = "notAvailable";
+        content.appendRow("{{.playlist.tuner.title}}", input);
       }
 
-      content.description("{{.playlist.tuner.description}}")
-      
+      content.description("{{.playlist.tuner.description}}");
+
       // Interaction
-      content.createInteraction()
+      content.createInteraction();
       // Delete
-      if (data["id.provider"]!= "-") {
-        var input = content.createInput("button", "delete", "{{.button.delete}}")
-        input.setAttribute('onclick', 'javascript: savePopupData("hdhr", "' + id + '", true, 0)')
-        input.className = "delete"
-        content.addInteraction(input)     
+      if (data["id.provider"] != "-") {
+        var input = content.createInput(
+          "button",
+          "delete",
+          "{{.button.delete}}",
+        );
+        input.setAttribute(
+          "onclick",
+          'javascript: savePopupData("hdhr", "' + id + '", true, 0)',
+        );
+        input.className = "delete";
+        content.addInteraction(input);
       } else {
-        var input = content.createInput("button", "back", "{{.button.back}}")
-        input.setAttribute("onclick", 'javascript: openPopUp("playlist")')
-        content.addInteraction(input)     
+        var input = content.createInput("button", "back", "{{.button.back}}");
+        input.setAttribute("onclick", 'javascript: openPopUp("playlist")');
+        content.addInteraction(input);
       }
-    
+
       // Abort
-      var input = content.createInput("button", "cancel", "{{.button.cancel}}")
-      input.setAttribute("onclick", 'javascript: showElement("popup", false);')
-      content.addInteraction(input)
-      
+      var input = content.createInput("button", "cancel", "{{.button.cancel}}");
+      input.setAttribute("onclick", 'javascript: showElement("popup", false);');
+      content.addInteraction(input);
+
       // Update
-      if (data["id.provider"]!= "-") {
-        var input = content.createInput("button", "update", "{{.button.update}}")
-        input.setAttribute('onclick', 'javascript: savePopupData("hdhr", "' + id + '", false, 1)')
-        content.addInteraction(input)
+      if (data["id.provider"] != "-") {
+        var input = content.createInput(
+          "button",
+          "update",
+          "{{.button.update}}",
+        );
+        input.setAttribute(
+          "onclick",
+          'javascript: savePopupData("hdhr", "' + id + '", false, 1)',
+        );
+        content.addInteraction(input);
       }
-    
+
       // Save
-      var input = content.createInput("button", "save", "{{.button.save}}")
-      input.setAttribute('onclick', 'javascript: savePopupData("hdhr", "' + id + '", false, 0)')
-      content.addInteraction(input)
-      break
+      var input = content.createInput("button", "save", "{{.button.save}}");
+      input.setAttribute(
+        "onclick",
+        'javascript: savePopupData("hdhr", "' + id + '", false, 0)',
+      );
+      content.addInteraction(input);
+      break;
 
     case "filter":
-      content.createHeadline(dataType)
-     
+      content.createHeadline(dataType);
+
       // Type
-      var dbKey:string = "type"
-      var text:string[] = ["M3U: " + "{{.filter.type.groupTitle}}", "xTeVe: " + "{{.filter.type.customFilter}}"]
-      var values:string[] = ["javascript: openPopUp('group-title')", "javascript: openPopUp('custom-filter')"]
-      var select = content.createSelect(text, values, "javascript: openPopUp('group-title')", dbKey)
-      select.setAttribute("id", id)
-      select.setAttribute("onchange", 'javascript: changeButtonAction(this, "next", "onclick");') // changeButtonAction
-      content.appendRow("{{.filter.type.title}}", select)
-      
+      var dbKey: string = "type";
+      var text: string[] = [
+        "M3U: " + "{{.filter.type.groupTitle}}",
+        "xTeVe: " + "{{.filter.type.customFilter}}",
+      ];
+      var values: string[] = [
+        "javascript: openPopUp('group-title')",
+        "javascript: openPopUp('custom-filter')",
+      ];
+      var select = content.createSelect(
+        text,
+        values,
+        "javascript: openPopUp('group-title')",
+        dbKey,
+      );
+      select.setAttribute("id", id);
+      select.setAttribute(
+        "onchange",
+        'javascript: changeButtonAction(this, "next", "onclick");',
+      ); // changeButtonAction
+      content.appendRow("{{.filter.type.title}}", select);
+
       // Interaction
-      content.createInteraction()
+      content.createInteraction();
       // Abort
-      var input = content.createInput("button", "cancel", "{{.button.cancel}}")
-      input.setAttribute("onclick", 'javascript: showElement("popup", false);')
-      content.addInteraction(input)
+      var input = content.createInput("button", "cancel", "{{.button.cancel}}");
+      input.setAttribute("onclick", 'javascript: showElement("popup", false);');
+      content.addInteraction(input);
 
       // Next
-      var input = content.createInput("button", "next", "{{.button.next}}")
-      input.setAttribute("onclick", 'javascript: openPopUp("group-title")')
-      input.setAttribute("id", 'next')
-      content.addInteraction(input)
-      break
+      var input = content.createInput("button", "next", "{{.button.next}}");
+      input.setAttribute("onclick", 'javascript: openPopUp("group-title")');
+      input.setAttribute("id", "next");
+      content.addInteraction(input);
+      break;
 
-    case "custom-filter": 
+    case "custom-filter":
     case "group-title":
-      
       switch (dataType) {
         case "custom-filter":
-          content.createHeadline("{{.filter.custom}}" + " Filter")
+          content.createHeadline("{{.filter.custom}}" + " Filter");
           break;
-      
+
         case "group-title":
-          content.createHeadline("{{.filter.group}}" + " Filter")
+          content.createHeadline("{{.filter.group}}" + " Filter");
           break;
       }
 
-      // Name      
-      var dbKey:string = "name"
-      var input = content.createInput("text", dbKey, data[dbKey])
-      input.setAttribute("placeholder", "{{.filter.name.placeholder}}")
-      content.appendRow("{{.filter.name.title}}", input)
+      // Name
+      var dbKey: string = "name";
+      var input = content.createInput("text", dbKey, data[dbKey]);
+      input.setAttribute("placeholder", "{{.filter.name.placeholder}}");
+      content.appendRow("{{.filter.name.title}}", input);
 
       // Description
-      var dbKey:string = "description"
-      var input = content.createInput("text", dbKey, data[dbKey])
-      input.setAttribute("placeholder", "{{.filter.description.placeholder}}")
-      content.appendRow("{{.filter.description.title}}", input)
+      var dbKey: string = "description";
+      var input = content.createInput("text", dbKey, data[dbKey]);
+      input.setAttribute("placeholder", "{{.filter.description.placeholder}}");
+      content.appendRow("{{.filter.description.title}}", input);
 
       // Type
-      var dbKey:string = "type"
-      var input = content.createInput("hidden", dbKey, data[dbKey])
-      content.appendRow("", input)
+      var dbKey: string = "type";
+      var input = content.createInput("hidden", dbKey, data[dbKey]);
+      content.appendRow("", input);
 
-      var filterType = data[dbKey]
-      
+      var filterType = data[dbKey];
+
       switch (filterType) {
-
         case "custom-filter":
           // Case sensitive
-          var dbKey:string = "caseSensitive"
-          var input = content.createCheckbox(dbKey)
-          input.checked = data[dbKey]
-          content.appendRow("{{.filter.caseSensitive.title}}", input)
-        
+          var dbKey: string = "caseSensitive";
+          var input = content.createCheckbox(dbKey);
+          input.checked = data[dbKey];
+          content.appendRow("{{.filter.caseSensitive.title}}", input);
+
           // Filter Rule (Custom)
-          var dbKey:string = "filter"
-          var input = content.createInput("text", dbKey, data[dbKey])
-          input.setAttribute("placeholder", "{{.filter.filterRule.placeholder}}")
-          content.appendRow("{{.filter.filterRule.title}}", input)
+          var dbKey: string = "filter";
+          var input = content.createInput("text", dbKey, data[dbKey]);
+          input.setAttribute(
+            "placeholder",
+            "{{.filter.filterRule.placeholder}}",
+          );
+          content.appendRow("{{.filter.filterRule.title}}", input);
 
           // Starting Channel Number Mapping
-          var dbKey:string = "startingChannel"
-          var input = content.createInput("text", dbKey, data[dbKey])
-          input.setAttribute("placeholder", "{{.filter.startingChannel.placeholder}}")
-          content.appendRow("{{.filter.startingChannel.title}}", input)
+          var dbKey: string = "startingChannel";
+          var input = content.createInput("text", dbKey, data[dbKey]);
+          input.setAttribute(
+            "placeholder",
+            "{{.filter.startingChannel.placeholder}}",
+          );
+          content.appendRow("{{.filter.startingChannel.title}}", input);
 
           break;
 
         case "group-title":
           //alert(dbKey + " " + filterType)
           // Filter based on the groups in the M3U
-          var dbKey:string = "filter"
-          var groupsM3U = getLocalData("m3uGroups", "")
-          var text:string[] = groupsM3U["text"]
-          var values:string[] = groupsM3U["value"]
-          
-          var select = content.createSelect(text, values, data[dbKey], dbKey)
-          select.setAttribute("onchange", "javascript: this.className = 'changed'")  
-          content.appendRow("{{.filter.filterGroup.title}}", select)
-          content.description("{{.filter.filterGroup.description}}")
-          
+          var dbKey: string = "filter";
+          var groupsM3U = getLocalData("m3uGroups", "");
+          var text: string[] = groupsM3U["text"];
+          var values: string[] = groupsM3U["value"];
+
+          var select = content.createSelect(text, values, data[dbKey], dbKey);
+          select.setAttribute(
+            "onchange",
+            "javascript: this.className = 'changed'",
+          );
+          content.appendRow("{{.filter.filterGroup.title}}", select);
+          content.description("{{.filter.filterGroup.description}}");
+
           // Case sensetive
-          var dbKey:string = "caseSensitive"
-          var input = content.createCheckbox(dbKey)
-          input.checked = data[dbKey]
-          content.appendRow("{{.filter.caseSensitive.title}}", input)
-        
-          
-          var dbKey:string = "include"
-          var input = content.createInput("text", dbKey, data[dbKey])
-          input.setAttribute("placeholder", "{{.filter.include.placeholder}}")
-          
-          content.appendRow("{{.filter.include.title}}", input)
-          content.description("{{.filter.include.description}}")
-          
-          var dbKey:string = "exclude"
-          var input = content.createInput("text", dbKey, data[dbKey])
-          input.setAttribute("placeholder", "{{.filter.exclude.placeholder}}")
-          content.appendRow("{{.filter.exclude.title}}", input)
-          content.description("{{.filter.exclude.description}}")
+          var dbKey: string = "caseSensitive";
+          var input = content.createCheckbox(dbKey);
+          input.checked = data[dbKey];
+          content.appendRow("{{.filter.caseSensitive.title}}", input);
+
+          var dbKey: string = "include";
+          var input = content.createInput("text", dbKey, data[dbKey]);
+          input.setAttribute("placeholder", "{{.filter.include.placeholder}}");
+
+          content.appendRow("{{.filter.include.title}}", input);
+          content.description("{{.filter.include.description}}");
+
+          var dbKey: string = "exclude";
+          var input = content.createInput("text", dbKey, data[dbKey]);
+          input.setAttribute("placeholder", "{{.filter.exclude.placeholder}}");
+          content.appendRow("{{.filter.exclude.title}}", input);
+          content.description("{{.filter.exclude.description}}");
 
           // Preserve M3U Playlist Channel Mapping
-          var dbKey:string = "preserveMapping"
-          var input = content.createCheckbox(dbKey)
-          input.checked = data[dbKey]
-          content.appendRow("{{.filter.preserveMapping.title}}", input)
+          var dbKey: string = "preserveMapping";
+          var input = content.createCheckbox(dbKey);
+          input.checked = data[dbKey];
+          content.appendRow("{{.filter.preserveMapping.title}}", input);
 
           // Starting Channel Number Mapping
-          var dbKey:string = "startingChannel"
-          var input = content.createInput("text", dbKey, data[dbKey])
-          input.setAttribute("placeholder", "{{.filter.startingChannel.placeholder}}")
-          content.appendRow("{{.filter.startingChannel.title}}", input)
+          var dbKey: string = "startingChannel";
+          var input = content.createInput("text", dbKey, data[dbKey]);
+          input.setAttribute(
+            "placeholder",
+            "{{.filter.startingChannel.placeholder}}",
+          );
+          content.appendRow("{{.filter.startingChannel.title}}", input);
 
           break;
-      
+
         default:
           break;
       }
 
       // Interaction
-      content.createInteraction()
+      content.createInteraction();
 
       // Delete
-      var input = content.createInput("button", "delete", "{{.button.delete}}")
-      input.setAttribute('onclick', 'javascript: savePopupData("filter", "' + id + '", true, 0)')
-      input.className = "delete"
-      content.addInteraction(input)     
-      
+      var input = content.createInput("button", "delete", "{{.button.delete}}");
+      input.setAttribute(
+        "onclick",
+        'javascript: savePopupData("filter", "' + id + '", true, 0)',
+      );
+      input.className = "delete";
+      content.addInteraction(input);
+
       // Abort
-      var input = content.createInput("button", "cancel", "{{.button.cancel}}")
-      input.setAttribute("onclick", 'javascript: showElement("popup", false);')
-      content.addInteraction(input)
-    
+      var input = content.createInput("button", "cancel", "{{.button.cancel}}");
+      input.setAttribute("onclick", 'javascript: showElement("popup", false);');
+      content.addInteraction(input);
+
       // Save
-      var input = content.createInput("button", "save", "{{.button.save}}")
-      input.setAttribute('onclick', 'javascript: savePopupData("filter", "' + id + '", false, 0)')
-      content.addInteraction(input)
-      
-      break
+      var input = content.createInput("button", "save", "{{.button.save}}");
+      input.setAttribute(
+        "onclick",
+        'javascript: savePopupData("filter", "' + id + '", false, 0)',
+      );
+      content.addInteraction(input);
+
+      break;
 
     case "xmltv":
-      content.createHeadline(dataType)
+      content.createHeadline(dataType);
       // Name
-      var dbKey:string = "name"
-      var input = content.createInput("text", dbKey, data[dbKey])
-      input.setAttribute("placeholder", "{{.xmltv.name.placeholder}}")
-      content.appendRow("{{.xmltv.name.title}}", input)
+      var dbKey: string = "name";
+      var input = content.createInput("text", dbKey, data[dbKey]);
+      input.setAttribute("placeholder", "{{.xmltv.name.placeholder}}");
+      content.appendRow("{{.xmltv.name.title}}", input);
 
       // Description
-      var dbKey:string = "description"
-      var input = content.createInput("text", dbKey, data[dbKey])
-      input.setAttribute("placeholder", "{{.xmltv.description.placeholder}}")
-      content.appendRow("{{.xmltv.description.title}}", input)
-      
+      var dbKey: string = "description";
+      var input = content.createInput("text", dbKey, data[dbKey]);
+      input.setAttribute("placeholder", "{{.xmltv.description.placeholder}}");
+      content.appendRow("{{.xmltv.description.title}}", input);
+
       // URL
-      var dbKey:string = "file.source"
-      var input = content.createInput("text", dbKey, data[dbKey])
-      input.setAttribute("placeholder", "{{.xmltv.fileXMLTV.placeholder}}")
-      content.appendRow("{{.xmltv.fileXMLTV.title}}", input)
+      var dbKey: string = "file.source";
+      var input = content.createInput("text", dbKey, data[dbKey]);
+      input.setAttribute("placeholder", "{{.xmltv.fileXMLTV.placeholder}}");
+      content.appendRow("{{.xmltv.fileXMLTV.title}}", input);
 
       // Interaction
-      content.createInteraction()
+      content.createInteraction();
       // Delete
-      if (data["id.provider"]!= "-") {
-        var input = content.createInput("button", "delete", "{{.button.delete}}")
-        input.setAttribute('onclick', 'javascript: savePopupData("xmltv", "' + id + '", true, 0)')
-        input.className = "delete"
-        content.addInteraction(input)     
+      if (data["id.provider"] != "-") {
+        var input = content.createInput(
+          "button",
+          "delete",
+          "{{.button.delete}}",
+        );
+        input.setAttribute(
+          "onclick",
+          'javascript: savePopupData("xmltv", "' + id + '", true, 0)',
+        );
+        input.className = "delete";
+        content.addInteraction(input);
       }
-    
+
       // Abort
-      var input = content.createInput("button", "cancel", "{{.button.cancel}}")
-      input.setAttribute("onclick", 'javascript: showElement("popup", false);')
-      content.addInteraction(input)
-      
+      var input = content.createInput("button", "cancel", "{{.button.cancel}}");
+      input.setAttribute("onclick", 'javascript: showElement("popup", false);');
+      content.addInteraction(input);
+
       // Update
-      if (data["id.provider"]!= "-") {
-        var input = content.createInput("button", "update", "{{.button.update}}")
-        input.setAttribute('onclick', 'javascript: savePopupData("xmltv", "' + id + '", false, 1)')
-        content.addInteraction(input)
+      if (data["id.provider"] != "-") {
+        var input = content.createInput(
+          "button",
+          "update",
+          "{{.button.update}}",
+        );
+        input.setAttribute(
+          "onclick",
+          'javascript: savePopupData("xmltv", "' + id + '", false, 1)',
+        );
+        content.addInteraction(input);
       }
-    
+
       // Save
-      var input = content.createInput("button", "save", "{{.button.save}}")
-      input.setAttribute('onclick', 'javascript: savePopupData("xmltv", "' + id + '", false, 0)')
-      content.addInteraction(input)
-      break
+      var input = content.createInput("button", "save", "{{.button.save}}");
+      input.setAttribute(
+        "onclick",
+        'javascript: savePopupData("xmltv", "' + id + '", false, 0)',
+      );
+      content.addInteraction(input);
+      break;
 
     case "users":
-      content.createHeadline("{{.mainMenu.item.users}}")
+      content.createHeadline("{{.mainMenu.item.users}}");
       // User name
-      var dbKey:string = "username"
-      var input = content.createInput("text", dbKey, data[dbKey])
-      input.setAttribute("placeholder", "{{.users.username.placeholder}}")
-      content.appendRow("{{.users.username.title}}", input)
-    
+      var dbKey: string = "username";
+      var input = content.createInput("text", dbKey, data[dbKey]);
+      input.setAttribute("placeholder", "{{.users.username.placeholder}}");
+      content.appendRow("{{.users.username.title}}", input);
+
       // New Parssword
-      var dbKey:string = "password"
-      var input = content.createInput("password", dbKey, "")
-      input.setAttribute("placeholder", "{{.users.password.placeholder}}")
-      content.appendRow("{{.users.password.title}}", input)
-    
+      var dbKey: string = "password";
+      var input = content.createInput("password", dbKey, "");
+      input.setAttribute("placeholder", "{{.users.password.placeholder}}");
+      content.appendRow("{{.users.password.title}}", input);
+
       // Confirmation
-      var dbKey:string = "confirm"
-      var input = content.createInput("password", dbKey, "")
-      input.setAttribute("placeholder", "{{.users.confirm.placeholder}}")
-      content.appendRow("{{.users.confirm.title}}", input)
-    
+      var dbKey: string = "confirm";
+      var input = content.createInput("password", dbKey, "");
+      input.setAttribute("placeholder", "{{.users.confirm.placeholder}}");
+      content.appendRow("{{.users.confirm.title}}", input);
+
       // Authentication WEB
-      var dbKey:string = "authentication.web"
-      var input = content.createCheckbox(dbKey)
-      input.checked = data[dbKey]
+      var dbKey: string = "authentication.web";
+      var input = content.createCheckbox(dbKey);
+      input.checked = data[dbKey];
       if (data["defaultUser"] == true) {
-        input.setAttribute("onclick", "javascript: return false")
+        input.setAttribute("onclick", "javascript: return false");
       }
-      content.appendRow("{{.users.web.title}}", input)
+      content.appendRow("{{.users.web.title}}", input);
 
       // Authentication PMS
-      var dbKey:string = "authentication.pms"
-      var input = content.createCheckbox(dbKey)
-      input.checked = data[dbKey]
-      content.appendRow("{{.users.pms.title}}", input)
+      var dbKey: string = "authentication.pms";
+      var input = content.createCheckbox(dbKey);
+      input.checked = data[dbKey];
+      content.appendRow("{{.users.pms.title}}", input);
 
       // Authentication M3U
-      var dbKey:string = "authentication.m3u"
-      var input = content.createCheckbox(dbKey)
-      input.checked = data[dbKey]
-      content.appendRow("{{.users.m3u.title}}", input)
+      var dbKey: string = "authentication.m3u";
+      var input = content.createCheckbox(dbKey);
+      input.checked = data[dbKey];
+      content.appendRow("{{.users.m3u.title}}", input);
 
       // Authentication XML
-      var dbKey:string = "authentication.xml"
-      var input = content.createCheckbox(dbKey)
-      input.checked = data[dbKey]
-      content.appendRow("{{.users.xml.title}}", input)
+      var dbKey: string = "authentication.xml";
+      var input = content.createCheckbox(dbKey);
+      input.checked = data[dbKey];
+      content.appendRow("{{.users.xml.title}}", input);
 
       // Authentication API
-      var dbKey:string = "authentication.api"
-      var input = content.createCheckbox(dbKey)
-      input.checked = data[dbKey]
-      content.appendRow("{{.users.api.title}}", input)
+      var dbKey: string = "authentication.api";
+      var input = content.createCheckbox(dbKey);
+      input.checked = data[dbKey];
+      content.appendRow("{{.users.api.title}}", input);
 
       // Interaction
-      content.createInteraction()
+      content.createInteraction();
 
       // Delete
-      if (data["defaultUser"]!= true && id != "-") {
-        var input = content.createInput("button", "delete", "{{.button.delete}}")
-        input.className = "delete"
-        input.setAttribute('onclick', 'javascript: savePopupData("' + dataType + '", "' + id + '", true, 0)')
-        content.addInteraction(input)     
+      if (data["defaultUser"] != true && id != "-") {
+        var input = content.createInput(
+          "button",
+          "delete",
+          "{{.button.delete}}",
+        );
+        input.className = "delete";
+        input.setAttribute(
+          "onclick",
+          'javascript: savePopupData("' +
+            dataType +
+            '", "' +
+            id +
+            '", true, 0)',
+        );
+        content.addInteraction(input);
       }
 
       // Abort
-      var input = content.createInput("button", "cancel", "{{.button.cancel}}")
-      input.setAttribute("onclick", 'javascript: showElement("popup", false);')
-      content.addInteraction(input)
-      
-      // Save
-      var input = content.createInput("button", "save", "{{.button.save}}")
-      input.setAttribute("onclick", 'javascript: savePopupData("' + dataType + '", "' + id + '", "false");')
-      content.addInteraction(input)
+      var input = content.createInput("button", "cancel", "{{.button.cancel}}");
+      input.setAttribute("onclick", 'javascript: showElement("popup", false);');
+      content.addInteraction(input);
 
-      break
+      // Save
+      var input = content.createInput("button", "save", "{{.button.save}}");
+      input.setAttribute(
+        "onclick",
+        'javascript: savePopupData("' + dataType + '", "' + id + '", "false");',
+      );
+      content.addInteraction(input);
+
+      break;
 
     case "mapping":
-      content.createHeadline("{{.mainMenu.item.mapping}}")
+      content.createHeadline("{{.mainMenu.item.mapping}}");
       // Active
-      var dbKey:string = "x-active"
-      var input = content.createCheckbox(dbKey)
-      input.checked = data[dbKey]
-      input.id = "active"
+      var dbKey: string = "x-active";
+      var input = content.createCheckbox(dbKey);
+      input.checked = data[dbKey];
+      input.id = "active";
       //input.setAttribute("onchange", "javascript: this.className = 'changed'")
-      input.setAttribute("onchange", "javascript: toggleChannelStatus('" + id + "', this)")
-      content.appendRow("{{.mapping.active.title}}", input)
+      input.setAttribute(
+        "onchange",
+        "javascript: toggleChannelStatus('" + id + "', this)",
+      );
+      content.appendRow("{{.mapping.active.title}}", input);
 
       // Channel name
-      var dbKey:string = "x-name"
-      var input = content.createInput("text", dbKey, data[dbKey])
-      input.setAttribute("onchange", "javascript: this.className = 'changed'")
+      var dbKey: string = "x-name";
+      var input = content.createInput("text", dbKey, data[dbKey]);
+      input.setAttribute("onchange", "javascript: this.className = 'changed'");
       if (BULK_EDIT == true) {
-        input.style.border = "solid 1px red"
-        input.setAttribute("readonly", "true")
+        input.style.border = "solid 1px red";
+        input.setAttribute("readonly", "true");
       }
-      content.appendRow("{{.mapping.channelName.title}}", input)
+      content.appendRow("{{.mapping.channelName.title}}", input);
 
-      content.description(data["name"])
+      content.description(data["name"]);
 
       // Description
-      var dbKey:string = "x-description"
-      var input = content.createInput("text", dbKey, data[dbKey])
-      input.setAttribute("placeholder", "{{.mapping.description.placeholder}}")
-      input.setAttribute("onchange", "javascript: this.className = 'changed'")
-      content.appendRow("{{.mapping.description.title}}", input)
+      var dbKey: string = "x-description";
+      var input = content.createInput("text", dbKey, data[dbKey]);
+      input.setAttribute("placeholder", "{{.mapping.description.placeholder}}");
+      input.setAttribute("onchange", "javascript: this.className = 'changed'");
+      content.appendRow("{{.mapping.description.title}}", input);
 
       // Update the channel x-name
       if (data.hasOwnProperty("_uuid.key")) {
         if (data["_uuid.key"] != "") {
-          var dbKey:string = "x-update-channel-name"
-          var input = content.createCheckbox(dbKey)
-          input.setAttribute("onchange", "javascript: this.className = 'changed'")
-          input.checked = data[dbKey]
-          content.appendRow("{{.mapping.updateChannelName.title}}", input)
+          var dbKey: string = "x-update-channel-name";
+          var input = content.createCheckbox(dbKey);
+          input.setAttribute(
+            "onchange",
+            "javascript: this.className = 'changed'",
+          );
+          input.checked = data[dbKey];
+          content.appendRow("{{.mapping.updateChannelName.title}}", input);
         }
       }
 
       // Channel name regex for updating the channel name
-      var dbKey:string = "update-channel-name-regex"
-      var input = content.createInput("text", dbKey, data[dbKey])
-      input.setAttribute("placeholder", "{{.mapping.updateChannelNameRegex.placeholder}}")
-      input.setAttribute("onchange", "javascript: this.className = 'changed'")
-      content.appendRow("{{.mapping.updateChannelNameRegex.title}}", input)
-      content.description("{{.mapping.updateChannelNameRegex.description}}")
+      var dbKey: string = "update-channel-name-regex";
+      var input = content.createInput("text", dbKey, data[dbKey]);
+      input.setAttribute(
+        "placeholder",
+        "{{.mapping.updateChannelNameRegex.placeholder}}",
+      );
+      input.setAttribute("onchange", "javascript: this.className = 'changed'");
+      content.appendRow("{{.mapping.updateChannelNameRegex.title}}", input);
+      content.description("{{.mapping.updateChannelNameRegex.description}}");
 
       // Channel group regex for updating the channel name
-      var dbKey:string = "update-channel-name-by-group-regex"
-      var input = content.createInput("text", dbKey, data[dbKey])
-      input.setAttribute("placeholder", "{{.mapping.updateChannelNameByGroupRegex.placeholder}}")
-      input.setAttribute("onchange", "javascript: this.className = 'changed'")
-      content.appendRow("{{.mapping.updateChannelNameByGroupRegex.title}}", input)
-      content.description("{{.mapping.updateChannelNameByGroupRegex.description}}")
+      var dbKey: string = "update-channel-name-by-group-regex";
+      var input = content.createInput("text", dbKey, data[dbKey]);
+      input.setAttribute(
+        "placeholder",
+        "{{.mapping.updateChannelNameByGroupRegex.placeholder}}",
+      );
+      input.setAttribute("onchange", "javascript: this.className = 'changed'");
+      content.appendRow(
+        "{{.mapping.updateChannelNameByGroupRegex.title}}",
+        input,
+      );
+      content.description(
+        "{{.mapping.updateChannelNameByGroupRegex.description}}",
+      );
 
-      // Logo URL (Channel) 
-      var dbKey:string = "tvg-logo"
-      var input = content.createInput("text", dbKey, data[dbKey])
-      input.setAttribute("onchange", "javascript: this.className = 'changed'")
-      input.setAttribute("id", "channel-icon")
-      content.appendRow("{{.mapping.channelLogo.title}}", input)
-      
+      // Logo URL (Channel)
+      var dbKey: string = "tvg-logo";
+      var input = content.createInput("text", dbKey, data[dbKey]);
+      input.setAttribute("onchange", "javascript: this.className = 'changed'");
+      input.setAttribute("id", "channel-icon");
+      content.appendRow("{{.mapping.channelLogo.title}}", input);
+
       // Channel logo update
-      var dbKey:string = "x-update-channel-icon"
-      var input = content.createCheckbox(dbKey)
-      input.checked = data[dbKey]
-      input.setAttribute("id", "update-icon")
-      input.setAttribute("onchange", "javascript: this.className = 'changed'; changeChannelLogo('" + id + "');")
-      content.appendRow("{{.mapping.updateChannelLogo.title}}", input)
+      var dbKey: string = "x-update-channel-icon";
+      var input = content.createCheckbox(dbKey);
+      input.checked = data[dbKey];
+      input.setAttribute("id", "update-icon");
+      input.setAttribute(
+        "onchange",
+        "javascript: this.className = 'changed'; changeChannelLogo('" +
+          id +
+          "');",
+      );
+      content.appendRow("{{.mapping.updateChannelLogo.title}}", input);
 
       // Expand EPG category
-      var dbKey:string = "x-category"
-      var text:string[] = ["-", "Kids (Emby only)", "News", "Movie", "Series", "Sports"]
-      var values:string[] = ["", "Kids", "News", "Movie", "Series", "Sports"]
-      var select = content.createSelect(text, values, data[dbKey], dbKey)
-      select.setAttribute("onchange", "javascript: this.className = 'changed'")  
-      content.appendRow("{{.mapping.epgCategory.title}}", select)
-      
+      var dbKey: string = "x-category";
+      var text: string[] = [
+        "-",
+        "Kids (Emby only)",
+        "News",
+        "Movie",
+        "Series",
+        "Sports",
+      ];
+      var values: string[] = ["", "Kids", "News", "Movie", "Series", "Sports"];
+      var select = content.createSelect(text, values, data[dbKey], dbKey);
+      select.setAttribute("onchange", "javascript: this.className = 'changed'");
+      content.appendRow("{{.mapping.epgCategory.title}}", select);
+
       // M3U group title
-      var dbKey:string = "x-group-title"
-      var input = content.createInput("text", dbKey, data[dbKey])
-      input.setAttribute("onchange", "javascript: this.className = 'changed'")
-      input.dataset.oldValue = data[dbKey]
-      content.appendRow("{{.mapping.m3uGroupTitle.title}}", input)
+      var dbKey: string = "x-group-title";
+      var input = content.createInput("text", dbKey, data[dbKey]);
+      input.setAttribute("onchange", "javascript: this.className = 'changed'");
+      input.dataset.oldValue = data[dbKey];
+      content.appendRow("{{.mapping.m3uGroupTitle.title}}", input);
       if (data["group-title"] != undefined) {
-        content.description(data["group-title"])
+        content.description(data["group-title"]);
       }
       if (data["x-update-channel-group"] == true) {
         input.disabled = true;
       }
 
       // Update channel group checkbox
-      var dbKey:string = "x-update-channel-group"
-      var input = content.createCheckbox(dbKey)
-      input.setAttribute("onchange", "javascript: toggleGroupUpdateCb('" + id + "', this);")
-      input.checked = data[dbKey]
-      content.appendRow("{{.mapping.updateChannelGroup.title}}", input)
-      content.description("{{.mapping.updateChannelGroup.description}}")
+      var dbKey: string = "x-update-channel-group";
+      var input = content.createCheckbox(dbKey);
+      input.setAttribute(
+        "onchange",
+        "javascript: toggleGroupUpdateCb('" + id + "', this);",
+      );
+      input.checked = data[dbKey];
+      content.appendRow("{{.mapping.updateChannelGroup.title}}", input);
+      content.description("{{.mapping.updateChannelGroup.description}}");
 
       // XMLTV file
-      var dbKey = 'x-xmltv-file';
+      var dbKey = "x-xmltv-file";
       const xmlTvFile: string = data[dbKey];
       var xmlTv = new XMLTVFile();
       const xmlTvFileSelect = xmlTv.getFiles(data[dbKey]);
-      xmlTvFileSelect.setAttribute('name', dbKey);
-      xmlTvFileSelect.setAttribute('id', 'popup-xmltv');
-      xmlTvFileSelect.setAttribute('onchange', `javascript: this.className = 'changed'; setXmltvChannel('${id}', this);`);
-      content.appendRow('{{.mapping.xmltvFile.title}}', xmlTvFileSelect);
+      xmlTvFileSelect.setAttribute("name", dbKey);
+      xmlTvFileSelect.setAttribute("id", "popup-xmltv");
+      xmlTvFileSelect.setAttribute(
+        "onchange",
+        `javascript: this.className = 'changed'; setXmltvChannel('${id}', this);`,
+      );
+      content.appendRow("{{.mapping.xmltvFile.title}}", xmlTvFileSelect);
 
       // XMLTV Mapping
-      var dbKey: string = 'x-mapping';
+      var dbKey: string = "x-mapping";
       var xmlTv = new XMLTVFile();
       const currentXmlTvId: string = data[dbKey];
-      const [xmlTvIdContainer, xmlTvIdInput, xmlTvIdDatalist] = xmlTv.newXmlTvIdPicker(xmlTvFile, currentXmlTvId);
-      xmlTvIdContainer.setAttribute('id', 'xmltv-id-picker-container');
-      xmlTvIdInput.setAttribute('list', 'xmltv-id-picker-datalist');
-      xmlTvIdInput.setAttribute('name', 'x-mapping'); // Should stay x-mapping as it will be used in donePopupData to make a server request
-      xmlTvIdInput.setAttribute('id', 'xmltv-id-picker-input');
-      xmlTvIdInput.setAttribute('onchange', `javascript: this.className = 'changed'; checkXmltvChannel('${id}', this.value, '${xmlTvFile}');`);
-      xmlTvIdDatalist.setAttribute('id', 'xmltv-id-picker-datalist');
-      content.appendRow('{{.mapping.xmltvChannel.title}}', xmlTvIdContainer);
+      const [xmlTvIdContainer, xmlTvIdInput, xmlTvIdDatalist] =
+        xmlTv.newXmlTvIdPicker(xmlTvFile, currentXmlTvId);
+      xmlTvIdContainer.setAttribute("id", "xmltv-id-picker-container");
+      xmlTvIdInput.setAttribute("list", "xmltv-id-picker-datalist");
+      xmlTvIdInput.setAttribute("name", "x-mapping"); // Should stay x-mapping as it will be used in donePopupData to make a server request
+      xmlTvIdInput.setAttribute("id", "xmltv-id-picker-input");
+      xmlTvIdInput.setAttribute(
+        "onchange",
+        `javascript: this.className = 'changed'; checkXmltvChannel('${id}', this.value, '${xmlTvFile}');`,
+      );
+      xmlTvIdDatalist.setAttribute("id", "xmltv-id-picker-datalist");
+      content.appendRow("{{.mapping.xmltvChannel.title}}", xmlTvIdContainer);
 
       // Timeshift
-      var dbKey:string = "x-timeshift"
-      var input = content.createInput("text", dbKey, data[dbKey])
-      input.setAttribute("onchange", "javascript: this.className = 'changed'")
-      input.setAttribute("placeholder", "{{.mapping.timeshift.placeholder}}")
-      input.setAttribute("id", "timeshift")
-      content.appendRow("{{.mapping.timeshift.title}}", input)
-      
+      var dbKey: string = "x-timeshift";
+      var input = content.createInput("text", dbKey, data[dbKey]);
+      input.setAttribute("onchange", "javascript: this.className = 'changed'");
+      input.setAttribute("placeholder", "{{.mapping.timeshift.placeholder}}");
+      input.setAttribute("id", "timeshift");
+      content.appendRow("{{.mapping.timeshift.title}}", input);
+
       // Interaction
-      content.createInteraction()
+      content.createInteraction();
 
       // Upload logo
-      var input = content.createInput("button", "cancel", "{{.button.uploadLogo}}")
-      input.setAttribute("onclick", 'javascript: uploadLogo();')
-      content.addInteraction(input)
+      var input = content.createInput(
+        "button",
+        "cancel",
+        "{{.button.uploadLogo}}",
+      );
+      input.setAttribute("onclick", "javascript: uploadLogo();");
+      content.addInteraction(input);
 
       // Abort
-      var input = content.createInput("button", "cancel", "{{.button.cancel}}")
-      input.setAttribute("onclick", 'javascript: showElement("popup", false);')
-      content.addInteraction(input)
-      
+      var input = content.createInput("button", "cancel", "{{.button.cancel}}");
+      input.setAttribute("onclick", 'javascript: showElement("popup", false);');
+      content.addInteraction(input);
+
       // Finished
-      var ids:string[] = []
-      ids = getAllSelectedChannels()
+      var ids: string[] = [];
+      ids = getAllSelectedChannels();
       if (ids.length == 0) {
-        ids.push(id)
+        ids.push(id);
       }
-      
-      var input = content.createInput("button", "save", "{{.button.done}}")
-      input.setAttribute("onclick", 'javascript: donePopupData("' + dataType + '", "' + ids + '", "false");')
-      content.addInteraction(input) 
-      break
+
+      var input = content.createInput("button", "save", "{{.button.done}}");
+      input.setAttribute(
+        "onclick",
+        'javascript: donePopupData("' +
+          dataType +
+          '", "' +
+          ids +
+          '", "false");',
+      );
+      content.addInteraction(input);
+      break;
 
     default:
       break;
   }
-  
-  showPopUpElement('popup-custom');
+
+  showPopUpElement("popup-custom");
 }
 
 class XMLTVFile {
-  File:string
+  File: string;
 
-  getFiles(set:string):any {
-    let fileIDs:string[] = getOwnObjProps(SERVER["xepg"]["xmltvMap"])
+  getFiles(set: string): any {
+    let fileIDs: string[] = getOwnObjProps(SERVER["xepg"]["xmltvMap"]);
     let values = new Array("-");
-    let text  = new Array("-");
+    let text = new Array("-");
 
     for (let i = 0; i < fileIDs.length; i++) {
       if (fileIDs[i] != "xTeVe Dummy") {
-        values.push(getValueFromProviderFile(fileIDs[i], "xmltv", "file.xteve"))
-        text.push(getValueFromProviderFile(fileIDs[i], "xmltv", "name"))
+        values.push(
+          getValueFromProviderFile(fileIDs[i], "xmltv", "file.xteve"),
+        );
+        text.push(getValueFromProviderFile(fileIDs[i], "xmltv", "name"));
       } else {
-        values.push(fileIDs[i])
-        text.push(fileIDs[i])
+        values.push(fileIDs[i]);
+        text.push(fileIDs[i]);
       }
-
     }
 
-    let select = document.createElement("SELECT")
+    let select = document.createElement("SELECT");
     for (let i = 0; i < text.length; i++) {
-      var option = document.createElement("OPTION")
-      option.setAttribute("value", values[i])
-      option.innerText = text[i]
-      select.appendChild(option)
+      var option = document.createElement("OPTION");
+      option.setAttribute("value", values[i]);
+      option.innerText = text[i];
+      select.appendChild(option);
     }
 
-    if(set != "") {
-      (select as HTMLSelectElement).value = set
+    if (set != "") {
+      (select as HTMLSelectElement).value = set;
     }
 
-    return select
+    return select;
   }
 
   /**
@@ -1788,38 +2001,41 @@ class XMLTVFile {
    * 2) Input field to type at and get choice from.
    * 3) Datalist containing every option.
    */
-  newXmlTvIdPicker(xmlTvFile: string, currentXmlTvId: string): [HTMLDivElement, HTMLInputElement, HTMLDataListElement] {
-    const container = document.createElement('div');
-    const input = document.createElement('input');
-    input.setAttribute('type', 'text');
+  newXmlTvIdPicker(
+    xmlTvFile: string,
+    currentXmlTvId: string,
+  ): [HTMLDivElement, HTMLInputElement, HTMLDataListElement] {
+    const container = document.createElement("div");
+    const input = document.createElement("input");
+    input.setAttribute("type", "text");
 
     // Initially, set value to '-' if input is empty
-    input.value = (currentXmlTvId) ? currentXmlTvId : '-';
+    input.value = currentXmlTvId ? currentXmlTvId : "-";
 
     // When input is focused, remove '-' from it
-    input.addEventListener('focus', (evt) => {
+    input.addEventListener("focus", (evt) => {
       const target = evt.target as HTMLInputElement;
-      target.value = (target.value === '-') ? '' : target.value;
+      target.value = target.value === "-" ? "" : target.value;
     });
 
     // When input lose focus or take a value, if it's empty, set value to '-'
-    input.addEventListener('blur', setFallbackValue);
-    input.addEventListener('change', setFallbackValue);
+    input.addEventListener("blur", setFallbackValue);
+    input.addEventListener("change", setFallbackValue);
     function setFallbackValue(evt: Event) {
       const target = evt.target as HTMLInputElement;
-      target.value = (target.value) ? target.value : '-';
+      target.value = target.value ? target.value : "-";
     }
 
     container.appendChild(input);
 
-    const datalist = document.createElement('datalist');
+    const datalist = document.createElement("datalist");
 
-    const option = document.createElement('option');
-    option.setAttribute('value', '-');
-    option.innerText = '-';
+    const option = document.createElement("option");
+    option.setAttribute("value", "-");
+    option.innerText = "-";
     datalist.appendChild(option);
 
-    const epg: Object = SERVER['xepg']['xmltvMap'][xmlTvFile];
+    const epg: Object = SERVER["xepg"]["xmltvMap"][xmlTvFile];
 
     if (epg) {
       const programIds = getOwnObjProps(epg);
@@ -1827,17 +2043,17 @@ class XMLTVFile {
       programIds.forEach((programId) => {
         const program: Object = epg[programId];
 
-        if (program.hasOwnProperty('display-names')) {
-          program['display-names'].forEach((displayName: Object) => {
-            const option = document.createElement('option');
-            option.setAttribute('value', programId);
-            option.innerText = displayName['Value'];
+        if (program.hasOwnProperty("display-names")) {
+          program["display-names"].forEach((displayName: Object) => {
+            const option = document.createElement("option");
+            option.setAttribute("value", programId);
+            option.innerText = displayName["Value"];
             datalist.appendChild(option);
           });
         } else {
-          const option = document.createElement('option');
-          option.setAttribute('value', programId);
-          option.innerText = '-';
+          const option = document.createElement("option");
+          option.setAttribute("value", programId);
+          option.innerText = "-";
           datalist.appendChild(option);
         }
       });
@@ -1848,482 +2064,477 @@ class XMLTVFile {
     return [container, input, datalist];
   }
 
-  return
+  return;
 }
 
-function getValueFromProviderFile(file:string, fileType, key) {
-
+function getValueFromProviderFile(file: string, fileType, key) {
   if (file == "xTeVe Dummy") {
-    return file
+    return file;
   }
 
-  let fileID:string
-  let indicator = file.charAt(0)
+  let fileID: string;
+  let indicator = file.charAt(0);
 
   switch (indicator) {
     case "M":
-      fileType = "m3u"
-      fileID = file
+      fileType = "m3u";
+      fileID = file;
       break;
 
     case "H":
-      fileType = "hdhr"
-      fileID = file
+      fileType = "hdhr";
+      fileID = file;
       break;
 
     case "X":
-      fileType = "xmltv"
-      fileID = file.substring(0, file.lastIndexOf('.'))
+      fileType = "xmltv";
+      fileID = file.substring(0, file.lastIndexOf("."));
       break;
-    
   }
 
   if (SERVER["settings"]["files"][fileType].hasOwnProperty(fileID) == true) {
     var data = SERVER["settings"]["files"][fileType][fileID];
-    return data[key]
+    return data[key];
   }
 
-  return
-
+  return;
 }
 
 function setXmltvChannel(epgMapId: string, xmlTvFileSelect: HTMLSelectElement) {
-
   const xmlTv = new XMLTVFile();
   const newXmlTvFile = xmlTvFileSelect.value;
 
   // Remove old XMLTV ID selection box
-  const xmlTvIdPickerParent = document.getElementById('xmltv-id-picker-container').parentElement as HTMLTableCellElement;
-  xmlTvIdPickerParent.innerHTML = '';
+  const xmlTvIdPickerParent = document.getElementById(
+    "xmltv-id-picker-container",
+  ).parentElement as HTMLTableCellElement;
+  xmlTvIdPickerParent.innerHTML = "";
 
   // Create new XMLTV ID selection box
-  const tvgId: string = SERVER['xepg']['epgMapping'][epgMapId]['tvg-id'];
+  const tvgId: string = SERVER["xepg"]["epgMapping"][epgMapId]["tvg-id"];
 
-  const [xmlTvIdContainer, xmlTvIdInput, xmlTvIdDatalist] = xmlTv.newXmlTvIdPicker(newXmlTvFile, tvgId);
-  xmlTvIdContainer.setAttribute('id', 'xmltv-id-picker-container');
-  xmlTvIdInput.setAttribute('list', 'xmltv-id-picker-datalist');
-  xmlTvIdInput.setAttribute('name', 'x-mapping'); // Should stay x-mapping as it will be used in donePopupData to make a server request
-  xmlTvIdInput.setAttribute('id', 'xmltv-id-picker-input');
-  xmlTvIdInput.setAttribute('onchange', `javascript: this.className = 'changed'; checkXmltvChannel('${epgMapId}', this.value, '${newXmlTvFile}');`);
-  xmlTvIdInput.classList.add('changed');
-  xmlTvIdDatalist.setAttribute('id', 'xmltv-id-picker-datalist');
+  const [xmlTvIdContainer, xmlTvIdInput, xmlTvIdDatalist] =
+    xmlTv.newXmlTvIdPicker(newXmlTvFile, tvgId);
+  xmlTvIdContainer.setAttribute("id", "xmltv-id-picker-container");
+  xmlTvIdInput.setAttribute("list", "xmltv-id-picker-datalist");
+  xmlTvIdInput.setAttribute("name", "x-mapping"); // Should stay x-mapping as it will be used in donePopupData to make a server request
+  xmlTvIdInput.setAttribute("id", "xmltv-id-picker-input");
+  xmlTvIdInput.setAttribute(
+    "onchange",
+    `javascript: this.className = 'changed'; checkXmltvChannel('${epgMapId}', this.value, '${newXmlTvFile}');`,
+  );
+  xmlTvIdInput.classList.add("changed");
+  xmlTvIdDatalist.setAttribute("id", "xmltv-id-picker-datalist");
 
   // Add new XMLTV ID selection box to it's parent
   xmlTvIdPickerParent.appendChild(xmlTvIdContainer);
 
   checkXmltvChannel(epgMapId, xmlTvIdInput.value, newXmlTvFile);
-
 }
 
-function checkXmltvChannel(epgMapId: string, newXmlTvId: string, xmlTvFile: string) {
+function checkXmltvChannel(
+  epgMapId: string,
+  newXmlTvId: string,
+  xmlTvFile: string,
+) {
+  const channelActiveCb = document.getElementById("active") as HTMLInputElement;
 
-  const channelActiveCb = document.getElementById('active') as HTMLInputElement;
-
-  const channelActive = newXmlTvId != '-';
+  const channelActive = newXmlTvId != "-";
 
   channelActiveCb.checked = channelActive;
-  channelActiveCb.className = 'changed';
+  channelActiveCb.className = "changed";
 
-  if(xmlTvFile != 'xTeVe Dummy' && channelActive == true) {
+  if (xmlTvFile != "xTeVe Dummy" && channelActive == true) {
     changeChannelLogo(epgMapId);
     return;
   }
 
-  if (xmlTvFile == 'xTeVe Dummy') {
-    (document.getElementById('update-icon') as HTMLInputElement).checked = false;
-    (document.getElementById('update-icon') as HTMLInputElement).className = 'changed';
+  if (xmlTvFile == "xTeVe Dummy") {
+    (document.getElementById("update-icon") as HTMLInputElement).checked =
+      false;
+    (document.getElementById("update-icon") as HTMLInputElement).className =
+      "changed";
   }
-
 }
 
 function changeChannelLogo(epgMapId: string) {
+  const channel: Object = SERVER["xepg"]["epgMapping"][epgMapId];
 
-  const channel: Object = SERVER['xepg']['epgMapping'][epgMapId];
+  const xmlTvFileSelect = document.getElementById(
+    "popup-xmltv",
+  ) as HTMLSelectElement;
+  const xmlTvFile =
+    xmlTvFileSelect.options[xmlTvFileSelect.selectedIndex].value;
 
-  const xmlTvFileSelect = document.getElementById('popup-xmltv') as HTMLSelectElement;
-  const xmlTvFile = xmlTvFileSelect.options[xmlTvFileSelect.selectedIndex].value;
-
-  const xmlTvIdInput = document.getElementById('xmltv-id-picker-input') as HTMLInputElement;
+  const xmlTvIdInput = document.getElementById(
+    "xmltv-id-picker-input",
+  ) as HTMLInputElement;
   const newXmlTvId = xmlTvIdInput.value;
 
-  const updateLogo = (document.getElementById('update-icon') as HTMLInputElement).checked;
+  const updateLogo = (
+    document.getElementById("update-icon") as HTMLInputElement
+  ).checked;
 
   let logo: string;
 
-  if (updateLogo == true && xmlTvFile != 'xTeVe Dummy') {
-
-    if (SERVER['xepg']['xmltvMap'][xmlTvFile].hasOwnProperty(newXmlTvId)) {
-      logo = SERVER['xepg']['xmltvMap'][xmlTvFile][newXmlTvId]['icon'];
+  if (updateLogo == true && xmlTvFile != "xTeVe Dummy") {
+    if (SERVER["xepg"]["xmltvMap"][xmlTvFile].hasOwnProperty(newXmlTvId)) {
+      logo = SERVER["xepg"]["xmltvMap"][xmlTvFile][newXmlTvId]["icon"];
     } else {
-      logo = channel['tvg-logo'];
+      logo = channel["tvg-logo"];
     }
 
-    var logoInput = (document.getElementById('channel-icon') as HTMLInputElement);
+    var logoInput = document.getElementById("channel-icon") as HTMLInputElement;
     logoInput.value = logo;
 
     if (BULK_EDIT == false) {
-      logoInput.className = 'changed';
+      logoInput.className = "changed";
     }
-
   }
-
 }
 
-function savePopupData(dataType: string, id: string, remove: Boolean, option: number) {
-  
+function savePopupData(
+  dataType: string,
+  id: string,
+  remove: Boolean,
+  option: number,
+) {
   if (dataType == "mapping") {
-    
-    let data = {}
-    let cmd = "saveEpgMapping"
-    data["epgMapping"] = SERVER["xepg"]["epgMapping"]
- 
-    let server:Server = new Server(cmd)
-    server.request(data)
+    let data = {};
+    let cmd = "saveEpgMapping";
+    data["epgMapping"] = SERVER["xepg"]["epgMapping"];
 
-    delete UNDO["epgMapping"]
-    
-    return
+    let server: Server = new Server(cmd);
+    server.request(data);
+
+    delete UNDO["epgMapping"];
+
+    return;
   }
 
-  let div = document.getElementById("popup-custom")
+  let div = document.getElementById("popup-custom");
 
-  let inputs = div.getElementsByTagName("TABLE")[0].getElementsByTagName("INPUT");
-  let selects = div.getElementsByTagName("TABLE")[0].getElementsByTagName("SELECT");
+  let inputs = div
+    .getElementsByTagName("TABLE")[0]
+    .getElementsByTagName("INPUT");
+  let selects = div
+    .getElementsByTagName("TABLE")[0]
+    .getElementsByTagName("SELECT");
 
   let input = {};
-  let confirmMsg: string
+  let confirmMsg: string;
 
   for (let i = 0; i < selects.length; i++) {
+    var name: string;
+    name = (selects[i] as HTMLSelectElement).name;
+    var value = (selects[i] as HTMLSelectElement).value;
 
-    var name:string
-    name = (selects[i] as HTMLSelectElement).name
-    var value = (selects[i] as HTMLSelectElement).value
-    
     switch (name) {
       case "tuner":
-        input[name] = parseInt(value)
+        input[name] = parseInt(value);
         break;
-      
+
       default:
-        input[name] = value
+        input[name] = value;
         break;
     }
-
   }
 
   for (let i = 0; i < inputs.length; i++) {
-    
     switch ((inputs[i] as HTMLInputElement).type) {
-
-      case "checkbox": 
-        name = (inputs[i] as HTMLInputElement).name
-        input[name] = (inputs[i] as HTMLInputElement).checked
-        break
+      case "checkbox":
+        name = (inputs[i] as HTMLInputElement).name;
+        input[name] = (inputs[i] as HTMLInputElement).checked;
+        break;
 
       case "text":
       case "hidden":
       case "password":
-        
-        name = (inputs[i] as HTMLInputElement).name
+        name = (inputs[i] as HTMLInputElement).name;
 
         switch (name) {
           case "tuner":
-            input[name] = parseInt((inputs[i] as HTMLInputElement).value)
+            input[name] = parseInt((inputs[i] as HTMLInputElement).value);
             break;
-          
+
           default:
-            input[name] = (inputs[i] as HTMLInputElement).value
+            input[name] = (inputs[i] as HTMLInputElement).value;
             break;
         }
 
-        break
-
+        break;
     }
-    
   }
 
-  let data = {}
+  let data = {};
 
-  let cmd:string
+  let cmd: string;
 
   if (remove == true) {
-    input["delete"] = true
+    input["delete"] = true;
   }
 
   switch (dataType) {
     case "users":
-
-      confirmMsg = "Delete this user?"
+      confirmMsg = "Delete this user?";
       if (id == "-") {
-        cmd = "saveNewUser"
-        data["userData"] = input
+        cmd = "saveNewUser";
+        data["userData"] = input;
       } else {
-        cmd = "saveUserData"
-        let d = {}
-        d[id] = input
-        data["userData"] = d
+        cmd = "saveUserData";
+        let d = {};
+        d[id] = input;
+        data["userData"] = d;
       }
 
       break;
 
     case "m3u":
-
-      confirmMsg = "Delete this playlist?"
+      confirmMsg = "Delete this playlist?";
       switch (option) {
         // Popup: Save
-        case 0: 
-          cmd = "saveFilesM3U"
-          break
+        case 0:
+          cmd = "saveFilesM3U";
+          break;
 
         // Popup: Update
         case 1:
-          cmd = "updateFileM3U"
-          break
-
+          cmd = "updateFileM3U";
+          break;
       }
 
-      data["files"] = {}
-      data["files"][dataType] = {}
-      data["files"][dataType][id] = input
-      
-      break
+      data["files"] = {};
+      data["files"][dataType] = {};
+      data["files"][dataType][id] = input;
+
+      break;
 
     case "hdhr":
-
-      confirmMsg = "Delete this HDHomeRun tuner?"
+      confirmMsg = "Delete this HDHomeRun tuner?";
       switch (option) {
         // Popup: Save
-        case 0: 
-          cmd = "saveFilesHDHR"
-          break
+        case 0:
+          cmd = "saveFilesHDHR";
+          break;
 
         // Popup: Update
         case 1:
-          cmd = "updateFileHDHR"
-          break
-
+          cmd = "updateFileHDHR";
+          break;
       }
 
-      data["files"] = {}
-      data["files"][dataType] = {}
-      data["files"][dataType][id] = input
-      
-      break
+      data["files"] = {};
+      data["files"][dataType] = {};
+      data["files"][dataType][id] = input;
+
+      break;
 
     case "xmltv":
-
-      confirmMsg = "Delete this XMLTV file?"
+      confirmMsg = "Delete this XMLTV file?";
       switch (option) {
         // Popup: Save
-        case 0: 
-          cmd = "saveFilesXMLTV"
-          break
+        case 0:
+          cmd = "saveFilesXMLTV";
+          break;
 
         // Popup: Update
         case 1:
-          cmd = "updateFileXMLTV"
-          break
-
+          cmd = "updateFileXMLTV";
+          break;
       }
 
-      data["files"] = {}
-      data["files"][dataType] = {}
-      data["files"][dataType][id] = input
-      
-      break
+      data["files"] = {};
+      data["files"][dataType] = {};
+      data["files"][dataType][id] = input;
+
+      break;
 
     case "filter":
-
-      confirmMsg = "Delete this filter?"
-      cmd = "saveFilter"
-      data["filter"] = {}
-      data["filter"][id] = input
-      break
+      confirmMsg = "Delete this filter?";
+      cmd = "saveFilter";
+      data["filter"] = {};
+      data["filter"][id] = input;
+      break;
 
     default:
-      return
-
+      return;
   }
 
   if (remove == true) {
-    
     if (!confirm(confirmMsg)) {
-      showElement("popup", false)
-      return
+      showElement("popup", false);
+      return;
     }
-
   }
 
-  let server:Server = new Server(cmd)
-  server.request(data)
-
+  let server: Server = new Server(cmd);
+  server.request(data);
 }
 
-function donePopupData(dataType:string, idsStr:string) {
+function donePopupData(dataType: string, idsStr: string) {
+  let ids: string[] = idsStr.split(",");
+  let div = document.getElementById("popup-custom");
+  let inputs = div.getElementsByClassName("changed");
 
-  let ids:string[] = idsStr.split(',');
-  let div = document.getElementById("popup-custom")
-  let inputs = div.getElementsByClassName("changed")
-
-  ids.forEach(id => {
+  ids.forEach((id) => {
     let input: Object;
-    input = SERVER["xepg"]["epgMapping"][id]
+    input = SERVER["xepg"]["epgMapping"][id];
 
     for (let i = 0; i < inputs.length; i++) {
-
-      let name:string
-      let value:any
+      let name: string;
+      let value: any;
 
       switch (inputs[i].tagName) {
-        
         case "INPUT":
           switch ((inputs[i] as HTMLInputElement).type) {
-            case "checkbox": 
-              name = (inputs[i] as HTMLInputElement).name
-              value = (inputs[i] as HTMLInputElement).checked
-              input[name] = value
-              break
-    
-            case "text": 
-              name = (inputs[i] as HTMLInputElement).name
-              value = (inputs[i] as HTMLInputElement).value
-              input[name] = value
-            break
-      
-          }            
-      
-          break
+            case "checkbox":
+              name = (inputs[i] as HTMLInputElement).name;
+              value = (inputs[i] as HTMLInputElement).checked;
+              input[name] = value;
+              break;
+
+            case "text":
+              name = (inputs[i] as HTMLInputElement).name;
+              value = (inputs[i] as HTMLInputElement).value;
+              input[name] = value;
+              break;
+          }
+
+          break;
 
         case "SELECT":
-          name = (inputs[i] as HTMLSelectElement).name
-          value = (inputs[i] as HTMLSelectElement).value
-          input[name] = value
-          break
-
+          name = (inputs[i] as HTMLSelectElement).name;
+          value = (inputs[i] as HTMLSelectElement).value;
+          input[name] = value;
+          break;
       }
-        
-      switch (name) {
-        
 
+      switch (name) {
         case "tvg-logo":
           //(document.getElementById(id).childNodes[2].firstChild as HTMLElement).setAttribute("src", value)
-          break
+          break;
 
         case "x-name":
-          (document.getElementById(id).childNodes[3].firstChild as HTMLElement).innerHTML = value
-          break
+          (
+            document.getElementById(id).childNodes[3].firstChild as HTMLElement
+          ).innerHTML = value;
+          break;
 
         case "x-category":
-          (document.getElementById(id).childNodes[3].firstChild as HTMLElement).className = value
-          break
+          (
+            document.getElementById(id).childNodes[3].firstChild as HTMLElement
+          ).className = value;
+          break;
 
         case "update-channel-name-regex":
-          (document.getElementById(id).childNodes[4].firstChild as HTMLElement).innerHTML = value
-          break
+          (
+            document.getElementById(id).childNodes[4].firstChild as HTMLElement
+          ).innerHTML = value;
+          break;
 
         case "x-group-title":
-          (document.getElementById(id).childNodes[6].firstChild as HTMLElement).innerHTML = value
-          break
+          (
+            document.getElementById(id).childNodes[6].firstChild as HTMLElement
+          ).innerHTML = value;
+          break;
 
         case "x-xmltv-file":
           if (value != "xTeVe Dummy" && value != "-") {
-            value = getValueFromProviderFile(value, "xmltv", "name")
+            value = getValueFromProviderFile(value, "xmltv", "name");
           }
 
           if (value == "-") {
-            input["x-active"] = false
+            input["x-active"] = false;
           }
 
-          (document.getElementById(id).childNodes[7].firstChild as HTMLElement).innerHTML = value
-          break
+          (
+            document.getElementById(id).childNodes[7].firstChild as HTMLElement
+          ).innerHTML = value;
+          break;
 
         case "x-mapping":
           if (value == "-") {
-            input["x-active"] = false
+            input["x-active"] = false;
           }
 
-          (document.getElementById(id).childNodes[8].firstChild as HTMLElement).innerHTML = value
-   
-          break
+          (
+            document.getElementById(id).childNodes[8].firstChild as HTMLElement
+          ).innerHTML = value;
+
+          break;
 
         case "x-timeshift":
-          (document.getElementById(id).childNodes[9].firstChild as HTMLElement).innerHTML = value
-          break
+          (
+            document.getElementById(id).childNodes[9].firstChild as HTMLElement
+          ).innerHTML = value;
+          break;
 
-        default: 
-        
+        default:
       }
 
-      createSearchObj()
-      searchInMapping()
-
+      createSearchObj();
+      searchInMapping();
     }
 
     if (input["x-active"] == false) {
-      document.getElementById(id).className = "notActiveEPG"
+      document.getElementById(id).className = "notActiveEPG";
     } else {
-      document.getElementById(id).className = "activeEPG"
+      document.getElementById(id).className = "activeEPG";
     }
 
-    (document.getElementById(id).childNodes[2].firstChild as HTMLElement).setAttribute("src", input["tvg-logo"])
-    
-
+    (
+      document.getElementById(id).childNodes[2].firstChild as HTMLElement
+    ).setAttribute("src", input["tvg-logo"]);
   });
 
   showElement("popup", false);
 
-  return
+  return;
 }
 
-function showPreview(element:boolean) {
-
-  let div = document.getElementById("myStreamsBox")
+function showPreview(element: boolean) {
+  let div = document.getElementById("myStreamsBox");
   switch (element) {
-  
     case false:
-      div.className = "notVisible"
-      return
+      div.className = "notVisible";
+      return;
   }
 
-  let streams:string[] = ["activeStreams", "inactiveStreams"]
-   
-  streams.forEach(preview => {
+  let streams: string[] = ["activeStreams", "inactiveStreams"];
 
-    let table = document.getElementById(preview)
-    table.innerHTML = ""
-    let obj:string[] = SERVER["data"]["StreamPreviewUI"][preview]
-    
-    obj.forEach(channel => {
+  streams.forEach((preview) => {
+    let table = document.getElementById(preview);
+    table.innerHTML = "";
+    let obj: string[] = SERVER["data"]["StreamPreviewUI"][preview];
 
-      let tr = document.createElement("TR")
-      let tdKey = document.createElement("TD")
-      let tdVal = document.createElement("TD")
+    obj.forEach((channel) => {
+      let tr = document.createElement("TR");
+      let tdKey = document.createElement("TD");
+      let tdVal = document.createElement("TD");
 
-      tdKey.className = "tdKey"
-      tdVal.className = "tdVal"
+      tdKey.className = "tdKey";
+      tdVal.className = "tdVal";
 
       switch (preview) {
         case "activeStreams":
-          tdKey.innerText = "Channel: (+)"
+          tdKey.innerText = "Channel: (+)";
           break;
-      
+
         case "inactiveStreams":
-          tdKey.innerText = "Channel: (-)"
+          tdKey.innerText = "Channel: (-)";
           break;
       }
 
-      tdVal.innerText = channel
-      tr.appendChild(tdKey)
-      tr.appendChild(tdVal)
-      
-      table.appendChild(tr)
+      tdVal.innerText = channel;
+      tr.appendChild(tdKey);
+      tr.appendChild(tdVal);
 
+      table.appendChild(tr);
     });
-
   });
 
-  showElement("loading", false)
-  div.className = "visible"
+  showElement("loading", false);
+  div.className = "visible";
 
-  return
+  return;
 }

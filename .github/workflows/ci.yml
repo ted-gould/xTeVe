@@ -96,3 +96,16 @@ jobs:
           go-version: '1.24.1'
       - name: Run E2E test
         run: go run cmd/ci-test/main.go
+
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Use Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+      - name: Install dependencies
+        run: npm install
+      - name: Check formatting
+        run: npx prettier --check "**/*.{js,ts}"

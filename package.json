@@ -1,0 +1,28 @@
+{
+  "name": "app",
+  "version": "1.0.0",
+  "description": "<div align=\"center\" style=\"background-color: #111; padding: 100;\">     <a href=\"https://github.com/senexcrenshaw/xTeVe\"><img width=\"880\" height=\"200\" src=\"html/img/logo_b_880x200.jpg\" alt=\"xTeVe\" /></a> </div> <br>",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ted-gould/xTeVe.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/ted-gould/xTeVe/issues"
+  },
+  "homepage": "https://github.com/ted-gould/xTeVe#readme",
+  "devDependencies": {
+    "prettier": "^3.6.2",
+    "typescript": "^5.9.2"
+  }
+}
