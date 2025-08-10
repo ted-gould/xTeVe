@@ -1,5 +1,5 @@
 <div align="center" style="background-color: #111; padding: 100;">
-    <a href="https://github.com/senexcrenshaw/xTeVe"><img width="880" height="200" src="html/img/logo_b_880x200.jpg" alt="xTeVe" /></a>
+    <a href="https://github.com/ted-gould/xTeVe"><img width="880" height="200" src="html/img/logo_b_880x200.jpg" alt="xTeVe" /></a>
 </div>
 <br>
 
@@ -43,7 +43,7 @@ Documentation for setup and configuration is [here](https://github.com/xteve-pro
 
 ## Downloads
 
-* See [releases page](https://github.com/senexcrenshaw/xTeVe/releases)
+* See [releases page](https://github.com/ted-gould/xTeVe/releases)
 
 ---
 
@@ -103,84 +103,39 @@ When the branch is changed, an update is only performed if there is a new versio
 
 --- -->
 
-## Build from source code [Go / Golang]
+## Build from source code
 
 ### Requirements
 
-* [Go](https://golang.org) (go1.18 or newer)
+* [Go](https://go.dev/dl/) (1.23 or newer)
+* [Node.js](https://nodejs.org/en/download/) (which includes `npm`)
 
 ### Dependencies
 
-* [avfs](https://github.com/avfs/avfs)
-* [go-ssdp](https://github.com/koron/go-ssdp)
-* [lo](https://github.com/samber/lo)
-* [osext](https://github.com/kardianos/osext)
-* [testify](https://github.com/stretchr/testify)
-* [websocket](https://github.com/gorilla/websocket)
+This project uses Go modules and NPM for dependency management.
+
+* Go dependencies are listed in the `go.mod` file and can be downloaded by running `go mod tidy`.
+* Node.js dependencies are listed in the `package.json` file and can be installed by running `npm install`.
 
 ### Build
 
-#### 1. Download source code
+The following steps will create the `xteve`, `xteve-inactive`, and `xteve-status` binaries in a new `bin/` directory.
 
-```sh
-git clone https://github.com/senexcrenshaw/xTeVe.git
-```
+1. **Clone the repository:**
+   ```sh
+   git clone https://github.com/ted-gould/xTeVe.git
+   cd xTeVe
+   ```
 
-#### 2. Install dependencies
+2. **Install JavaScript dependencies:**
+   ```sh
+   npm install
+   ```
 
-```sh
-go mod tidy
-```
-
-Or
-
-```sh
-go get github.com/avfs/avfs@latest 
-go get github.com/gorilla/websocket
-go get github.com/kardianos/osext
-go get github.com/koron/go-ssdp
-go get github.com/samber/lo
-go get github.com/stretchr/testify
-```
-
-#### 3. Update dependencies (optional)
-
-```sh
-go get -u ./...
-```
-
-#### 5. Update web files (optional)
-
-If TypeScript files were changed, run:
-
-```sh
-tsc -p ./ts/tsconfig.json
-```
-
-Then, to embed updated JavaScript files into the source code (src/webUI.go), run it in development mode at least once:
-
-```sh
-go build xteve.go
-xteve -dev
-```
-
-:exclamation: To not to get CreateFile error, do not forget to switch your binary to "regular" mode after runnning with `-dev` flag:
-
-`xteve -branch main` or `xteve -branch beta`
-
-#### 4. Build xTeVe
-
-```sh
-go build xteve.go
-```
-
-Or use convenient cross-compile tool. To build binaries for every OS / architecture pair into `./xteve-build/` folder:
-
-```sh
-go get github.com/mitchellh/gox
-go install github.com/mitchellh/gox
-gox -output="./xteve-build/{{.Dir}}_{{.OS}}_{{.Arch}}" ./
-```
+3. **Run the build script:**
+   ```sh
+   sh build.sh
+   ```
 
 ---
 
