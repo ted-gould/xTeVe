@@ -96,7 +96,7 @@ settingsCategory.push(
 settingsCategory.push(
   new SettingsCategoryItem(
     "{{.settings.category.streaming}}",
-    "buffer,udpxy,buffer.size.kb,storeBufferInRAM,buffer.timeout,user.agent,ffmpeg.path,ffmpeg.options,vlc.path,vlc.options",
+    "buffer,udpxy,buffer.size.kb,storeBufferInRAM,buffer.timeout,user.agent",
   ),
 );
 settingsCategory.push(

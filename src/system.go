@@ -100,7 +100,6 @@ func loadSettings() (settings SettingsStruct, err error) {
 	defaults["disallowURLDuplicates"] = false
 	defaults["enableMappedChannels"] = false
 	defaults["epgSource"] = "PMS"
-	defaults["ffmpeg.options"] = System.FFmpeg.DefaultOptions
 	defaults["files.update"] = true
 	defaults["files"] = dataMap
 	defaults["filter"] = make(map[string]any)
@@ -121,7 +120,6 @@ func loadSettings() (settings SettingsStruct, err error) {
 	defaults["user.agent"] = System.Name
 	defaults["uuid"] = createUUID()
 	defaults["version"] = System.DBVersion
-	defaults["vlc.options"] = System.VLC.DefaultOptions
 	defaults["xepg.replace.missing.images"] = true
 	defaults["xteveAutoUpdate"] = true
 	defaults["stream.retry.enabled"] = true
@@ -145,29 +143,12 @@ func loadSettings() (settings SettingsStruct, err error) {
 		settings.Port = System.Flag.Port
 	}
 
-	if len(settings.FFmpegPath) == 0 {
-		settings.FFmpegPath = searchFileInOS("ffmpeg")
-	}
-
-	if len(settings.VLCPath) == 0 {
-		settings.VLCPath = searchFileInOS("cvlc")
-	}
-
 	// Initialze virutal filesystem for the Buffer
 	initBufferVFS(settings.StoreBufferInRAM)
 
 	settings.TempPath = getValidTempDir(settings.TempPath)
 
 	err = saveSettings(settings)
-
-	// Warning if FFmpeg was not found
-	if len(Settings.FFmpegPath) == 0 && Settings.Buffer == "ffmpeg" {
-		showWarning(2020)
-	}
-
-	if len(Settings.VLCPath) == 0 && Settings.Buffer == "vlc" {
-		showWarning(2021)
-	}
 	return
 }
 

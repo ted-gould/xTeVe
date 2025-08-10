@@ -13,7 +13,6 @@ import (
 	"log" // Added for log.Printf
 	"net"
 	"os"
-	"os/exec"
 	"os/user"
 	"path/filepath"
 	"runtime"
@@ -184,27 +183,6 @@ func getPlatformFile(filename string) (osFilePath string) {
 // Output Filenames from the File Path
 func getFilenameFromPath(path string) (file string) {
 	return filepath.Base(path)
-}
-
-// Searches for a File in the OS
-func searchFileInOS(file string) (path string) {
-	switch runtime.GOOS {
-	case "linux", "darwin", "freebsd":
-		var args = file
-		var cmd = exec.Command("which", strings.Split(args, " ")...)
-
-		out, err := cmd.CombinedOutput()
-		if err == nil {
-			var slice = strings.Split(strings.Replace(string(out), "\r\n", "\n", -1), "\n")
-
-			if len(slice) > 0 {
-				path = strings.Trim(slice[0], "\r\n")
-			}
-		}
-	default:
-		return
-	}
-	return
 }
 
 func removeChildItems(dir string) error {
