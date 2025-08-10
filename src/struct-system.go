@@ -276,6 +276,9 @@ type SettingsStruct struct {
 	Buffer                string   `json:"buffer"`
 	BufferSize            int      `json:"buffer.size.kb"`
 	BufferTimeout         float64  `json:"buffer.timeout"`
+	StreamRetryEnabled    bool     `json:"stream.retry.enabled"`
+	StreamMaxRetries      int      `json:"stream.max.retries"`
+	StreamRetryDelay      int      `json:"stream.retry.delay"`
 	CacheImages           bool     `json:"cache.images"`
 	ClearXMLTVCache       bool     `json:"clearXMLTVCache"`
 	DefaultMissingEPG     string   `json:"defaultMissingEPG"`
