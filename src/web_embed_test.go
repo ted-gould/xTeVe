@@ -83,8 +83,15 @@ func TestWebHandler(t *testing.T) {
 			assert.NotContains(t, actualContentType, "text/plain", "Content-Type for static asset '%s' should not be text/plain", testFile)
 		} else {
 			expectedContentType := getContentType(testFile)
-			// http.FileServer can add charset, so we check for a prefix
-			assert.True(t, strings.HasPrefix(actualContentType, expectedContentType), "for file '%s', expected content type '%s', got '%s'", testFile, expectedContentType, actualContentType)
+			if strings.HasSuffix(testFile, ".js") {
+				// The http.FileServer can return "text/javascript" which is also valid.
+				// We check for both possibilities.
+				mimeType := strings.Split(actualContentType, ";")[0]
+				assert.Contains(t, []string{"application/javascript", "text/javascript"}, mimeType, "for file '%s', unexpected content type", testFile)
+			} else {
+				// http.FileServer can add charset, so we check for a prefix
+				assert.True(t, strings.HasPrefix(actualContentType, expectedContentType), "for file '%s', expected content type '%s', got '%s'", testFile, expectedContentType, actualContentType)
+			}
 		}
 
 		// The body should not be empty
@@ -116,6 +123,30 @@ func TestWebUIAsHTTPFS(t *testing.T) {
 	assert.NoError(t, err, "should be able to open file from http.FS")
 	if err == nil {
 		file.Close()
+	}
+}
+
+func TestGeneratedJSFilesEmbedded(t *testing.T) {
+	// GIVEN
+	// A list of expected JavaScript files that should be generated and embedded.
+	expectedJSFiles := []string{
+		"html/js/authentication_ts.js",
+		"html/js/base_ts.js",
+		"html/js/configuration_ts.js",
+		"html/js/logs_ts.js",
+		"html/js/menu_ts.js",
+		"html/js/network_ts.js",
+		"html/js/settings_ts.js",
+	}
+
+	// WHEN
+	// We check if each file exists in the embedded FS.
+	for _, file := range expectedJSFiles {
+		// THEN
+		// The file should exist in the embedded FS. If it doesn't, it's likely
+		// that `go generate` was not run before `go test`.
+		_, err := webUI.ReadFile(file)
+		assert.NoError(t, err, "Generated JS file '%s' should be embedded. Did you run 'go generate'?", file)
 	}
 }
 

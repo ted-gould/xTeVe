@@ -15,12 +15,13 @@ jobs:
         uses: actions/setup-go@v3
         with:
           go-version: '1.24.1'
+      - name: Install Node.js and TypeScript
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y npm
+          sudo npm install -g typescript
       - name: Build project
-        run: go build ./...
-      # Add build steps here
-      # For example:
-      # - name: Build project
-      #   run: go build ./...
+        run: bash build.sh
 
   test:
     runs-on: ubuntu-latest
@@ -31,12 +32,15 @@ jobs:
         uses: actions/setup-go@v3
         with:
           go-version: '1.24.1'
+      - name: Install Node.js and TypeScript
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y npm
+          sudo npm install -g typescript
       - name: Run tests
-        run: go test ./...
-      # Add test steps here
-      # For example:
-      # - name: Run tests
-      #   run: go test ./...
+        run: |
+          (cd ts && sh compileJS.sh)
+          go test ./...
 
   lint:
     runs-on: ubuntu-latest
@@ -54,10 +58,6 @@ jobs:
         run: |
           export PATH=$PATH:$(go env GOPATH)/bin
           golangci-lint run
-      # Add linting steps here
-      # For example:
-      # - name: Lint code
-      #   run: golangci-lint run
 
   snap-test:
     runs-on: ubuntu-latest
@@ -65,6 +65,17 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: '1.24.1'
+      - name: Install Node.js and TypeScript
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y npm
+          sudo npm install -g typescript
+      - name: Build project for snap
+        run: bash build.sh
       - name: Install snapcraft and lxd
         run: |
           sudo apt-get update

@@ -12,4 +12,6 @@ src/html/video/stream-limit.bin
 .xteve/
 __debug_bin
 xteve_test_binary*
+src/html/js/
+bin/
 node_modules/
