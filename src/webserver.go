@@ -610,7 +610,11 @@ func Web(w http.ResponseWriter, r *http.Request) {
 	var lang = make(map[string]any)
 	var err error
 
-	var requestFile = strings.Replace(r.URL.Path, "/web", "html", -1)
+	var path = r.URL.Path
+	if path == "/web" {
+		path = "/web/"
+	}
+	var requestFile = strings.Replace(path, "/web", "html", -1)
 	var content string
 	var contentBytes []byte
 	var contentType, file string
