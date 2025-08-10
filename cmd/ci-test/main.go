@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -13,28 +12,6 @@ import (
 
 	"github.com/gorilla/websocket"
 )
-
-// Request and Response structs based on frontend code
-type WebSocketRequest struct {
-	Cmd  string      `json:"cmd"`
-	Data interface{} `json:"data,omitempty"`
-}
-
-type M3UFile struct {
-	Name     string `json:"name"`
-	URL      string `json:"url"`
-	Category string `json:"category,omitempty"`
-}
-
-type Filter struct {
-	Type        string `json:"type"`
-	Name        string `json:"name"`
-	Filter      string `json:"filter"`
-	Case        string `json:"case"`
-	Active      bool   `json:"active"`
-	Rule        string `json:"rule"`
-	Description string `json:"description"`
-}
 
 func main() {
 	// 1. Start the xteve server
