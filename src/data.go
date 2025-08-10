@@ -418,7 +418,7 @@ func saveFilter(request RequestStruct) (settings SettingsStruct, err error) {
 				Active:          true,
 				CaseSensitive:   false,
 				PreserveMapping: true,
-				StartingChannel: int(Settings.MappingFirstChannel),
+				StartingChannel: strconv.FormatFloat(Settings.MappingFirstChannel, 'f', -1, 64),
 			}
 			// Convert to map and merge with provided properties
 			newFilterMap := jsonToMap(mapToJSON(defaultFilter))
