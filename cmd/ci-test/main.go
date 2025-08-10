@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gorilla/websocket"
+	"github.comcom/gorilla/websocket"
 )
 
 // WebSocketResponse defines the structure of a response from the server.
@@ -121,8 +121,8 @@ func runTests() error {
 		},
 	}
 	invalidFilterRequest := map[string]interface{}{
-		"cmd":  "saveFilter",
-		"data": invalidFilterData,
+		"cmd":    "saveFilter",
+		"filter": invalidFilterData, // Correct key is "filter"
 	}
 
 	resp, err := sendRequest(conn, invalidFilterRequest)
@@ -145,7 +145,8 @@ func runTests() error {
 			"url":  "https://raw.githubusercontent.com/freearhey/iptv-usa/main/c-span.us.m3u",
 		},
 	}
-	m3uRequest := map[string]interface{}{"cmd": "saveFilesM3U", "data": m3uData}
+	// Correct key is "files" with a nested "m3u" map
+	m3uRequest := map[string]interface{}{"cmd": "saveFilesM3U", "files": map[string]interface{}{"m3u": m3uData}}
 	if _, err := sendRequest(conn, m3uRequest); err != nil {
 		return fmt.Errorf("failed to add M3U playlist: %w", err)
 	}
@@ -164,17 +165,17 @@ func runTests() error {
 			"type":            "group-title",
 			"preserveMapping": true,
 			"rule":            "",
-			"startingChannel": 1000,
+			"startingChannel": "1000",
 		},
 	}
-	validFilterRequest := map[string]interface{}{"cmd": "saveFilter", "data": validFilterData}
+	validFilterRequest := map[string]interface{}{"cmd": "saveFilter", "filter": validFilterData} // Correct key is "filter"
 	if _, err := sendRequest(conn, validFilterRequest); err != nil {
 		return fmt.Errorf("failed to add valid filter: %w", err)
 	}
 
 	// 5. Test: Verify the M3U output
 	fmt.Println("Verifying M3U output...")
-	updateRequest := map[string]interface{}{"cmd": "update.m3u"}
+	updateRequest := map[string]interface{}{"cmd": "updateFileM3U"} // Correct command is "updateFileM3U"
 	if _, err := sendRequest(conn, updateRequest); err != nil {
 		return fmt.Errorf("failed to send M3U update request: %w", err)
 	}
