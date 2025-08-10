@@ -306,10 +306,6 @@ func readByteFromFile(file string) (content []byte, err error) {
 			log.Printf("Error closing file %s after read: %v", file, closeErr)
 			return content, closeErr // Return the close error as the primary error now
 		}
-	} else {
-		// If ReadAll failed, we still rely on the deferred close.
-		// We could try to close explicitly and log, but it might mask the original ReadAll error.
-		// For now, let's stick to the deferred close for the error path of ReadAll.
 	}
 	return
 }

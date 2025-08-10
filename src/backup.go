@@ -51,9 +51,7 @@ func xTeVeAutoBackup() (err error) {
 		for i := 0; i < len(oldBackupFiles)-end; i++ { // Corrected loop condition
 			backupFileToDelete := System.Folder.Backup + oldBackupFiles[i]
 			if errRemove := os.RemoveAll(backupFileToDelete); errRemove != nil {
-				// Log the error, but continue trying to delete other old backups
-				// log.Printf("Error deleting old backup file %s: %v", backupFileToDelete, errRemove)
-				// Potentially, update 'err' to return a generic error indicating some cleanup failed
+				ShowError(errRemove, 0)
 			}
 			debug = fmt.Sprintf("Delete backup file:%s", oldBackupFiles[i])
 			showDebug(debug, 1)

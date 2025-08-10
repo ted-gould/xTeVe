@@ -19,7 +19,11 @@ func ShowSystemInfo() {
 		return
 	}
 
-	buildXEPG(false)
+	err = buildXEPG(false)
+	if err != nil {
+		ShowError(err, 0)
+		return
+	}
 
 	fmt.Println("OK")
 	println()

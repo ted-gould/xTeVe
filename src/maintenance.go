@@ -31,11 +31,17 @@ func maintenance() {
 					}
 
 					// Update Playlist and XMLTV Files
-					getProviderData("m3u", "")
-					getProviderData("hdhr", "")
+					if err := getProviderData("m3u", ""); err != nil {
+						ShowError(err, 0)
+					}
+					if err := getProviderData("hdhr", ""); err != nil {
+						ShowError(err, 0)
+					}
 
 					if Settings.EpgSource == "XEPG" {
-						getProviderData("xmltv", "")
+						if err := getProviderData("xmltv", ""); err != nil {
+							ShowError(err, 0)
+						}
 					}
 
 					// Create database for DVR
@@ -45,12 +51,16 @@ func maintenance() {
 					}
 
 					if !Settings.CacheImages && System.ImageCachingInProgress == 0 {
-						removeChildItems(System.Folder.ImagesCache)
+						if err := removeChildItems(System.Folder.ImagesCache); err != nil {
+							ShowError(err, 0)
+						}
 					}
 
 					// Create XEPG Files
 					Data.Cache.XMLTV = make(map[string]XMLTV)
-					buildXEPG(false)
+					if err := buildXEPG(false); err != nil {
+						ShowError(err, 0)
+					}
 				}
 			}
 		}

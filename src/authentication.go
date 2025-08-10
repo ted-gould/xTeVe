@@ -164,7 +164,7 @@ func checkAuthorizationLevel(token, level string) (err error) {
 			userData[level] = false
 			if writeErr := authentication.WriteUserData(userID, userData); writeErr != nil {
 				// Log the error, but the primary error (no authorization) stands.
-				// log.Printf("Failed to write default authorization level for user %s, level %s: %v", userID, level, writeErr)
+				ShowError(writeErr, 0)
 			}
 			err = errors.New("no authorization") // Ensure error is set if level was not found
 		}
@@ -172,7 +172,7 @@ func checkAuthorizationLevel(token, level string) (err error) {
 		// UserData is empty, this is an unusual case.
 		// Attempt to write, but the user definitely doesn't have authorization.
 		if writeErr := authentication.WriteUserData(userID, userData); writeErr != nil {
-			// log.Printf("Failed to write empty userData for user %s, level %s: %v", userID, level, writeErr)
+			ShowError(writeErr, 0)
 		}
 		err = errors.New("no authorization") // Ensure error is set if userData was empty
 	}
