@@ -3,7 +3,6 @@ package imgcache
 import (
 	"fmt"
 	"io"
-	// "io/ioutil" // Will be removed
 	"net/http"
 	"net/url"
 	"os"
