@@ -13,17 +13,8 @@ confinement: strict
 
 parts:
   xteve:
-    plugin: go
-    source: .
-    build-packages:
-      - npm
-    build-snaps:
-      - go
-    override-build: |
-      npm install -g typescript
-      make build
-      mkdir -p $CRAFT_PART_INSTALL/bin
-      cp bin/* $CRAFT_PART_INSTALL/bin/
+    plugin: dump
+    source: bin
     override-stage: |
       snapcraftctl stage
       snapcraftctl set-version `$SNAPCRAFT_STAGE/bin/xteve -version`
