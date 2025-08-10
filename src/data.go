@@ -255,8 +255,13 @@ func saveFiles(request RequestStruct, fileType string) (err error) {
 		if dataID == "-" {
 			// New Provider File
 			dataID = indicator + randomString(19)
-			data.(map[string]any)["new"] = true
-			filesMap[dataID] = data
+			dMap := data.(map[string]any)
+			dMap["new"] = true
+			if url, ok := dMap["url"]; ok {
+				dMap["file.source"] = url
+				delete(dMap, "url")
+			}
+			filesMap[dataID] = dMap
 		} else {
 			// Existing Provider File
 			for key, value := range data.(map[string]any) {
