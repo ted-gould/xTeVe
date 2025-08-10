@@ -3,7 +3,6 @@ package authentication
 import (
 	"encoding/json"
 	"errors"
-	// "io/ioutil" // Will be removed
 	"net/http"
 	"os"
 	"path/filepath"
