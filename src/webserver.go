@@ -622,7 +622,7 @@ func Web(w http.ResponseWriter, r *http.Request) {
 	var path = r.URL.Path
 
 	// Serve static assets using the file server
-	if !strings.HasSuffix(path, ".js") && !strings.HasSuffix(path, ".html") && path != "/web/" && path != "/web" {
+	if !strings.HasSuffix(path, ".html") && path != "/web/" && path != "/web" {
 		webHandler.ServeHTTP(w, r)
 		return
 	}
