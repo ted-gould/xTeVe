@@ -595,7 +595,7 @@ func WS(w http.ResponseWriter, r *http.Request) {
 		response.Settings = Settings
 	}
 
-	// response = setDefaultResponseData(response, true)
+	response = setDefaultResponseData(response, true)
 	if System.ConfigurationWizard {
 		response.ConfigurationWizard = System.ConfigurationWizard
 	}
