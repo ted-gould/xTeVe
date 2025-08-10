@@ -954,7 +954,7 @@ func API(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 	case "update.xepg":
-		buildXEPG(false)
+		err = buildXEPG(false)
 	default:
 		err = errors.New(getErrMsg(5000))
 	}

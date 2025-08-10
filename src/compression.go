@@ -97,9 +97,7 @@ func extractZIP(archive, target string) (err error) {
 		path := filepath.Join(target, file.Name)
 		if file.FileInfo().IsDir() {
 			if err := os.MkdirAll(path, file.Mode()); err != nil {
-				// Log the error and continue with other files/dirs
-				// log.Printf("Error creating directory %s during ZIP extraction: %v", path, err)
-				// Depending on desired strictness, could accumulate errors and return at the end
+				ShowError(err, 0)
 			}
 			continue
 		}

@@ -208,7 +208,9 @@ func getProviderData(fileType, fileID string) (err error) {
 			Settings.Files.XMLTV = dataMap
 			delete(Data.Cache.XMLTV, System.Folder.Data+dataID+fileExtension)
 		}
-		saveSettings(Settings)
+		if err := saveSettings(Settings); err != nil {
+			ShowError(err, 0)
+		}
 	Done:
 	}
 	return
