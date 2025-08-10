@@ -53,9 +53,6 @@ func Init() (err error) {
 	System.PlexChannelLimit = 480
 	System.Compatibility = "1.4.4"
 
-	// FFmpeg Default Settings
-	System.FFmpeg.DefaultOptions = "-hide_banner -err_detect ignore_err -reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 20 -loglevel error -i [URL] -c copy -f mpegts pipe:1"
-	System.VLC.DefaultOptions = "-I dummy [URL] --sout #std{mux=ts,access=file,dst=-}"
 
 	// Default Log Entries, which will later be overwritten by those from settings.json. Needed so that the first entries are also displayed in the Log (webUI are displayed)
 	Settings.LogEntriesRAM = 500

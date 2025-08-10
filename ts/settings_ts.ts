@@ -152,82 +152,6 @@ class SettingsCategory {
         setting.appendChild(tdRight);
         break;
 
-      case "ffmpeg.path":
-        var tdLeft = document.createElement("TD");
-        tdLeft.innerHTML = "{{.settings.ffmpegPath.title}}" + ":";
-
-        var tdRight = document.createElement("TD");
-        var input = content.createInput("text", "ffmpeg.path", data);
-        input.setAttribute(
-          "placeholder",
-          "{{.settings.ffmpegPath.placeholder}}",
-        );
-        input.setAttribute(
-          "onchange",
-          "javascript: this.className = 'changed'",
-        );
-        tdRight.appendChild(input);
-
-        setting.appendChild(tdLeft);
-        setting.appendChild(tdRight);
-        break;
-
-      case "ffmpeg.options":
-        var tdLeft = document.createElement("TD");
-        tdLeft.innerHTML = "{{.settings.ffmpegOptions.title}}" + ":";
-
-        var tdRight = document.createElement("TD");
-        var input = content.createInput("text", "ffmpeg.options", data);
-        input.setAttribute(
-          "placeholder",
-          "{{.settings.ffmpegOptions.placeholder}}",
-        );
-        input.setAttribute(
-          "onchange",
-          "javascript: this.className = 'changed'",
-        );
-        tdRight.appendChild(input);
-
-        setting.appendChild(tdLeft);
-        setting.appendChild(tdRight);
-        break;
-
-      case "vlc.path":
-        var tdLeft = document.createElement("TD");
-        tdLeft.innerHTML = "{{.settings.vlcPath.title}}" + ":";
-
-        var tdRight = document.createElement("TD");
-        var input = content.createInput("text", "vlc.path", data);
-        input.setAttribute("placeholder", "{{.settings.vlcPath.placeholder}}");
-        input.setAttribute(
-          "onchange",
-          "javascript: this.className = 'changed'",
-        );
-        tdRight.appendChild(input);
-
-        setting.appendChild(tdLeft);
-        setting.appendChild(tdRight);
-        break;
-
-      case "vlc.options":
-        var tdLeft = document.createElement("TD");
-        tdLeft.innerHTML = "{{.settings.vlcOptions.title}}" + ":";
-
-        var tdRight = document.createElement("TD");
-        var input = content.createInput("text", "vlc.options", data);
-        input.setAttribute(
-          "placeholder",
-          "{{.settings.vlcOptions.placeholder}}",
-        );
-        input.setAttribute(
-          "onchange",
-          "javascript: this.className = 'changed'",
-        );
-        tdRight.appendChild(input);
-
-        setting.appendChild(tdLeft);
-        setting.appendChild(tdRight);
-        break;
 
       // Checkboxes
       case "tlsMode":
@@ -780,21 +704,6 @@ class SettingsCategory {
         text = "{{.settings.userAgent.description}}";
         break;
 
-      case "ffmpeg.path":
-        text = "{{.settings.ffmpegPath.description}}";
-        break;
-
-      case "ffmpeg.options":
-        text = "{{.settings.ffmpegOptions.description}}";
-        break;
-
-      case "vlc.path":
-        text = "{{.settings.vlcPath.description}}";
-        break;
-
-      case "vlc.options":
-        text = "{{.settings.vlcOptions.description}}";
-        break;
 
       case "epgSource":
         text = "{{.settings.epgSource.description}}";
@@ -888,10 +797,6 @@ settingsCategory.push(
     "buffer,buffer.size.kb,storeBufferInRAM,buffer.timeout,stream.retry.enabled,stream.max.retries,stream.retry.delay,user.agent,udpxy",
   ),
 );
-settingsCategory.push(
-  new SettingsCategoryItem("FFmpeg", "ffmpeg.path,ffmpeg.options"),
-);
-settingsCategory.push(new SettingsCategoryItem("VLC", "vlc.path,vlc.options"));
 settingsCategory.push(
   new SettingsCategoryItem(
     "{{.settings.backup.title}}",
