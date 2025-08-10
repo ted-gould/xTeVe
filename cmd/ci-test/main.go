@@ -168,15 +168,14 @@ func runTests() error {
 	validFilterData := map[string]interface{}{
 		"0": map[string]interface{}{
 			"active":          true,
-			"caseSensitive":   true,
+			"caseSensitive":   false,
 			"description":     "Filter out CSPAN 2",
-			"exclude":         "",
-			"filter":          "CSPAN 2",
+			"exclude":         "CSPAN 2",
+			"filter":          "News",
 			"include":         "",
-			"name":            "CSPAN2-Filter",
+			"name":            "CSPAN-Filter",
 			"type":            "group-title",
 			"preserveMapping": true,
-			"rule":            "",
 			"startingChannel": "1000",
 		},
 	}
