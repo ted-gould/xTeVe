@@ -470,6 +470,9 @@ func connectWithRetry(client *http.Client, req *http.Request) (*http.Response, e
 		resp, err = client.Do(req)
 
 		if err != nil {
+			if resp != nil {
+				debugResponse(resp)
+			}
 			if Settings.StreamRetryEnabled && retries < Settings.StreamMaxRetries {
 				retries++
 				showInfo(fmt.Sprintf("Stream Error (%s). Retry %d/%d in %d milliseconds.", err.Error(), retries, Settings.StreamMaxRetries, Settings.StreamRetryDelay))
