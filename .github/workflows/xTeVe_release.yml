@@ -36,7 +36,7 @@ jobs:
     - name: Set BUILD_TIME env
       run: echo BUILD_TIME=$(date -u +%Y%m%d-%H%M) >> ${GITHUB_ENV}
 
-    - uses: wangyoucao577/go-release-action@v1.30
+    - uses: wangyoucao577/go-release-action@v1.53
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
         goos: ${{ matrix.goos }}
