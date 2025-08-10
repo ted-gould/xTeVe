@@ -82,7 +82,9 @@ func TestRunLogic_InvalidJSONError(t *testing.T) {
 func TestRunLogic_TunerInactive(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		response := src.APIResponseStruct{TunerActive: 0}
-		json.NewEncoder(w).Encode(response)
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			t.Fatalf("Failed to encode response: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -109,7 +111,9 @@ func TestRunLogic_TunerInactive(t *testing.T) {
 func TestRunLogic_TunerActive(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		response := src.APIResponseStruct{TunerActive: 1}
-		json.NewEncoder(w).Encode(response)
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			t.Fatalf("Failed to encode response: %v", err)
+		}
 	}))
 	defer server.Close()
 

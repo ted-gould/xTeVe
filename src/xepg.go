@@ -35,7 +35,7 @@ func checkXMLCompatibility(id string, body []byte) (err error) {
 	compatibility["xmltv.channels"] = len(xmltv.Channel)
 	compatibility["xmltv.programs"] = len(xmltv.Program)
 
-	setProviderCompatibility(id, "xmltv", compatibility)
+	err = setProviderCompatibility(id, "xmltv", compatibility)
 	return
 }
 
@@ -82,8 +82,12 @@ func buildXEPG(background bool) error { // Added error return type
 						Data.Cache.Images.Image.Caching()
 						Data.Cache.Images.Image.Remove()
 						showInfo("Image Caching:Done")
-						createXMLTVFile()
-						createM3UFile()
+						if err := createXMLTVFile(); err != nil {
+							ShowError(err, 0)
+						}
+						if err := createM3UFile(); err != nil {
+							ShowError(err, 0)
+						}
 						System.ImageCachingInProgress = 0
 					}()
 				}
@@ -144,12 +148,12 @@ func buildXEPG(background bool) error { // Added error return type
 		// getLineup() // Assuming getLineup() modifies globals and doesn't return error, or handles its own.
 		// If getLineup can fail and that failure should be propagated, it needs to return error.
 		// For now, assume it matches original behavior.
-		getLineup()
+		if _, err := getLineup(); err != nil {
+			ShowError(err, 0)
+		}
 		System.ScanInProgress = 0
 		return nil
 	}
-	// Fallback, though all paths should be covered.
-	return nil
 }
 
 // Create Mapping Menu for the XMLTV Files
@@ -766,7 +770,10 @@ func createXMLTVFile() (err error) {
 
 	var content, _ = xml.MarshalIndent(xepgXML, "  ", "    ")
 	var xmlOutput = []byte(xml.Header + string(content))
-	writeByteToFile(System.File.XML, xmlOutput)
+	err = writeByteToFile(System.File.XML, xmlOutput)
+	if err != nil {
+		return
+	}
 
 	showInfo("XEPG:" + fmt.Sprintf("Compress XMLTV file (%s)", System.Compressed.GZxml))
 	err = compressGZIP(&xmlOutput, System.Compressed.GZxml) // Original err is shadowed here, this is fine.

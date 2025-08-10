@@ -110,10 +110,17 @@ func Index(w http.ResponseWriter, r *http.Request) {
 
 	switch path {
 	case "/favicon.ico":
-		if value, ok := webUI["html"+path].(string); ok {
-			response = []byte(GetHTMLString(value))
-			w.Header().Set("Content-Type", "image/x-icon")
+		response, err = webUI.ReadFile("favicon.ico")
+		if err != nil {
+			httpStatusError(w, r, 404)
+			return
 		}
+		w.Header().Set("Content-Type", "image/x-icon")
+		w.WriteHeader(200)
+		if _, writeErr := w.Write(response); writeErr != nil {
+			log.Printf("Error writing response in Index handler: %v", writeErr)
+		}
+		return
 	case "/discover.json":
 		response, err = getDiscover()
 		w.Header().Set("Content-Type", "application/json")
@@ -353,252 +360,248 @@ func WS(w http.ResponseWriter, r *http.Request) {
 
 	setGlobalDomain(r.Host)
 
-	for {
-		select {
-		case response.Alert = <-webAlerts:
-			//
-		default:
-			//
+	select {
+	case response.Alert = <-webAlerts:
+	//
+	default:
+		//
+	}
+
+	err = conn.ReadJSON(&request)
+
+	if err != nil {
+		return
+	}
+
+	if !System.ConfigurationWizard {
+		switch Settings.AuthenticationWEB {
+		// Token Authentication
+		case true:
+			var token string
+			tokens, ok := r.URL.Query()["Token"]
+
+			if !ok || len(tokens[0]) < 1 {
+				token = "-"
+			} else {
+				token = tokens[0]
+			}
+
+			newToken, err = tokenAuthentication(token)
+			if err != nil {
+				response.Status = false
+				response.Reload = true
+				response.Error = err.Error()
+				request.Cmd = "-"
+
+				if errWrite := conn.WriteJSON(response); errWrite != nil {
+					log.Printf("Error writing JSON response (token auth failed): %v", errWrite)
+					// ShowError(errWrite, 1102) // Original logging
+					// If we can't even write the error message, best to close connection.
+					return // Return from the handler for this client
+				}
+				return // Successfully wrote error, now return
+			}
+			response.Token = newToken
+			response.Users, _ = authentication.GetAllUserData()
 		}
+	}
 
-		err = conn.ReadJSON(&request)
-
-		if err != nil {
-			return
-		}
-
-		if !System.ConfigurationWizard {
-			switch Settings.AuthenticationWEB {
-			// Token Authentication
-			case true:
-				var token string
-				tokens, ok := r.URL.Query()["Token"]
-
-				if !ok || len(tokens[0]) < 1 {
-					token = "-"
-				} else {
-					token = tokens[0]
-				}
-
-				newToken, err = tokenAuthentication(token)
-				if err != nil {
-					response.Status = false
-					response.Reload = true
-					response.Error = err.Error()
-					request.Cmd = "-"
-
-					if errWrite := conn.WriteJSON(response); errWrite != nil {
-						log.Printf("Error writing JSON response (token auth failed): %v", errWrite)
-						// ShowError(errWrite, 1102) // Original logging
-						// If we can't even write the error message, best to close connection.
-						return // Return from the handler for this client
-					}
-					return // Successfully wrote error, now return
-				}
-				response.Token = newToken
-				response.Users, _ = authentication.GetAllUserData()
-			}
-		}
-
-		switch request.Cmd {
-		// Read Data
-		case "getServerConfig":
-			// response.Config = Settings
-		case "updateLog":
-			response = setDefaultResponseData(response, false)
-			if errWrite := conn.WriteJSON(response); errWrite != nil {
-				log.Printf("Error writing JSON response (updateLog): %v", errWrite)
-				// ShowError(errWrite, 1022) // Original logging
-				return // Return from the handler for this client
-			}
-			return
-		case "loadFiles":
-			// response.Response = Settings.Files
-
-		// Save Data
-		case "saveSettings":
-			var authenticationUpdate = Settings.AuthenticationWEB
-			var previousTLSMode = Settings.TLSMode
-			var previousHostIP = Settings.HostIP
-			var previousHostName = Settings.HostName
-			var previousStoreBufferInRAM = Settings.StoreBufferInRAM
-			var previousClearXMLTVCache = Settings.ClearXMLTVCache
-
-			response.Settings, err = updateServerSettings(request)
-			if err == nil {
-				response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "settings"))
-
-				if Settings.AuthenticationWEB && !authenticationUpdate {
-					response.Reload = true
-				}
-
-				if Settings.TLSMode != previousTLSMode {
-					showInfo("Web server:" + "Toggling TLS mode")
-					reinitialize()
-					response.OpenLink = System.URLBase + "/web/"
-					restartWebserver <- true
-				}
-
-				if Settings.HostIP != previousHostIP {
-					showInfo("Web server:" + fmt.Sprintf("Changing host IP to %s", Settings.HostIP))
-					reinitialize()
-					response.OpenLink = System.URLBase + "/web/"
-					restartWebserver <- true
-				}
-
-				if Settings.HostName != previousHostName {
-					Settings.HostIP = previousHostName
-					showInfo("Web server:" + fmt.Sprintf("Changing host name to %s", Settings.HostName))
-					reinitialize()
-					response.OpenLink = System.URLBase + "/web/"
-					restartWebserver <- true
-				}
-
-				if Settings.StoreBufferInRAM != previousStoreBufferInRAM {
-					initBufferVFS(Settings.StoreBufferInRAM)
-				}
-
-				if Settings.ClearXMLTVCache && !previousClearXMLTVCache {
-					clearXMLTVCache()
-				}
-			}
-		case "saveFilesM3U":
-			err = saveFiles(request, "m3u")
-			if err == nil {
-				response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "playlist"))
-			}
-		case "updateFileM3U":
-			err = updateFile(request, "m3u")
-			if err == nil {
-				response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "playlist"))
-			}
-		case "saveFilesHDHR":
-			err = saveFiles(request, "hdhr")
-			if err == nil {
-				response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "playlist"))
-			}
-		case "updateFileHDHR":
-			err = updateFile(request, "hdhr")
-			if err == nil {
-				response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "playlist"))
-			}
-		case "saveFilesXMLTV":
-			err = saveFiles(request, "xmltv")
-			if err == nil {
-				response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "xmltv"))
-			}
-		case "updateFileXMLTV":
-			err = updateFile(request, "xmltv")
-			if err == nil {
-				response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "xmltv"))
-			}
-		case "saveFilter":
-			response.Settings, err = saveFilter(request)
-			if err == nil {
-				response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "filter"))
-			}
-		case "saveEpgMapping":
-			err = saveXEpgMapping(request)
-		case "saveUserData":
-			err = saveUserData(request)
-			if err == nil {
-				response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "users"))
-			}
-		case "saveNewUser":
-			err = saveNewUser(request)
-			if err == nil {
-				response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "users"))
-			}
-		case "resetLogs":
-			WebScreenLog.Log = make([]string, 0)
-			WebScreenLog.Errors = 0
-			WebScreenLog.Warnings = 0
-			response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "log"))
-		case "xteveBackup":
-			file, errNew := xteveBackup()
-			err = errNew
-			if err == nil {
-				response.OpenLink = fmt.Sprintf("%s://%s/download/%s", System.ServerProtocol.WEB, System.Domain, file)
-			}
-		case "xteveRestore":
-			WebScreenLog.Log = make([]string, 0)
-			WebScreenLog.Errors = 0
-			WebScreenLog.Warnings = 0
-
-			if len(request.Base64) > 0 {
-				newWebURL, err := xteveRestoreFromWeb(request.Base64)
-				if err != nil {
-					ShowError(err, 000)
-					response.Alert = err.Error()
-				}
-
-				if err == nil {
-					if len(newWebURL) > 0 {
-						response.Alert = "Backup was successfully restored.\nThe port of the sTeVe URL has changed, you have to restart xTeVe.\nAfter a restart, xTeVe can be reached again at the following URL:\n" + newWebURL
-					} else {
-						response.Alert = "Backup was successfully restored."
-						response.Reload = true
-					}
-					showInfo("xTeVe:" + "Backup successfully restored.")
-				}
-			}
-		case "uploadLogo":
-			if len(request.Base64) > 0 {
-				response.LogoURL, err = uploadLogo(request.Base64, request.Filename)
-
-				if err == nil {
-					if errWrite := conn.WriteJSON(response); errWrite != nil {
-						log.Printf("Error writing JSON response (uploadLogo): %v", errWrite)
-						// ShowError(errWrite, 1022) // Original logging
-						return // Error writing this specific response, terminate for this client.
-					}
-					// Successfully wrote the logo response, so return from the handler.
-					return
-				}
-				// If err from uploadLogo was not nil, it will be handled by the generic error handling below.
-			}
-		case "saveWizard":
-			nextStep, errNew := saveWizard(request)
-
-			err = errNew
-			if err == nil {
-				if nextStep == 10 {
-					System.ConfigurationWizard = false
-					response.Reload = true
-				} else {
-					response.Wizard = nextStep
-				}
-			}
-		// case "wizardCompleted":
-		// 	System.ConfigurationWizard = false
-		// 	response.Reload = true
-		default:
-			fmt.Println("+ + + + + + + + + + +", request.Cmd)
-
-			var requestMap = make(map[string]any) // Debug
-			_ = requestMap
-			if System.Dev {
-				fmt.Println(mapToJSON(requestMap))
-			}
-		}
-
-		if err != nil {
-			response.Status = false
-			response.Error = err.Error()
-			response.Settings = Settings
-		}
-
-		response = setDefaultResponseData(response, true)
-		if System.ConfigurationWizard {
-			response.ConfigurationWizard = System.ConfigurationWizard
-		}
-
+	switch request.Cmd {
+	// Read Data
+	case "getServerConfig":
+		// response.Config = Settings
+	case "updateLog":
+		response = setDefaultResponseData(response, false)
 		if errWrite := conn.WriteJSON(response); errWrite != nil {
-			log.Printf("Error writing main JSON response in WS handler: %v", errWrite)
+			log.Printf("Error writing JSON response (updateLog): %v", errWrite)
 			// ShowError(errWrite, 1022) // Original logging
+			return // Return from the handler for this client
 		}
-		// Whether successful or not, the loop should break as per original logic.
-		break
+		return
+	case "loadFiles":
+		// response.Response = Settings.Files
+
+	// Save Data
+	case "saveSettings":
+		var authenticationUpdate = Settings.AuthenticationWEB
+		var previousTLSMode = Settings.TLSMode
+		var previousHostIP = Settings.HostIP
+		var previousHostName = Settings.HostName
+		var previousStoreBufferInRAM = Settings.StoreBufferInRAM
+		var previousClearXMLTVCache = Settings.ClearXMLTVCache
+
+		response.Settings, err = updateServerSettings(request)
+		if err == nil {
+			response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "settings"))
+
+			if Settings.AuthenticationWEB && !authenticationUpdate {
+				response.Reload = true
+			}
+
+			if Settings.TLSMode != previousTLSMode {
+				showInfo("Web server:" + "Toggling TLS mode")
+				reinitialize()
+				response.OpenLink = System.URLBase + "/web/"
+				restartWebserver <- true
+			}
+
+			if Settings.HostIP != previousHostIP {
+				showInfo("Web server:" + fmt.Sprintf("Changing host IP to %s", Settings.HostIP))
+				reinitialize()
+				response.OpenLink = System.URLBase + "/web/"
+				restartWebserver <- true
+			}
+
+			if Settings.HostName != previousHostName {
+				Settings.HostIP = previousHostName
+				showInfo("Web server:" + fmt.Sprintf("Changing host name to %s", Settings.HostName))
+				reinitialize()
+				response.OpenLink = System.URLBase + "/web/"
+				restartWebserver <- true
+			}
+
+			if Settings.StoreBufferInRAM != previousStoreBufferInRAM {
+				initBufferVFS(Settings.StoreBufferInRAM)
+			}
+
+			if Settings.ClearXMLTVCache && !previousClearXMLTVCache {
+				clearXMLTVCache()
+			}
+		}
+	case "saveFilesM3U":
+		err = saveFiles(request, "m3u")
+		if err == nil {
+			response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "playlist"))
+		}
+	case "updateFileM3U":
+		err = updateFile(request, "m3u")
+		if err == nil {
+			response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "playlist"))
+		}
+	case "saveFilesHDHR":
+		err = saveFiles(request, "hdhr")
+		if err == nil {
+			response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "playlist"))
+		}
+	case "updateFileHDHR":
+		err = updateFile(request, "hdhr")
+		if err == nil {
+			response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "playlist"))
+		}
+	case "saveFilesXMLTV":
+		err = saveFiles(request, "xmltv")
+		if err == nil {
+			response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "xmltv"))
+		}
+	case "updateFileXMLTV":
+		err = updateFile(request, "xmltv")
+		if err == nil {
+			response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "xmltv"))
+		}
+	case "saveFilter":
+		response.Settings, err = saveFilter(request)
+		if err == nil {
+			response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "filter"))
+		}
+	case "saveEpgMapping":
+		err = saveXEpgMapping(request)
+	case "saveUserData":
+		err = saveUserData(request)
+		if err == nil {
+			response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "users"))
+		}
+	case "saveNewUser":
+		err = saveNewUser(request)
+		if err == nil {
+			response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "users"))
+		}
+	case "resetLogs":
+		WebScreenLog.Log = make([]string, 0)
+		WebScreenLog.Errors = 0
+		WebScreenLog.Warnings = 0
+		response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "log"))
+	case "xteveBackup":
+		file, errNew := xteveBackup()
+		err = errNew
+		if err == nil {
+			response.OpenLink = fmt.Sprintf("%s://%s/download/%s", System.ServerProtocol.WEB, System.Domain, file)
+		}
+	case "xteveRestore":
+		WebScreenLog.Log = make([]string, 0)
+		WebScreenLog.Errors = 0
+		WebScreenLog.Warnings = 0
+
+		if len(request.Base64) > 0 {
+			newWebURL, err := xteveRestoreFromWeb(request.Base64)
+			if err != nil {
+				ShowError(err, 000)
+				response.Alert = err.Error()
+			}
+
+			if err == nil {
+				if len(newWebURL) > 0 {
+					response.Alert = "Backup was successfully restored.\nThe port of the sTeVe URL has changed, you have to restart xTeVe.\nAfter a restart, xTeVe can be reached again at the following URL:\n" + newWebURL
+				} else {
+					response.Alert = "Backup was successfully restored."
+					response.Reload = true
+				}
+				showInfo("xTeVe:" + "Backup successfully restored.")
+			}
+		}
+	case "uploadLogo":
+		if len(request.Base64) > 0 {
+			response.LogoURL, err = uploadLogo(request.Base64, request.Filename)
+
+			if err == nil {
+				if errWrite := conn.WriteJSON(response); errWrite != nil {
+					log.Printf("Error writing JSON response (uploadLogo): %v", errWrite)
+					// ShowError(errWrite, 1022) // Original logging
+					return // Error writing this specific response, terminate for this client.
+				}
+				// Successfully wrote the logo response, so return from the handler.
+				return
+			}
+			// If err from uploadLogo was not nil, it will be handled by the generic error handling below.
+		}
+	case "saveWizard":
+		nextStep, errNew := saveWizard(request)
+
+		err = errNew
+		if err == nil {
+			if nextStep == 10 {
+				System.ConfigurationWizard = false
+				response.Reload = true
+			} else {
+				response.Wizard = nextStep
+			}
+		}
+	// case "wizardCompleted":
+	// 	System.ConfigurationWizard = false
+	// 	response.Reload = true
+	default:
+		fmt.Println("+ + + + + + + + + + +", request.Cmd)
+
+		var requestMap = make(map[string]any) // Debug
+		_ = requestMap
+		if System.Dev {
+			fmt.Println(mapToJSON(requestMap))
+		}
+	}
+
+	if err != nil {
+		response.Status = false
+		response.Error = err.Error()
+		response.Settings = Settings
+	}
+
+	response = setDefaultResponseData(response, true)
+	if System.ConfigurationWizard {
+		response.ConfigurationWizard = System.ConfigurationWizard
+	}
+
+	if errWrite := conn.WriteJSON(response); errWrite != nil {
+		log.Printf("Error writing main JSON response in WS handler: %v", errWrite)
+		// ShowError(errWrite, 1022) // Original logging
 	}
 }
 
@@ -611,30 +614,43 @@ func Web(w http.ResponseWriter, r *http.Request) {
 	if path == "/web" {
 		path = "/web/"
 	}
-	var requestFile = "html" + strings.TrimPrefix(path, "/web")
-	var content, contentType, file string
+	var requestFile = strings.Replace(path, "/web", "html", -1)
+	var content string
+	var contentBytes []byte
+	var contentType, file string
 
 	var language LanguageUI
 
 	setGlobalDomain(r.Host)
 
+	// Load language file
+	var languageFile = fmt.Sprintf("lang/%s.json", Settings.Language)
 	if System.Dev {
-		lang, err = loadJSONFileToMap(fmt.Sprintf("html/lang/%s.json", Settings.Language))
+		lang, err = loadJSONFileToMap("src/html/" + languageFile)
 		if err != nil {
-			ShowError(err, 000)
+			ShowError(err, 0)
 		}
 	} else {
-		var languageFile = "html/lang/en.json"
-
-		if value, ok := webUI[languageFile].(string); ok {
-			content = GetHTMLString(value)
-			lang = jsonToMap(content)
+		contentBytes, err = webUI.ReadFile(languageFile)
+		if err != nil {
+			// Fallback to English if language file is not found
+			languageFile = "lang/en.json"
+			contentBytes, err = webUI.ReadFile(languageFile)
+			if err != nil {
+				ShowError(err, 0)
+				httpStatusError(w, r, 500)
+				return
+			}
+		}
+		err = json.Unmarshal(contentBytes, &lang)
+		if err != nil {
+			ShowError(err, 0)
 		}
 	}
 
 	err = json.Unmarshal([]byte(mapToJSON(lang)), &language)
 	if err != nil {
-		ShowError(err, 000)
+		ShowError(err, 0)
 		return
 	}
 
@@ -717,7 +733,7 @@ func Web(w http.ResponseWriter, r *http.Request) {
 
 			allUserData, err := authentication.GetAllUserData()
 			if err != nil {
-				ShowError(err, 000)
+				ShowError(err, 0)
 				httpStatusError(w, r, 403)
 				return
 			}
@@ -727,45 +743,34 @@ func Web(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		requestFile = file
+	}
 
-		if _, ok := webUI[requestFile]; ok {
-			//content = GetHTMLString(value.(string))
-			if contentType == "text/plain" {
-				w.Header().Set("Content-Disposition", "attachment; filename="+getFilenameFromPath(requestFile))
-			}
-		} else {
+	if System.Dev {
+		contentBytes, err = os.ReadFile("src/" + requestFile)
+		if err != nil {
+			httpStatusError(w, r, 404)
+			return
+		}
+	} else {
+		embeddedPath := strings.TrimPrefix(requestFile, "html/")
+		contentBytes, err = webUI.ReadFile(embeddedPath)
+		if err != nil {
 			httpStatusError(w, r, 404)
 			return
 		}
 	}
 
-	if value, ok := webUI[requestFile].(string); ok {
-		content = GetHTMLString(value)
-		contentType = getContentType(requestFile)
-
-		if contentType == "text/plain" {
-			w.Header().Set("Content-Disposition", "attachment; filename="+getFilenameFromPath(requestFile))
-		}
-	} else {
-		httpStatusError(w, r, 404)
-		return
-	}
-
 	contentType = getContentType(requestFile)
-
-	if System.Dev {
-		// Local web server Files are loaded, only for Development
-		content, _ = readStringFromFile(requestFile)
-	}
-
 	w.Header().Add("Content-Type", contentType)
-	w.WriteHeader(200)
 
 	if contentType == "text/html" || contentType == "application/javascript" {
+		content = string(contentBytes)
 		content = parseTemplate(content, lang)
+		contentBytes = []byte(content)
 	}
 
-	if _, writeErr := w.Write([]byte(content)); writeErr != nil {
+	w.WriteHeader(200)
+	if _, writeErr := w.Write(contentBytes); writeErr != nil {
 		log.Printf("Error writing response in Web handler: %v", writeErr)
 	}
 }
@@ -953,7 +958,7 @@ func API(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 	case "update.xepg":
-		buildXEPG(false)
+		err = buildXEPG(false)
 	default:
 		err = errors.New(getErrMsg(5000))
 	}
