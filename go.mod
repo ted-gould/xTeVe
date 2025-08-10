@@ -5,7 +5,7 @@ go 1.23.0
 toolchain go1.24.1
 
 require (
-	github.com/gorilla/websocket v1.5.0
+	github.com/gorilla/websocket v1.5.3
 	github.com/koron/go-ssdp v0.0.3
 	github.com/samber/lo v1.27.0
 	github.com/stretchr/testify v1.8.0
