@@ -1,0 +1,7 @@
+#EXTM3U
+#EXTINF:-1 tvg-id="CSPAN.us" tvg-name="C-SPAN" tvg-logo="https://i.imgur.com/SAyXl2E.png" group-title="News",C-SPAN
+http://example.com/cspan
+#EXTINF:-1 tvg-id="CSPAN2.us" tvg-name="C-SPAN 2" tvg-logo="https://i.imgur.com/E4I0OA9.png" group-title="News",C-SPAN 2
+http://example.com/cspan2
+#EXTINF:-1 tvg-id="CSPAN3.us" tvg-name="C-SPAN 3" tvg-logo="https://i.imgur.com/df90v1t.png" group-title="News",C-SPAN 3
+http://example.com/cspan3

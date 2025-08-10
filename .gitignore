@@ -10,3 +10,4 @@ html/js/
 /.idea/*
 .xteve/
 __debug_bin
+xteve_test_binary*
