@@ -130,7 +130,7 @@ jobs:
           go build -o xteve_test_binary xteve.go
           ./xteve_test_binary -port=34400 &
       - name: Run Playwright tests
-        run: npx playwright test --project=chromium
+        run: npx playwright test
 
   format:
     runs-on: ubuntu-latest
