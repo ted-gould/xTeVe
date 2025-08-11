@@ -503,7 +503,7 @@ func connectToStreamingServer(streamID int, playlistID string) {
 		var networkBandwidth = Settings.M3U8AdaptiveBandwidthMBPS * 1e+6
 		// Size of the Buffer
 		var bufferSize = Settings.BufferSize
-		var buffer = make([]byte, 1024*bufferSize*2)
+		var buffer = make([]byte, 1024*bufferSize)
 
 		var defaultSegment = func() {
 			var segment Segment
@@ -723,9 +723,10 @@ func connectToStreamingServer(streamID int, playlistID string) {
 			// Video Stream (TS)
 			case "video/mpeg", "video/mp4", "video/mp2t", "video/m2ts", "application/octet-stream", "binary/octet-stream", "application/mp2t", "video/x-matroska":
 				var fileSize int
+				var bytesWritten int
 
 				// Size of the Buffer
-				buffer = make([]byte, 1024*bufferSize*2)
+				buffer = make([]byte, 1024*bufferSize)
 				var tmpFileSize = 1024 * bufferSize * 1
 
 				debug = fmt.Sprintf("Buffer Size:%d KB [SERVER CONNECTION]", len(buffer)/1024)
@@ -758,13 +759,66 @@ func connectToStreamingServer(streamID int, playlistID string) {
 
 					n, err := resp.Body.Read(buffer)
 					if n > 0 {
-						if _, err := bufferFile.Write(buffer[:n]); err != nil {
-							ShowError(err, 0)
-							addErrorToStream(err)
-							bufferFile.Close()
-							return
+						bytesWritten = 0
+						for bytesWritten < n {
+							// Calculate how much to write in this chunk
+							writeSize := n - bytesWritten
+							if fileSize+writeSize > tmpFileSize {
+								writeSize = tmpFileSize - fileSize
+							}
+
+							if _, err := bufferFile.Write(buffer[bytesWritten : bytesWritten+writeSize]); err != nil {
+								ShowError(err, 0)
+								addErrorToStream(err)
+								bufferFile.Close()
+								return
+							}
+							fileSize += writeSize
+							bytesWritten += writeSize
+
+							// If the file is full, create a new one
+							if fileSize >= tmpFileSize {
+								Lock.Lock()
+
+								bandwidth.Stop = time.Now()
+								bandwidth.Size += fileSize
+
+								bandwidth.TimeDiff = bandwidth.Stop.Sub(bandwidth.Start).Seconds()
+
+								networkBandwidth = int(float64(bandwidth.Size) / bandwidth.TimeDiff * 1000)
+
+								stream.NetworkBandwidth = networkBandwidth
+
+								debug = fmt.Sprintf("Buffer Status:Done (%s)", tmpFile)
+								showDebug(debug, 2)
+
+								bufferFile.Close()
+
+								stream.Status = true
+								playlist.Streams[streamID] = stream
+								BufferInformation.Store(playlistID, playlist)
+								Lock.Unlock()
+
+								tmpSegment++
+
+								tmpFile = fmt.Sprintf("%s%d.ts", tmpFolder, tmpSegment)
+
+								if !clientConnection(stream) {
+									if err = bufferVFS.RemoveAll(stream.Folder); err != nil {
+										ShowError(err, 4005)
+									}
+									return
+								}
+
+								bufferFile, err = bufferVFS.Create(tmpFile)
+								if err != nil {
+									addErrorToStream(err)
+									return
+								}
+
+								fileSize = 0
+							}
 						}
-						fileSize += n
 					}
 
 					if err != nil {
@@ -787,49 +841,6 @@ func connectToStreamingServer(streamID int, playlistID string) {
 					if !clientConnection(stream) {
 						bufferFile.Close()
 						return
-					}
-
-					// Save the buffer to the Hard Disk
-					if fileSize >= tmpFileSize {
-						Lock.Lock()
-
-						bandwidth.Stop = time.Now()
-						bandwidth.Size += fileSize
-
-						bandwidth.TimeDiff = bandwidth.Stop.Sub(bandwidth.Start).Seconds()
-
-						networkBandwidth = int(float64(bandwidth.Size) / bandwidth.TimeDiff * 1000)
-
-						stream.NetworkBandwidth = networkBandwidth
-
-						debug = fmt.Sprintf("Buffer Status:Done (%s)", tmpFile)
-						showDebug(debug, 2)
-
-						bufferFile.Close()
-
-						stream.Status = true
-						playlist.Streams[streamID] = stream
-						BufferInformation.Store(playlistID, playlist)
-						Lock.Unlock()
-
-						tmpSegment++
-
-						tmpFile = fmt.Sprintf("%s%d.ts", tmpFolder, tmpSegment)
-
-						if !clientConnection(stream) {
-							if err = bufferVFS.RemoveAll(stream.Folder); err != nil {
-								ShowError(err, 4005)
-							}
-							return
-						}
-
-						bufferFile, err = bufferVFS.Create(tmpFile)
-						if err != nil {
-							addErrorToStream(err)
-							return
-						}
-
-						fileSize = 0
 					}
 				}
 				//--
