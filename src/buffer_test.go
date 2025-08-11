@@ -90,3 +90,47 @@ func TestConnectWithRetry(t *testing.T) {
 		}
 	})
 }
+
+func TestGetBufTmpFiles(t *testing.T) {
+	// Initialize the in-memory filesystem for the test
+	initBufferVFS(true)
+
+	// Setup a dummy stream and directory
+	stream := &ThisStream{
+		Folder:      "/tmp/stream1/",
+		OldSegments: []string{},
+	}
+	err := bufferVFS.MkdirAll(stream.Folder, 0755)
+	if err != nil {
+		t.Fatalf("Failed to create test directory: %v", err)
+	}
+	defer func() {
+		if err := bufferVFS.RemoveAll(stream.Folder); err != nil {
+			t.Logf("Error removing test directory %s: %v", stream.Folder, err)
+		}
+	}()
+
+	// Create dummy segment files
+	dummyFiles := []string{"1.ts", "2.ts", "3.ts"}
+	for _, fname := range dummyFiles {
+		file, err := bufferVFS.Create(stream.Folder + fname)
+		if err != nil {
+			t.Fatalf("Failed to create dummy file %s: %v", fname, err)
+		}
+		file.Close()
+	}
+
+	// Call the function to test
+	tmpFiles := getBufTmpFiles(stream)
+
+	// The function should return all available segment files.
+	if len(tmpFiles) != len(dummyFiles) {
+		t.Fatalf("Expected %d files, but got %d", len(dummyFiles), len(tmpFiles))
+	}
+
+	for i, f := range tmpFiles {
+		if f != dummyFiles[i] {
+			t.Errorf("Expected file %s at index %d, but got %s", dummyFiles[i], i, f)
+		}
+	}
+}

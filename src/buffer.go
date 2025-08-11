@@ -369,7 +369,6 @@ func getBufTmpFiles(stream *ThisStream) (tmpFiles []string) {
 			}
 
 			sort.Float64s(fileIDs)
-			fileIDs = fileIDs[:len(fileIDs)-1]
 
 			for _, file := range fileIDs {
 				var fileName = fmt.Sprintf("%d.ts", int64(file))
