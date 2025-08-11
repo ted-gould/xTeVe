@@ -15,7 +15,9 @@ func TestConnectWithRetry(t *testing.T) {
 				http.Redirect(w, r, "/target", http.StatusFound)
 			} else if r.URL.Path == "/target" {
 				w.WriteHeader(http.StatusOK)
-				w.Write([]byte("Hello, world!"))
+				if _, err := w.Write([]byte("Hello, world!")); err != nil {
+					t.Fatalf("w.Write failed: %v", err)
+				}
 			} else {
 				http.NotFound(w, r)
 			}
