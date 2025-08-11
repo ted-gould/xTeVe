@@ -32,7 +32,7 @@ test: ts-compile
 lint:
 	@echo "--- Running golangci-lint ---"
 	$(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-	$($(GO) env GOPATH)/bin/golangci-lint run
+	$(shell $(GO) env GOPATH)/bin/golangci-lint run
 
 e2e-test: build
 	@echo "--- Running E2E tests ---"
