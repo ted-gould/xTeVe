@@ -1,6 +1,7 @@
 package src
 
 import (
+	"io"
 	"mime"
 	"net/http"
 	"net/http/httptest"
@@ -52,4 +53,29 @@ func TestJSFileMimeTypeE2E(t *testing.T) {
 		actualContentType := resp.Header.Get("Content-Type")
 		assert.Equal(t, expectedContentType, actualContentType, "for file '%s', unexpected content type", jsFile)
 	}
+}
+
+func TestJSTemplate(t *testing.T) {
+	// GIVEN
+	// A new test server
+	server := httptest.NewServer(http.HandlerFunc(Web))
+	defer server.Close()
+
+	// WHEN
+	// We make a request to the test server for a JS file that contains a template
+	url := server.URL + "/web/js/settings_ts.js"
+	resp, err := http.Get(url)
+	assert.NoError(t, err, "Failed to get URL '%s'", url)
+	defer resp.Body.Close()
+
+	// THEN
+	// The response should be successful
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	// The response body should contain the templated string
+	bodyBytes, err := io.ReadAll(resp.Body)
+	assert.NoError(t, err)
+	bodyString := string(bodyBytes)
+	assert.NotContains(t, bodyString, "{{.settings.update.title}}")
+	assert.Contains(t, bodyString, "Schedule for updating (Playlist, XMLTV, Backup)")
 }
