@@ -104,7 +104,11 @@ func TestGetBufTmpFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create test directory: %v", err)
 	}
-	defer bufferVFS.RemoveAll(stream.Folder)
+	defer func() {
+		if err := bufferVFS.RemoveAll(stream.Folder); err != nil {
+			t.Logf("Error removing test directory %s: %v", stream.Folder, err)
+		}
+	}()
 
 	// Create dummy segment files
 	dummyFiles := []string{"1.ts", "2.ts", "3.ts"}
