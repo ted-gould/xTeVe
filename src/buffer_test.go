@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"strings"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -140,11 +140,16 @@ func TestGetBufTmpFiles(t *testing.T) {
 
 func TestConnectToStreamingServer_Buffering(t *testing.T) {
 	// 1. Setup mock server
-	content := "0123456789abcdef" // 16 bytes
+	// Create 10MB of random data
+	content := make([]byte, 10*1024*1024)
+	for i := range content {
+		content[i] = byte(i)
+	}
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "video/mp2t")
 		w.WriteHeader(http.StatusOK)
-		_, err := w.Write([]byte(content))
+		_, err := w.Write(content)
 		if err != nil {
 			t.Logf("Error writing content in mock server: %v", err)
 		}
@@ -153,7 +158,7 @@ func TestConnectToStreamingServer_Buffering(t *testing.T) {
 
 	// 2. Setup VFS and other required state
 	initBufferVFS(true)
-	Settings.BufferSize = 1 // 1 KB, so our content should be smaller than one segment file
+	Settings.BufferSize = 1024 // 1MB buffer size
 	Settings.UserAgent = "xTeVe-Test"
 
 	playlistID := "M1"
@@ -197,31 +202,57 @@ func TestConnectToStreamingServer_Buffering(t *testing.T) {
 	// 3. Call the function to be tested
 	go connectToStreamingServer(streamID, playlistID)
 
-	// 4. Wait for buffering to happen (give it a moment)
-	time.Sleep(2 * time.Second)
+	// 4. Wait for buffering to happen
+	// With a 1MB buffer and 10MB of data, we expect 10 files.
+	expectedFiles := 10
+	var foundFiles []string
+	for i := 0; i < 20; i++ { // Wait for up to 20 seconds
+		files, err := bufferVFS.ReadDir(streamFolder)
+		if err == nil {
+			if len(files) >= expectedFiles {
+				for _, f := range files {
+					foundFiles = append(foundFiles, f.Name())
+				}
+				break
+			}
+		}
+		time.Sleep(1 * time.Second)
+	}
+
+	if len(foundFiles) < expectedFiles {
+		t.Fatalf("Expected at least %d buffered files, but found %d", expectedFiles, len(foundFiles))
+	}
 
 	// 5. Verify the buffered content
-	// The first segment file should be named "1.ts"
-	bufferedFilePath := streamFolder + "1.ts"
+	var bufferedContent []byte
+	for i := 1; i <= expectedFiles; i++ {
+		bufferedFilePath := streamFolder + strconv.Itoa(i) + ".ts"
+		if _, err := bufferVFS.Stat(bufferedFilePath); err != nil {
+			t.Fatalf("Buffered file not found: %s. Error: %v", bufferedFilePath, err)
+		}
 
-	// Check if the file exists
-	if _, err := bufferVFS.Stat(bufferedFilePath); err != nil {
-		t.Fatalf("Buffered file not found: %s. Error: %v", bufferedFilePath, err)
+		file, err := bufferVFS.Open(bufferedFilePath)
+		if err != nil {
+			t.Fatalf("Failed to open buffered file: %s. Error: %v", bufferedFilePath, err)
+		}
+
+		contentPart, err := io.ReadAll(file)
+		if err != nil {
+			file.Close()
+			t.Fatalf("Failed to read buffered file: %s. Error: %v", bufferedFilePath, err)
+		}
+		file.Close()
+		bufferedContent = append(bufferedContent, contentPart...)
 	}
 
-	file, err := bufferVFS.Open(bufferedFilePath)
-	if err != nil {
-		t.Fatalf("Failed to open buffered file: %s. Error: %v", bufferedFilePath, err)
-	}
-	defer file.Close()
-
-	bufferedContent, err := io.ReadAll(file)
-	if err != nil {
-		t.Fatalf("Failed to read buffered file: %s. Error: %v", bufferedFilePath, err)
+	if len(bufferedContent) != len(content) {
+		t.Fatalf("Buffered content length mismatch.\nExpected: %d\nGot: %d", len(content), len(bufferedContent))
 	}
 
-	if strings.TrimSpace(string(bufferedContent)) != content {
-		t.Errorf("Buffered content mismatch.\nExpected: %s\nGot: %s", content, string(bufferedContent))
+	for i, b := range bufferedContent {
+		if b != content[i] {
+			t.Fatalf("Buffered content mismatch at byte %d.\nExpected: %v\nGot: %v", i, content[i], b)
+		}
 	}
 
 	// Clean up global state
