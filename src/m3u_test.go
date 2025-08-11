@@ -16,7 +16,7 @@ func TestFilterThisStream_GroupTitle_Bug(t *testing.T) {
 	stream := map[string]string{
 		"name":        "National Report",
 		"group-title": "News",
-		"_values":     "National Report;News",
+		"_values":     "National Report News",
 	}
 
 	// Setup: Create a filter
@@ -43,7 +43,7 @@ func TestFilterThisStream_CustomFilter(t *testing.T) {
 	stream := map[string]string{
 		"name":        "Some Channel",
 		"group-title": "Some Group",
-		"_values":     "Some Channel;Some Group;keyword",
+		"_values":     "Some Channel Some Group keyword",
 	}
 
 	// Setup: Create a filter
@@ -68,7 +68,7 @@ func TestFilterThisStream_GroupTitle_SpecialCharacters(t *testing.T) {
 	stream := map[string]string{
 		"name":        "Some Channel",
 		"group-title": "!@#$%^&*()_+-=[]{};':\",./<>?",
-		"_values":     "Some Channel;!@#$%^&*()_+-=[]{};':\",./<>?",
+		"_values":     "Some Channel !@#$%^&*()_+-=[]{};':\",./<>?",
 	}
 
 	// Setup: Create a filter
@@ -93,7 +93,7 @@ func TestFilterThisStream_GroupTitle_UnicodeCharacters(t *testing.T) {
 	stream := map[string]string{
 		"name":        "Some Channel",
 		"group-title": "뉴스", // "News" in Korean
-		"_values":     "Some Channel;뉴스",
+		"_values":     "Some Channel 뉴스",
 	}
 
 	// Setup: Create a filter
@@ -109,4 +109,33 @@ func TestFilterThisStream_GroupTitle_UnicodeCharacters(t *testing.T) {
 
 	// Assert
 	assert.True(t, result, "Stream should be matched by the filter with unicode characters")
+}
+
+func TestFilterThisStream_ExcludeExactPhrase(t *testing.T) {
+	// This test ensures that excluding a specific phrase does not also exclude a stream that contains a substring of that phrase.
+	// For example, excluding "CSPAN 2" should not exclude "CSPAN".
+
+	// Setup: Create streams
+	streamToKeep := map[string]string{
+		"name":        "CSPAN",
+		"group-title": "News",
+		"_values":     "CSPAN News",
+	}
+	streamToExclude := map[string]string{
+		"name":        "CSPAN 2",
+		"group-title": "News",
+		"_values":     "CSPAN 2 News",
+	}
+
+	// Setup: Create a filter to exclude "CSPAN 2" from the "News" group
+	filter := Filter{
+		Type:          "group-title",
+		Rule:          "News !{CSPAN 2}",
+		CaseSensitive: false,
+	}
+	Data.Filter = []Filter{filter}
+
+	// Execute and Assert
+	assert.True(t, FilterThisStream(streamToKeep), "CSPAN should be kept")
+	assert.False(t, FilterThisStream(streamToExclude), "CSPAN 2 should be excluded")
 }

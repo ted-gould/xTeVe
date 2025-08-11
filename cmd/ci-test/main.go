@@ -210,7 +210,20 @@ func runTests() error {
 		return fmt.Errorf("filter failed: 'CSPAN 2' found in M3U output")
 	}
 	if !strings.Contains(m3uContent, "CSPAN") {
-		return fmt.Errorf("verification failed: 'CSPAN' not found in M3U output")
+		var foundChannels []string
+		lines := strings.Split(m3uContent, "\n")
+		for _, line := range lines {
+			if strings.HasPrefix(line, "#EXTINF:") {
+				parts := strings.Split(line, ",")
+				if len(parts) > 1 {
+					foundChannels = append(foundChannels, strings.TrimSpace(parts[len(parts)-1]))
+				}
+			}
+		}
+		if len(foundChannels) > 0 {
+			return fmt.Errorf("verification failed: 'CSPAN' not found in M3U output. Found channels: %s", strings.Join(foundChannels, ", "))
+		}
+		return fmt.Errorf("verification failed: 'CSPAN' not found in M3U output, and no other channels were found")
 	}
 
 	fmt.Println("Filter successfully applied.")

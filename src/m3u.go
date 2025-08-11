@@ -151,16 +151,27 @@ func checkConditions(streamValues, conditions, coType string) (status bool) {
 
 	var keys = strings.Split(conditions, ",")
 
+	// Pad streamValues to handle matches at the beginning or end of the string.
+	// This ensures that we are matching whole words or phrases.
+	paddedStreamValues := " " + streamValues + " "
+
 	for _, key := range keys {
-		if strings.Contains(streamValues, key) {
+		if key == "" {
+			continue
+		}
+
+		// Pad the key to ensure we match the exact phrase surrounded by spaces.
+		paddedKey := " " + key + " "
+		if strings.Contains(paddedStreamValues, paddedKey) {
 			switch coType {
 			case "exclude":
-				return false
+				return false // Exclude if the exact phrase is found
 			case "include":
-				return true
+				return true // Include if the exact phrase is found
 			}
 		}
 	}
+
 	return
 }
 
