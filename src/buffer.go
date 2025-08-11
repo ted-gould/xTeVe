@@ -749,61 +749,48 @@ func connectToStreamingServer(streamID int, playlistID string) {
 					return
 				}
 
+				defer resp.Body.Close()
 				for {
 					if fileSize == 0 {
 						debug = fmt.Sprintf("Buffer Status:Buffering (%s)", tmpFile)
 						showDebug(debug, 2)
 					}
 
-					timeOut = 0
-					var n int
-					// Fill the Buffer with data from the Server
-					for {
-						n, err = resp.Body.Read(buffer)
+					n, err := resp.Body.Read(buffer)
+					if n > 0 {
+						if _, err := bufferFile.Write(buffer[:n]); err != nil {
+							ShowError(err, 0)
+							addErrorToStream(err)
+							bufferFile.Close()
+							return
+						}
+						fileSize += n
+					}
 
-						if err != nil && err != io.EOF {
+					if err != nil {
+						if err != io.EOF {
 							if Settings.StreamRetryEnabled && retries < Settings.StreamMaxRetries {
 								retries++
 								showInfo(fmt.Sprintf("Stream Read Error (%s). Retry %d/%d in %d seconds.", err.Error(), retries, Settings.StreamMaxRetries, Settings.StreamRetryDelay))
 								time.Sleep(time.Duration(Settings.StreamRetryDelay) * time.Second)
-								resp.Body.Close()
+								bufferFile.Close()
 								goto Redirect
 							}
 							ShowError(err, 0)
 							addErrorToStream(err)
-							resp.Body.Close()
-							return
 						}
-						retries = 0 // Reset retries on successful read
-
-						if n == 0 {
-							break
-						}
+						bufferFile.Close()
+						break
 					}
-					defer resp.Body.Close()
-
-					if _, err := bufferFile.Write(buffer[:n]); err != nil {
-						ShowError(err, 0)
-						addErrorToStream(err)
-						resp.Body.Close()
-						return
-					}
-					defer bufferFile.Close()
-
-					fileSize = fileSize + n
+					retries = 0
 
 					if !clientConnection(stream) {
-						resp.Body.Close()
 						bufferFile.Close()
-
-						if err = bufferVFS.RemoveAll(stream.Folder); err != nil {
-							ShowError(err, 4005)
-						}
 						return
 					}
 
 					// Save the buffer to the Hard Disk
-					if fileSize >= tmpFileSize/2 || n == 0 {
+					if fileSize >= tmpFileSize {
 						Lock.Lock()
 
 						bandwidth.Stop = time.Now()
@@ -830,9 +817,6 @@ func connectToStreamingServer(streamID int, playlistID string) {
 						tmpFile = fmt.Sprintf("%s%d.ts", tmpFolder, tmpSegment)
 
 						if !clientConnection(stream) {
-							bufferFile.Close()
-							resp.Body.Close()
-
 							if err = bufferVFS.RemoveAll(stream.Folder); err != nil {
 								ShowError(err, 4005)
 							}
@@ -842,18 +826,10 @@ func connectToStreamingServer(streamID int, playlistID string) {
 						bufferFile, err = bufferVFS.Create(tmpFile)
 						if err != nil {
 							addErrorToStream(err)
-							resp.Body.Close()
 							return
 						}
 
 						fileSize = 0
-						buffer = make([]byte, 1024*bufferSize*2)
-
-						if n == 0 {
-							bufferFile.Close()
-							resp.Body.Close()
-							break
-						}
 					}
 				}
 				//--
