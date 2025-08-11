@@ -30,6 +30,8 @@ func FuzzMakeInterfaceFromM3U(f *testing.F) {
 	addFileToCorpus(filepath.Join(benchmarkDir, "tiny.m3u"))
 
 	f.Fuzz(func(t *testing.T, data []byte) {
-		MakeInterfaceFromM3U(data)
+		// We are not checking the error here because we are only interested in panics.
+		// The function is expected to return errors for malformed input.
+		_, _ = MakeInterfaceFromM3U(data)
 	})
 }
