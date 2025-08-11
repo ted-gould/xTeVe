@@ -1,7 +1,9 @@
 package src
 
 import (
+	"os"
 	"testing"
+	"xteve/src/internal/imgcache"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -138,4 +140,54 @@ func TestFilterThisStream_ExcludeExactPhrase(t *testing.T) {
 	// Execute and Assert
 	assert.True(t, FilterThisStream(streamToKeep), "CSPAN should be kept")
 	assert.False(t, FilterThisStream(streamToExclude), "CSPAN 2 should be excluded")
+}
+
+func TestBuildM3U_PMSSource(t *testing.T) {
+	// Setup: Set EPG source to PMS
+	Settings.EpgSource = "PMS"
+	// Restore original settings after test
+	defer func() {
+		Settings.EpgSource = "XEPG"
+	}()
+
+	// Setup: Create mock active streams
+	stream1 := map[string]string{
+		"name":         "Channel 1",
+		"group-title":  "Group 1",
+		"url":          "http://test.com/stream1",
+		"_file.m3u.id": "test_m3u_id",
+		"tvg-logo":     "logo1.png",
+		"tvg-id":       "channel1.tv",
+	}
+	Data.Streams.Active = []any{stream1}
+	defer func() {
+		Data.Streams.Active = make([]any, 0)
+	}()
+
+	// Setup: System variables needed for URL generation
+	System.ServerProtocol.WEB = "http"
+	System.ServerProtocol.XML = "http"
+	System.ServerProtocol.DVR = "http"
+	System.Domain = "localhost:34400"
+	System.Folder.Data = "" // To avoid writing file
+
+	// Setup: Initialize caches
+	Data.Cache.StreamingURLS = make(map[string]StreamInfo)
+	var err error
+	// Create a temporary directory for the image cache
+	tempDir, err := os.MkdirTemp("", "xteve-test-")
+	assert.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	Data.Cache.Images, err = imgcache.New(tempDir, "", false)
+	assert.NoError(t, err)
+
+	// Execute
+	m3u, err := buildM3U([]string{})
+
+	// Assert
+	assert.NoError(t, err)
+	assert.NotEmpty(t, m3u)
+	// The failing assertion:
+	assert.Contains(t, m3u, `tvg-name="Channel 1"`, "M3U should contain channel 1")
 }
