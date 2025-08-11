@@ -618,6 +618,20 @@ func init() {
 	if err != nil {
 		log.Fatal("Failed to create sub-filesystem for embedded resources: ", err)
 	}
+
+	// Check if JS files exist.
+	jsFiles, err := fs.ReadDir(htmlFS, "js")
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			log.Fatal("Embedded 'html/js' directory not found. Please run 'make build' to compile the TypeScript files.")
+		}
+		log.Fatal("Failed to read embedded 'html/js' directory: ", err)
+	}
+
+	if len(jsFiles) == 0 {
+		log.Fatal("No JavaScript files found in embedded 'html/js' directory. Please run 'make build' to compile the TypeScript files.")
+	}
+
 	fileServer := http.FileServer(http.FS(htmlFS))
 	webHandler = http.StripPrefix("/web/", fileServer)
 }
