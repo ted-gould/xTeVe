@@ -1,12 +1,55 @@
 package src
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 )
 
 func TestConnectWithRetry(t *testing.T) {
+	t.Run("Follows Redirects", func(t *testing.T) {
+		// Create a mock server
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/redirect" {
+				http.Redirect(w, r, "/target", http.StatusFound)
+			} else if r.URL.Path == "/target" {
+				w.WriteHeader(http.StatusOK)
+				if _, err := w.Write([]byte("Hello, world!")); err != nil {
+					t.Fatalf("w.Write failed: %v", err)
+				}
+			} else {
+				http.NotFound(w, r)
+			}
+		}))
+		defer server.Close()
+
+		// Setup settings for retry
+		Settings.StreamRetryEnabled = false // No retries for this test
+
+		req, _ := http.NewRequest("GET", server.URL+"/redirect", nil)
+		client := &http.Client{}
+
+		resp, err := connectWithRetry(client, req)
+		if err != nil {
+			t.Fatalf("connectWithRetry failed: %v", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			t.Errorf("Expected status code %d, but got %d", http.StatusOK, resp.StatusCode)
+		}
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			t.Fatalf("Failed to read response body: %v", err)
+		}
+
+		if string(body) != "Hello, world!" {
+			t.Errorf("Expected response body 'Hello, world!', but got '%s'", string(body))
+		}
+	})
+
 	t.Run("Initial Connection", func(t *testing.T) {
 		// Counter for how many times the server has been hit
 		hitCount := 0
