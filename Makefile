@@ -18,7 +18,7 @@ build: ts-compile generate-video
 
 ts-compile:
 	@echo "--- Compiling TypeScript ---"
-	(cd ts && npx tsc -p tsconfig.json)
+	(npm install && cd ts && npx tsc)
 
 generate-video:
 	@echo "--- Generating video asset ---"
