@@ -178,41 +178,74 @@ func checkConditions(streamValues, conditions, coType string) (status bool) {
 // Create xTeVe M3U file
 func buildM3U(groups []string) (m3u string, err error) {
 	var imgc = Data.Cache.Images
-	var m3uChannels = make(map[float64]XEPGChannelStruct)
-	var channelNumbers []float64
+	var m3uChannelsForSort []XEPGChannelStruct
 
-	for _, dxc := range Data.XEPG.Channels {
-		var xepgChannel XEPGChannelStruct
-		err := json.Unmarshal([]byte(mapToJSON(dxc)), &xepgChannel)
-		if err == nil {
-			if xepgChannel.XActive {
-				if len(groups) > 0 {
-					if lo.IndexOf(groups, xepgChannel.XGroupTitle) == -1 {
-						goto Done
-					}
+	switch Settings.EpgSource {
+	case "PMS":
+		for i, dsa := range Data.Streams.Active {
+			var stream = dsa.(map[string]string)
+			var channel XEPGChannelStruct
+
+			channel.XName = stream["name"]
+			channel.XGroupTitle = stream["group-title"]
+			channel.TvgLogo = stream["tvg-logo"]
+			channel.URL = stream["url"]
+			channel.FileM3UID = stream["_file.m3u.id"]
+
+			// Use tvg-id if present for the tvg-id attribute
+			if tvgID, ok := stream["tvg-id"]; ok && len(tvgID) > 0 {
+				channel.TvgID = tvgID
+			}
+
+			// Generate a numeric channel number for tvg-chno and for sorting
+			channel.XChannelID = strconv.Itoa(i + 1000)
+			channel.XEPG = channel.XChannelID // For channelID attribute
+
+			if len(groups) > 0 {
+				if lo.IndexOf(groups, channel.XGroupTitle) == -1 {
+					continue
 				}
+			}
 
-				var channelNumber, err = strconv.ParseFloat(strings.TrimSpace(xepgChannel.XChannelID), 64)
+			m3uChannelsForSort = append(m3uChannelsForSort, channel)
+		}
 
-				if err == nil {
-					m3uChannels[channelNumber] = xepgChannel
-					channelNumbers = append(channelNumbers, channelNumber)
+	case "XEPG":
+		for _, dxc := range Data.XEPG.Channels {
+			var xepgChannel XEPGChannelStruct
+			err := json.Unmarshal([]byte(mapToJSON(dxc)), &xepgChannel)
+			if err == nil {
+				if xepgChannel.XActive {
+					if len(groups) > 0 {
+						if lo.IndexOf(groups, xepgChannel.XGroupTitle) == -1 {
+							continue // Not goto
+						}
+					}
+					m3uChannelsForSort = append(m3uChannelsForSort, xepgChannel)
 				}
 			}
 		}
-	Done:
 	}
 
-	// Create M3U Content
-	sort.Float64s(channelNumbers)
+	// Sort channels by numeric channel ID
+	sort.Slice(m3uChannelsForSort, func(i, j int) bool {
+		numA, _ := strconv.ParseFloat(m3uChannelsForSort[i].XChannelID, 64)
+		numB, _ := strconv.ParseFloat(m3uChannelsForSort[j].XChannelID, 64)
+		return numA < numB
+	})
 
+	// Create M3U Content
 	var xmltvURL = fmt.Sprintf("%s://%s/xmltv/xteve.xml", System.ServerProtocol.XML, System.Domain)
 	m3u = fmt.Sprintf(`#EXTM3U url-tvg="%s" x-tvg-url="%s"`+"\n", xmltvURL, xmltvURL)
 
-	for _, channelNumber := range channelNumbers {
-		var channel = m3uChannels[channelNumber]
+	for _, channel := range m3uChannelsForSort {
+		// Use TvgID for tvg-id if it exists, otherwise fall back to XChannelID
+		tvgID := channel.TvgID
+		if len(tvgID) == 0 {
+			tvgID = channel.XChannelID
+		}
 
-		var parameter = fmt.Sprintf(`#EXTINF:0 channelID="%s" tvg-chno="%s" tvg-name="%s" tvg-id="%s" tvg-logo="%s" group-title="%s",%s`+"\n", channel.XEPG, channel.XChannelID, channel.XName, channel.XChannelID, imgc.Image.GetURL(channel.TvgLogo), channel.XGroupTitle, channel.XName)
+		var parameter = fmt.Sprintf(`#EXTINF:0 channelID="%s" tvg-chno="%s" tvg-name="%s" tvg-id="%s" tvg-logo="%s" group-title="%s",%s`+"\n", channel.XEPG, channel.XChannelID, channel.XName, tvgID, imgc.Image.GetURL(channel.TvgLogo), channel.XGroupTitle, channel.XName)
 		var stream, err = createStreamingURL("M3U", channel.FileM3UID, channel.XChannelID, channel.XName, channel.URL)
 		if err == nil {
 			m3u = m3u + parameter + stream + "\n"
