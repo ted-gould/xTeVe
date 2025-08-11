@@ -109,40 +109,44 @@ func buildXEPG(background bool) error { // Added error return type
 				System.ScanInProgress = 0
 				return err
 			}
-			cleanupXEPG() // Assuming this doesn't return error or handles internally
+			cleanupXEPG()
 
-			go func() {
-				// Errors in this goroutine are logged as buildXEPG already returned for sync path
-				if xmlErr := createXMLTVFile(); xmlErr != nil {
-					ShowError(fmt.Errorf("error creating XMLTV file (async): %w", xmlErr), 0)
-				}
-				if m3uErr := createM3UFile(); m3uErr != nil {
-					ShowError(fmt.Errorf("error creating M3U file (async): %w", m3uErr), 0)
-				}
-
-				if Settings.CacheImages && System.ImageCachingInProgress == 0 {
-					go func() {
-						System.ImageCachingInProgress = 1
-						showInfo(fmt.Sprintf("Image Caching:Images are cached (%d)", len(Data.Cache.Images.Queue)))
-						Data.Cache.Images.Image.Caching()
-						Data.Cache.Images.Image.Remove()
-						showInfo("Image Caching:Done")
-						if xmlErr := createXMLTVFile(); xmlErr != nil { // Called again here
-							ShowError(fmt.Errorf("error creating XMLTV file (async cache): %w", xmlErr), 0)
-						}
-						if m3uErr := createM3UFile(); m3uErr != nil { // Called again here
-							ShowError(fmt.Errorf("error creating M3U file (async cache): %w", m3uErr), 0)
-						}
-						System.ImageCachingInProgress = 0
-					}()
-				}
-				showInfo("XEPG:" + "Ready to use")
+			// Create files synchronously when not in background mode
+			if err := createXMLTVFile(); err != nil {
+				ShowError(fmt.Errorf("error creating XMLTV file: %w", err), 0)
+				// Even with an error, we might want to try creating the M3U file
+			}
+			if err := createM3UFile(); err != nil {
+				ShowError(fmt.Errorf("error creating M3U file: %w", err), 0)
 				System.ScanInProgress = 0
-				if Settings.ClearXMLTVCache {
-					clearXMLTVCache()
-				}
-			}()
-			return nil // Synchronous part successful
+				return err // M3U file is critical for clients, so maybe return error
+			}
+
+			if Settings.CacheImages && System.ImageCachingInProgress == 0 {
+				// Run caching in the background as it can be slow
+				go func() {
+					System.ImageCachingInProgress = 1
+					showInfo(fmt.Sprintf("Image Caching:Images are cached (%d)", len(Data.Cache.Images.Queue)))
+					Data.Cache.Images.Image.Caching()
+					Data.Cache.Images.Image.Remove()
+					showInfo("Image Caching:Done")
+					// After caching, regenerate files to update image URLs
+					if xmlErr := createXMLTVFile(); xmlErr != nil {
+						ShowError(fmt.Errorf("error creating XMLTV file post-cache: %w", xmlErr), 0)
+					}
+					if m3uErr := createM3UFile(); m3uErr != nil {
+						ShowError(fmt.Errorf("error creating M3U file post-cache: %w", m3uErr), 0)
+					}
+					System.ImageCachingInProgress = 0
+				}()
+			}
+
+			showInfo("XEPG:" + "Ready to use")
+			System.ScanInProgress = 0
+			if Settings.ClearXMLTVCache {
+				clearXMLTVCache()
+			}
+			return nil
 		}
 	} else {
 		// getLineup() // Assuming getLineup() modifies globals and doesn't return error, or handles its own.
