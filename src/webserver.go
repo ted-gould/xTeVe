@@ -626,6 +626,22 @@ func init() {
 func Web(w http.ResponseWriter, r *http.Request) {
 	var path = r.URL.Path
 
+	// Custom handler for .js files to ensure correct MIME type
+	if strings.HasSuffix(path, ".js") {
+		fsPath := "html" + strings.TrimPrefix(path, "/web")
+		content, err := webUI.ReadFile(fsPath)
+		if err != nil {
+			httpStatusError(w, r, http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/javascript")
+		w.WriteHeader(http.StatusOK)
+		if _, err := w.Write(content); err != nil {
+			log.Printf("Error writing response in Web handler for %s: %v", path, err)
+		}
+		return
+	}
+
 	// Serve static assets using the file server
 	if !strings.HasSuffix(path, ".html") && path != "/web/" && path != "/web" {
 		webHandler.ServeHTTP(w, r)
