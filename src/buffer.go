@@ -609,33 +609,10 @@ func connectToStreamingServer(streamID int, playlistID string) {
 			debugRequest(req)
 
 			client := &http.Client{}
-			client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
-				return errors.New("Redirect")
-			}
 
 			resp, err := connectWithRetry(client, req)
 
 			if err != nil {
-				// Redirect
-				if resp != nil && resp.StatusCode >= 301 && resp.StatusCode <= 308 {
-					debug = fmt.Sprintf("Streaming Status:HTTP response status [%d] %s", resp.StatusCode, http.StatusText(resp.StatusCode))
-					showDebug(debug, 2)
-					currentURL = strings.Trim(resp.Header.Get("Location"), "\r\n")
-					stream.Location = currentURL
-					if len(currentURL) > 0 {
-						debug = fmt.Sprintf("HTTP Redirect:%s", stream.Location)
-						showDebug(debug, 2)
-						defer resp.Body.Close()
-						goto Redirect
-					} else {
-						err = errors.New("streaming server")
-						ShowError(err, 4002)
-						addErrorToStream(err)
-						defer resp.Body.Close()
-						return
-					}
-				}
-
 				ShowError(err, 0)
 				addErrorToStream(err)
 				if resp != nil {
@@ -703,9 +680,6 @@ func connectToStreamingServer(streamID int, playlistID string) {
 
 				if stream.HLS {
 					client := &http.Client{}
-					client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
-						return errors.New("Redirect")
-					}
 
 					for _, segment := range stream.Segment {
 						req, _ := http.NewRequest("GET", segment.URL, nil)
