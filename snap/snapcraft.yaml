@@ -19,7 +19,10 @@ parts:
       - ffmpeg
     build-snaps:
       - go
+      - node/20/stable
     override-build: |
+      npm install
+      (cd ts && npx tsc)
       ./build/generate_video.sh
       snapcraftctl build
     override-stage: |
