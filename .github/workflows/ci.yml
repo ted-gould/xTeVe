@@ -128,13 +128,16 @@ jobs:
         with:
           node-version: '20'
       - name: Install dependencies
-        run: npm install
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y make ffmpeg
+          npm install
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps
       - name: Run app
         run: |
-          go build -o xteve_test_binary xteve.go
-          ./xteve_test_binary -port=34400 &
+          make build
+          ./bin/xteve -port=34400 &
       - name: Run Playwright tests
         run: npx playwright test
 
