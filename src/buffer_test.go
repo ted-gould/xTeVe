@@ -4,7 +4,10 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestConnectWithRetry(t *testing.T) {
@@ -133,4 +136,95 @@ func TestGetBufTmpFiles(t *testing.T) {
 			t.Errorf("Expected file %s at index %d, but got %s", dummyFiles[i], i, f)
 		}
 	}
+}
+
+func TestConnectToStreamingServer_Buffering(t *testing.T) {
+	// 1. Setup mock server
+	content := "0123456789abcdef" // 16 bytes
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "video/mp2t")
+		w.WriteHeader(http.StatusOK)
+		_, err := w.Write([]byte(content))
+		if err != nil {
+			t.Logf("Error writing content in mock server: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	// 2. Setup VFS and other required state
+	initBufferVFS(true)
+	Settings.BufferSize = 1 // 1 KB, so our content should be smaller than one segment file
+	Settings.UserAgent = "xTeVe-Test"
+
+	playlistID := "M1"
+	streamID := 0
+	streamURL := server.URL
+	channelName := "TestChannel"
+	tempFolder := "/tmp/xteve_test/"
+	md5 := getMD5(streamURL)
+	streamFolder := tempFolder + md5 + string(os.PathSeparator)
+
+	playlist := Playlist{
+		Folder:       tempFolder,
+		PlaylistID:   playlistID,
+		PlaylistName: "TestPlaylist",
+		Tuner:        1,
+		Streams:      make(map[int]ThisStream),
+		Clients:      make(map[int]ThisClient),
+	}
+
+	stream := ThisStream{
+		URL:         streamURL,
+		ChannelName: channelName,
+		Status:      false,
+		Folder:      streamFolder,
+		MD5:         md5,
+		PlaylistID:  playlistID,
+	}
+	playlist.Streams[streamID] = stream
+
+	client := ThisClient{
+		Connection: 1,
+	}
+	playlist.Clients[streamID] = client
+
+	BufferInformation.Store(playlistID, playlist)
+
+	var clients ClientConnection
+	clients.Connection = 1
+	BufferClients.Store(playlistID+stream.MD5, clients)
+
+	// 3. Call the function to be tested
+	go connectToStreamingServer(streamID, playlistID)
+
+	// 4. Wait for buffering to happen (give it a moment)
+	time.Sleep(2 * time.Second)
+
+	// 5. Verify the buffered content
+	// The first segment file should be named "1.ts"
+	bufferedFilePath := streamFolder + "1.ts"
+
+	// Check if the file exists
+	if _, err := bufferVFS.Stat(bufferedFilePath); err != nil {
+		t.Fatalf("Buffered file not found: %s. Error: %v", bufferedFilePath, err)
+	}
+
+	file, err := bufferVFS.Open(bufferedFilePath)
+	if err != nil {
+		t.Fatalf("Failed to open buffered file: %s. Error: %v", bufferedFilePath, err)
+	}
+	defer file.Close()
+
+	bufferedContent, err := io.ReadAll(file)
+	if err != nil {
+		t.Fatalf("Failed to read buffered file: %s. Error: %v", bufferedFilePath, err)
+	}
+
+	if strings.TrimSpace(string(bufferedContent)) != content {
+		t.Errorf("Buffered content mismatch.\nExpected: %s\nGot: %s", content, string(bufferedContent))
+	}
+
+	// Clean up global state
+	BufferInformation.Delete(playlistID)
+	BufferClients.Delete(playlistID + stream.MD5)
 }
