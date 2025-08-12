@@ -53,21 +53,21 @@ func run() error {
 
 	// Wait for streamer
 	if err := waitForServerReady(fmt.Sprintf("http://localhost:%d/test.m3u", streamingPort)); err != nil {
-		streamerCmd.Process.Kill()
+		stopStreamer(streamerCmd)
 		return fmt.Errorf("streamer not ready: %w", err)
 	}
 
 	// 2. Start xteve
 	xteveCmd, err := startXteve()
 	if err != nil {
-		streamerCmd.Process.Kill()
+		stopStreamer(streamerCmd)
 		return fmt.Errorf("failed to start xteve: %w", err)
 	}
 
 	// Wait for xteve
 	if err := waitForServerReady(fmt.Sprintf("http://localhost:%d/web/", xtevePort)); err != nil {
-		streamerCmd.Process.Kill()
-		xteveCmd.Process.Kill()
+		stopStreamer(streamerCmd)
+		stopXteve(xteveCmd)
 		return fmt.Errorf("server not ready: %w", err)
 	}
 
@@ -76,12 +76,7 @@ func run() error {
 
 	// 4. Cleanup
 	stopXteve(xteveCmd)
-	fmt.Println("Stopping streamer...")
-	if streamerCmd.Process != nil {
-		if err := streamerCmd.Process.Kill(); err != nil {
-			log.Printf("Failed to kill streamer process: %v", err)
-		}
-	}
+	stopStreamer(streamerCmd)
 
 	if testErr != nil {
 		return testErr
@@ -111,6 +106,16 @@ func stopXteve(cmd *exec.Cmd) {
 	}
 	if err := cmd.Process.Kill(); err != nil {
 		log.Printf("Failed to kill xteve process: %v", err)
+	}
+}
+
+func stopStreamer(cmd *exec.Cmd) {
+	fmt.Println("Stopping streamer...")
+	if cmd.Process == nil {
+		return
+	}
+	if err := cmd.Process.Kill(); err != nil {
+		log.Printf("Failed to kill streamer process: %v", err)
 	}
 }
 

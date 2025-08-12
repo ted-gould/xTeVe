@@ -45,15 +45,19 @@ func main() {
 	http.HandleFunc("/stream", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "video/mpeg")
 		w.Header().Set("Content-Length", fmt.Sprintf("%d", len(testData)))
-		w.Write(testData)
+		if _, err := w.Write(testData); err != nil {
+			log.Printf("Failed to write stream data: %v", err)
+		}
 	})
 	http.HandleFunc("/test.m3u", func(w http.ResponseWriter, r *http.Request) {
-        m3uContent := fmt.Sprintf(`#EXTM3U
+		m3uContent := fmt.Sprintf(`#EXTM3U
 #EXTINF:-1 tvg-id="test.stream" tvg-name="Test Stream" group-title="Test",Test Stream
 http://localhost:%d/stream
 `, port)
 		w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
-		w.Write([]byte(m3uContent))
+		if _, err := w.Write([]byte(m3uContent)); err != nil {
+			log.Printf("Failed to write m3u data: %v", err)
+		}
 	})
 
 	if err := http.ListenAndServe(fmt.Sprintf(":%d", port), nil); err != nil {
