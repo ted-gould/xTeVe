@@ -602,11 +602,10 @@ func connectToStreamingServer(streamID int, playlistID string) {
 				ShowError(err, 0)
 				addErrorToStream(err)
 				if resp != nil {
-					defer resp.Body.Close()
+					resp.Body.Close()
 				}
 				return
 			}
-			defer resp.Body.Close()
 
 			// Check HTTP Status, in case of errors the stream is terminated
 			var contentType = resp.Header.Get("Content-Type")
@@ -847,6 +846,10 @@ func connectToStreamingServer(streamID int, playlistID string) {
 			}
 
 			s++
+
+			if stream.StreamFinished && !stream.HLS {
+				return
+			}
 
 			// Calculate the waiting time for the Download of the next Segment
 			if stream.HLS {
