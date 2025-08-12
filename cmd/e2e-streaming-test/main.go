@@ -177,15 +177,14 @@ func runTests() error {
 		return fmt.Errorf("failed to add M3U playlist: %w", err)
 	}
 
-	// FIXME: The buffered test is disabled because it causes timeouts in the execution environment.
-	// // Run with buffer enabled
-	// if err := setBuffer(conn, "xteve", 1024); err != nil {
-	// 	return err
-	// }
-	// if err := runStreamingTest(conn); err != nil {
-	// 	return fmt.Errorf("streaming test failed with buffer enabled: %w", err)
-	// }
-	// fmt.Println("---")
+	// Run with buffer enabled
+	if err := setBuffer(conn, "xteve", 1024); err != nil {
+		return err
+	}
+	if err := runStreamingTest(conn); err != nil {
+		return fmt.Errorf("streaming test failed with buffer enabled: %w", err)
+	}
+	fmt.Println("---")
 
 	// Run with buffer disabled
 	if err := setBuffer(conn, "-", 0); err != nil {

@@ -16,3 +16,4 @@ src/html/js/
 bin/
 node_modules/
 test-results/
+streamer_binary
