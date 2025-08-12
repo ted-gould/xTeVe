@@ -46,9 +46,13 @@ build-no-video: ts-compile
 	$(GOCMD) -o ./$(BINDIR)/xteve-status ./cmd/xteve-status
 	@echo "--- Build complete ---"
 
-e2e-streaming-test: build-no-video
+e2e-streaming-test: build-no-video build-streamer
 	@echo "--- Running E2E streaming tests ---"
 	$(GO) run cmd/e2e-streaming-test/main.go
+
+build-streamer:
+	@echo "--- Building E2E streamer ---"
+	$(GO) build -o streamer_binary ./cmd/e2e-streaming-test/streamer
 
 format-check:
 	@echo "--- Checking formatting ---"
