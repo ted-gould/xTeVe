@@ -224,30 +224,41 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 					continue
 				}
 
-				var oldSegments []string
+				stream.OldSegments = []string{}
 
 				for { // Loop 2: Temporary files are available, Data can be sent to the Client
 					// Monitor HTTP Client connection
-
-					//cn, ok := w.(http.CloseNotifier)
 					ctx := r.Context()
-					if ok {
-						select {
-						case <-ctx.Done(): // cn.CloseNotify():
+					select {
+					case <-ctx.Done():
+						killClientConnection(streamID, playlistID, false)
+						return
+					default:
+					}
+
+					// Get the latest stream state from BufferInformation
+					if p, ok := BufferInformation.Load(playlistID); ok {
+						playlist := p.(Playlist)
+						if s, ok := playlist.Streams[streamID]; ok {
+							stream.StreamFinished = s.StreamFinished
+						} else {
+							// Stream has been removed, so we can exit
+							return
+						}
+					} else {
+						// Playlist has been removed, so we can exit
+						return
+					}
+
+					if c, ok := BufferClients.Load(playlistID + stream.MD5); ok {
+						var clients = c.(ClientConnection)
+						if clients.Error != nil {
+							ShowError(clients.Error, 0)
 							killClientConnection(streamID, playlistID, false)
 							return
-						default:
-							if c, ok := BufferClients.Load(playlistID + stream.MD5); ok {
-								var clients = c.(ClientConnection)
-								if clients.Error != nil {
-									ShowError(clients.Error, 0)
-									killClientConnection(streamID, playlistID, false)
-									return
-								}
-							} else {
-								return
-							}
 						}
+					} else {
+						return
 					}
 
 					if _, err := bufferVFS.Stat(stream.Folder); fsIsNotExistErr(err) {
@@ -256,26 +267,15 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 					}
 
 					var tmpFiles = getBufTmpFiles(&stream)
-					//fmt.Println("Buffer Loop:", stream.Connection)
 
 					for _, f := range tmpFiles {
-						if _, err := bufferVFS.Stat(stream.Folder); fsIsNotExistErr(err) {
-							killClientConnection(streamID, playlistID, false)
-							return
-						}
-
-						oldSegments = append(oldSegments, f)
-
 						var fileName = stream.Folder + f
-
 						file, err := bufferVFS.Open(fileName)
 						if err != nil {
 							debug = fmt.Sprintf("Buffer Open (%s)", fileName)
 							showDebug(debug, 2)
 							return
 						}
-
-						defer file.Close()
 
 						l, err := file.Stat()
 						if err == nil {
@@ -286,54 +286,41 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 							_, err = file.Read(buffer)
 
 							if err == nil {
-								if _, errSeek := file.Seek(0, 0); errSeek != nil {
-									// Log error and potentially skip this segment or return
-									// log.Printf("Error seeking file %s: %v", fileName, errSeek)
-									file.Close() // Ensure file is closed before returning or continuing
-									// Depending on desired behavior, might need to killClientConnection here
-									return // Or continue to next segment if appropriate
-								}
-
 								if !streaming {
 									contentType := http.DetectContentType(buffer)
-									_ = contentType
-									//w.Header().Set("Content-type", "video/mpeg")
 									w.Header().Set("Content-type", contentType)
 									w.Header().Set("Content-Length", "0")
 									w.Header().Set("Connection", "close")
 								}
 
-								/*
-								   // HDHR Header
-								   w.Header().Set("Cache-Control", "no-cache")
-								   w.Header().Set("Pragma", "no-cache")
-								   w.Header().Set("transferMode.dlna.org", "Streaming")
-								*/
-
 								if _, errWrite := w.Write(buffer); errWrite != nil {
-									// log.Printf("Error writing segment to client %s: %v", stream.ChannelName, errWrite)
 									file.Close()
 									killClientConnection(streamID, playlistID, false)
 									return
 								}
 
-								file.Close()
 								streaming = true
 							}
-							file.Close()
 						}
+						file.Close()
 
-						var n = lo.IndexOf(oldSegments, f)
-						if n > 20 {
-							var fileToRemove = stream.Folder + oldSegments[0]
+						stream.OldSegments = append(stream.OldSegments, f)
+
+						// Clean up old segments
+						if len(stream.OldSegments) > 20 {
+							var fileToRemove = stream.Folder + stream.OldSegments[0]
 							if err = bufferVFS.RemoveAll(getPlatformFile(fileToRemove)); err != nil {
 								ShowError(err, 4007)
 							}
-							oldSegments = slices.Delete(oldSegments, 0, 0+1)
+							stream.OldSegments = slices.Delete(stream.OldSegments, 0, 1)
 						}
 					}
 
 					if len(tmpFiles) == 0 {
+						if stream.StreamFinished {
+							// No more files and stream is finished, so we can exit
+							return
+						}
 						time.Sleep(time.Duration(100) * time.Millisecond)
 					}
 				} // End of Loop 2
@@ -358,7 +345,7 @@ func getBufTmpFiles(stream *ThisStream) (tmpFiles []string) {
 			return
 		}
 
-		if len(files) > 2 {
+		if len(files) > 0 {
 			for _, file := range files {
 				var fileID = strings.Replace(file.Name(), ".ts", "", -1)
 				var f, err = strconv.ParseFloat(fileID, 64)
@@ -833,6 +820,10 @@ func connectToStreamingServer(streamID int, playlistID string) {
 							ShowError(err, 0)
 							addErrorToStream(err)
 						}
+						stream.Status = true
+						stream.StreamFinished = true
+						playlist.Streams[streamID] = stream
+						BufferInformation.Store(playlistID, playlist)
 						bufferFile.Close()
 						break
 					}

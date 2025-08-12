@@ -259,3 +259,92 @@ func TestConnectToStreamingServer_Buffering(t *testing.T) {
 	BufferInformation.Delete(playlistID)
 	BufferClients.Delete(playlistID + stream.MD5)
 }
+
+func TestBufferingStream_ClosesOnStreamEnd(t *testing.T) {
+	// 1. Setup mock server that serves a small amount of data and then closes
+	content := []byte("some finite stream data")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "video/mp2t")
+		w.WriteHeader(http.StatusOK)
+		_, err := w.Write(content)
+		if err != nil {
+			t.Logf("Error writing content in mock server: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	// 2. Setup VFS and other required state
+	initBufferVFS(true)
+	Settings.BufferSize = 1024
+	Settings.UserAgent = "xTeVe-Test"
+
+	playlistID := "M1"
+	streamID := 0
+	streamURL := server.URL
+	channelName := "TestChannel"
+	tempFolder := "/tmp/xteve_test_closes/"
+	md5 := getMD5(streamURL)
+	streamFolder := tempFolder + md5 + string(os.PathSeparator)
+
+	playlist := Playlist{
+		Folder:       tempFolder,
+		PlaylistID:   playlistID,
+		PlaylistName: "TestPlaylist",
+		Tuner:        1,
+		Streams:      make(map[int]ThisStream),
+		Clients:      make(map[int]ThisClient),
+	}
+
+	stream := ThisStream{
+		URL:         streamURL,
+		ChannelName: channelName,
+		Status:      false,
+		Folder:      streamFolder,
+		MD5:         md5,
+		PlaylistID:  playlistID,
+	}
+	playlist.Streams[streamID] = stream
+
+	client := ThisClient{
+		Connection: 1,
+	}
+	playlist.Clients[streamID] = client
+
+	BufferInformation.Store(playlistID, playlist)
+
+	var clients ClientConnection
+	clients.Connection = 1
+	BufferClients.Store(playlistID+stream.MD5, clients)
+
+	// 3. Start buffering in a goroutine
+	go connectToStreamingServer(streamID, playlistID)
+
+	// 4. Call bufferingStream and check if it closes
+	req := httptest.NewRequest("GET", "/stream", nil)
+	rr := httptest.NewRecorder()
+
+	done := make(chan bool)
+	go func() {
+		bufferingStream(playlistID, streamURL, channelName, rr, req)
+		done <- true
+	}()
+
+	select {
+	case <-done:
+		// Test passed, bufferingStream finished
+	case <-time.After(5 * time.Second):
+		t.Fatal("Test timed out: bufferingStream did not close after stream ended")
+	}
+
+	// 5. Verify the received content
+	resp := rr.Result()
+	body, _ := io.ReadAll(resp.Body)
+
+	if string(body) != string(content) {
+		t.Errorf("Expected response body '%s', but got '%s'", string(content), string(body))
+	}
+
+	// Clean up
+	BufferInformation.Delete(playlistID)
+	BufferClients.Delete(playlistID + stream.MD5)
+}
