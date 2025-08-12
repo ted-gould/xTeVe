@@ -64,6 +64,9 @@ type ThisStream struct {
 
 	// Local Temp Files
 	OldSegments []string
+
+	// Stream Status
+	StreamFinished bool
 }
 
 // Segment : URL Segments (HLS / M3U8)
