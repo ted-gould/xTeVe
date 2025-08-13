@@ -181,8 +181,12 @@ func runTests() error {
 	if err := setBuffer(conn, "xteve", 1024); err != nil {
 		return err
 	}
-	if err := runStreamingTest(conn); err != nil {
+	streamURL, err := runStreamingTest(conn, true)
+	if err != nil {
 		return fmt.Errorf("streaming test failed with buffer enabled: %w", err)
+	}
+	if err := runClientDisconnectTest(streamURL, true); err != nil {
+		return fmt.Errorf("client disconnect test failed with buffer enabled: %w", err)
 	}
 	fmt.Println("---")
 
@@ -190,11 +194,75 @@ func runTests() error {
 	if err := setBuffer(conn, "-", 0); err != nil {
 		return err
 	}
-	if err := runStreamingTest(conn); err != nil {
+	streamURL, err = runStreamingTest(conn, false)
+	if err != nil {
 		return fmt.Errorf("streaming test failed with buffer disabled: %w", err)
+	}
+	if err := runClientDisconnectTest(streamURL, false); err != nil {
+		return fmt.Errorf("client disconnect test failed with buffer disabled: %w", err)
 	}
 
 	return nil
+}
+
+func getActiveConnections() (int, error) {
+	resp, err := http.Get(fmt.Sprintf("http://localhost:%d/connections/active", streamingPort))
+	if err != nil {
+		return 0, fmt.Errorf("failed to get active connections: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return 0, fmt.Errorf("failed to read active connections response: %w", err)
+	}
+
+	var count int
+	_, err = fmt.Sscanf(string(body), "%d", &count)
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse active connections count: %w", err)
+	}
+
+	return count, nil
+}
+
+func runClientDisconnectTest(streamURL string, buffered bool) error {
+	fmt.Println("Running client disconnect test...")
+
+	// 1. Start streaming and disconnect early
+	fmt.Printf("Streaming from %s and disconnecting early...\n", streamURL)
+	streamResp, err := http.Get(streamURL)
+	if err != nil {
+		return fmt.Errorf("failed to start stream: %w", err)
+	}
+	// Read a small part of the body and then close it
+	buffer := make([]byte, 1024)
+	_, err = streamResp.Body.Read(buffer)
+	if err != nil {
+		// Reading from a closed stream will result in an error, we can ignore it
+		if err != io.EOF && !strings.Contains(err.Error(), "closed") {
+			return fmt.Errorf("failed to read from stream: %w", err)
+		}
+	}
+	streamResp.Body.Close()
+	fmt.Println("Client disconnected.")
+
+	// 2. Verify that the streamer connection is closed
+	time.Sleep(2 * time.Second) // Give xteve a moment to notice
+	for i := 0; i < 10; i++ {
+		active, err := getActiveConnections()
+		if err != nil {
+			return err
+		}
+		if active == 0 {
+			fmt.Println("Streamer connection closed as expected.")
+			return nil
+		}
+		fmt.Printf("Waiting for streamer connection to close... (active: %d)\n", active)
+		time.Sleep(1 * time.Second)
+	}
+
+	return fmt.Errorf("streamer connection did not close after client disconnect")
 }
 
 func setBuffer(conn *websocket.Conn, mode string, sizeKB int) error {
@@ -210,12 +278,12 @@ func setBuffer(conn *websocket.Conn, mode string, sizeKB int) error {
 	return nil
 }
 
-func runStreamingTest(conn *websocket.Conn) error {
+func runStreamingTest(conn *websocket.Conn, buffered bool) (string, error) {
 	// 1. Update the M3U file in xTeVe
 	fmt.Println("Updating M3U file...")
 	updateRequest := map[string]interface{}{"cmd": "updateFileM3U"}
 	if _, err := sendRequest(conn, updateRequest); err != nil {
-		return fmt.Errorf("failed to send M3U update request: %w", err)
+		return "", fmt.Errorf("failed to send M3U update request: %w", err)
 	}
 
 	// Wait for the update to process
@@ -225,18 +293,18 @@ func runStreamingTest(conn *websocket.Conn) error {
 	fmt.Println("Verifying M3U output...")
 	httpResp, err := http.Get(fmt.Sprintf("http://localhost:%d/m3u/xteve.m3u", xtevePort))
 	if err != nil {
-		return fmt.Errorf("failed to get M3U file: %w", err)
+		return "", fmt.Errorf("failed to get M3U file: %w", err)
 	}
 	defer httpResp.Body.Close()
 
 	body, err := io.ReadAll(httpResp.Body)
 	if err != nil {
-		return fmt.Errorf("failed to read M3U file body: %w", err)
+		return "", fmt.Errorf("failed to read M3U file body: %w", err)
 	}
 
 	m3uContent := string(body)
 	if !strings.Contains(m3uContent, "Test Stream") {
-		return fmt.Errorf("verification failed: 'Test Stream' not found in M3U output")
+		return "", fmt.Errorf("verification failed: 'Test Stream' not found in M3U output")
 	}
 
 	// Find the stream URL from the M3U content
@@ -250,24 +318,24 @@ func runStreamingTest(conn *websocket.Conn) error {
 	}
 
 	if streamURL == "" {
-		return fmt.Errorf("could not find stream URL in M3U output")
+		return "", fmt.Errorf("could not find stream URL in M3U output")
 	}
 
 	// 3. Stream the data and verify it
 	fmt.Printf("Streaming from %s...\n", streamURL)
 	streamResp, err := http.Get(streamURL)
 	if err != nil {
-		return fmt.Errorf("failed to start stream: %w", err)
+		return "", fmt.Errorf("failed to start stream: %w", err)
 	}
 	defer streamResp.Body.Close()
 
 	receivedData, err := io.ReadAll(streamResp.Body)
 	if err != nil {
-		return fmt.Errorf("failed to read stream data: %w", err)
+		return "", fmt.Errorf("failed to read stream data: %w", err)
 	}
 
 	// This now needs to call verifyStreamedData
-	return verifyStreamedData(receivedData)
+	return streamURL, verifyStreamedData(receivedData)
 }
 
 func verifyStreamedData(data []byte) error {
