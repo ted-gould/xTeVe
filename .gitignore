@@ -16,4 +16,7 @@ src/html/js/
 bin/
 node_modules/
 test-results/
+
+# E2E test binaries
 streamer_binary
+e2e-streaming-test
