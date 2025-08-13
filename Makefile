@@ -25,7 +25,7 @@ generate-video:
 	@bash build/generate_video.sh
 
 # Test and lint targets
-test: ts-compile
+test: ts-compile generate-video
 	@echo "--- Running Go tests ---"
 	$(GO) test ./...
 
