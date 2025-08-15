@@ -2,7 +2,6 @@ package src
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -14,7 +13,7 @@ import (
 func TestHandleHLSStream(t *testing.T) {
 	// 1. Setup mock server
 	tsContent := "some ts segment data"
-	m3u8Playlist := fmt.Sprintf("#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:10\n#EXTINF:10.0,\nsegment1.ts\n#EXT-X-ENDLIST")
+	m3u8Playlist := "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:10\n#EXTINF:10.0,\nsegment1.ts\n#EXT-X-ENDLIST"
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, ".m3u8") {

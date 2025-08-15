@@ -60,7 +60,6 @@ func TestHandleTSStream(t *testing.T) {
 	}
 	var buffer = make([]byte, 1024*Settings.BufferSize)
 	var bandwidth BandwidthCalculation
-	var networkBandwidth = 0
 	var retries = 0
 
 	req, err := http.NewRequest("GET", server.URL, nil)
@@ -73,7 +72,7 @@ func TestHandleTSStream(t *testing.T) {
 	}
 
 	// 3. Call the function
-	modifiedStream, err := handleTSStream(resp, stream, streamID, playlistID, tmpFolder, &tmpSegment, addErrorToStream, buffer, &bandwidth, networkBandwidth, retries)
+	modifiedStream, err := handleTSStream(resp, stream, streamID, playlistID, tmpFolder, &tmpSegment, addErrorToStream, buffer, &bandwidth, retries)
 	if err != nil {
 		t.Fatalf("handleTSStream returned an error: %v", err)
 	}

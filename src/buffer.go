@@ -428,7 +428,6 @@ func connectToStreamingServer(streamID int, playlistID string) {
 		var tmpFolder = playlist.Streams[streamID].Folder
 		var m3u8Segments []string
 		var bandwidth BandwidthCalculation
-		var networkBandwidth = Settings.M3U8AdaptiveBandwidthMBPS * 1e+6
 		// Size of the Buffer
 		var bufferSize = Settings.BufferSize
 		var buffer = make([]byte, 1024*bufferSize)
@@ -451,7 +450,7 @@ func connectToStreamingServer(streamID int, playlistID string) {
 			stream.HLS = false
 			stream.Sequence = 0
 			stream.Wait = 0
-			stream.NetworkBandwidth = networkBandwidth
+			stream.NetworkBandwidth = Settings.M3U8AdaptiveBandwidthMBPS * 1e+6
 
 			playlist.Streams[streamID] = stream
 
@@ -597,7 +596,7 @@ func connectToStreamingServer(streamID int, playlistID string) {
 			// Video Stream (TS)
 			case "video/mpeg", "video/mp4", "video/mp2t", "video/m2ts", "application/octet-stream", "binary/octet-stream", "application/mp2t", "video/x-matroska":
 				var err error
-				stream, err = handleTSStream(resp, stream, streamID, playlistID, tmpFolder, &tmpSegment, addErrorToStream, buffer, &bandwidth, networkBandwidth, retries)
+				stream, err = handleTSStream(resp, stream, streamID, playlistID, tmpFolder, &tmpSegment, addErrorToStream, buffer, &bandwidth, retries)
 				if err != nil {
 					if err.Error() == "redirect" {
 						goto Redirect
@@ -722,7 +721,7 @@ func handleHLSStream(resp *http.Response, stream ThisStream, tmpFolder string, t
 	return stream, nil
 }
 
-func handleTSStream(resp *http.Response, stream ThisStream, streamID int, playlistID, tmpFolder string, tmpSegment *int, addErrorToStream func(err error), buffer []byte, bandwidth *BandwidthCalculation, networkBandwidth, retries int) (ThisStream, error) {
+func handleTSStream(resp *http.Response, stream ThisStream, streamID int, playlistID, tmpFolder string, tmpSegment *int, addErrorToStream func(err error), buffer []byte, bandwidth *BandwidthCalculation, retries int) (ThisStream, error) {
 	var fileSize int
 	var bytesWritten int
 	var bufferSize = Settings.BufferSize
@@ -785,9 +784,7 @@ func handleTSStream(resp *http.Response, stream ThisStream, streamID int, playli
 
 					bandwidth.TimeDiff = bandwidth.Stop.Sub(bandwidth.Start).Seconds()
 
-					networkBandwidth = int(float64(bandwidth.Size) / bandwidth.TimeDiff * 1000)
-
-					stream.NetworkBandwidth = networkBandwidth
+					stream.NetworkBandwidth = int(float64(bandwidth.Size) / bandwidth.TimeDiff * 1000)
 
 					debug = fmt.Sprintf("Buffer Status:Done (%s)", tmpFile)
 					showDebug(debug, 2)
