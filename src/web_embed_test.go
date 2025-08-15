@@ -126,6 +126,21 @@ func TestWebUIAsHTTPFS(t *testing.T) {
 	}
 }
 
+func TestStreamLimitBinEmbedded(t *testing.T) {
+	// GIVEN
+	// The path to the stream-limit.bin file
+	streamLimitPath := "html/video/stream-limit.bin"
+
+	// WHEN
+	// We check if the file exists in the embedded FS
+	_, err := webUI.ReadFile(streamLimitPath)
+
+	// THEN
+	// The file should exist in the embedded FS. If it doesn't, it's likely
+	// that `make build` was not run before `go test`.
+	assert.NoError(t, err, "Stream limit file '%s' should be embedded. Did you run 'make build'?", streamLimitPath)
+}
+
 func TestGeneratedJSFilesEmbedded(t *testing.T) {
 	// GIVEN
 	// A list of expected JavaScript files that should be generated and embedded.

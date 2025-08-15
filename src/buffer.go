@@ -18,10 +18,10 @@ import (
 	"strings"
 	"time"
 
+	"slices"
+
 	"github.com/avfs/avfs/vfs/memfs"
 	"github.com/avfs/avfs/vfs/osfs"
-	"github.com/samber/lo"
-	"slices"
 )
 
 func createStreamID(stream map[int]ThisStream) (streamID int) {
@@ -266,9 +266,21 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 						return
 					}
 
-					var tmpFiles = getBufTmpFiles(&stream)
+					Lock.Lock()
+					var filesToSend []string
+					if p, ok := BufferInformation.Load(playlistID); ok {
+						playlist := p.(Playlist)
+						if s, ok := playlist.Streams[streamID]; ok {
+							filesToSend = make([]string, len(s.CompletedSegments))
+							copy(filesToSend, s.CompletedSegments)
+							s.CompletedSegments = []string{}
+							playlist.Streams[streamID] = s
+							BufferInformation.Store(playlistID, playlist)
+						}
+					}
+					Lock.Unlock()
 
-					for _, f := range tmpFiles {
+					for _, f := range filesToSend {
 						var fileName = stream.Folder + f
 						file, err := bufferVFS.Open(fileName)
 						if err != nil {
@@ -316,7 +328,7 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 						}
 					}
 
-					if len(tmpFiles) == 0 {
+					if len(filesToSend) == 0 {
 						if stream.StreamFinished {
 							// No more files and stream is finished, so we can exit
 							return
@@ -332,42 +344,6 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 			}
 		} // End of Buffer Information
 	} // End of Loop 1
-}
-
-func getBufTmpFiles(stream *ThisStream) (tmpFiles []string) {
-	var tmpFolder = stream.Folder
-	var fileIDs []float64
-
-	if _, err := bufferVFS.Stat(tmpFolder); !fsIsNotExistErr(err) {
-		files, err := bufferVFS.ReadDir(getPlatformPath(tmpFolder))
-		if err != nil {
-			ShowError(err, 000)
-			return
-		}
-
-		if len(files) > 0 {
-			for _, file := range files {
-				var fileID = strings.Replace(file.Name(), ".ts", "", -1)
-				var f, err = strconv.ParseFloat(fileID, 64)
-
-				if err == nil {
-					fileIDs = append(fileIDs, f)
-				}
-			}
-
-			sort.Float64s(fileIDs)
-
-			for _, file := range fileIDs {
-				var fileName = fmt.Sprintf("%d.ts", int64(file))
-
-				if lo.IndexOf(stream.OldSegments, fileName) == -1 {
-					tmpFiles = append(tmpFiles, fileName)
-					stream.OldSegments = append(stream.OldSegments, fileName)
-				}
-			}
-		}
-	}
-	return
 }
 
 func killClientConnection(streamID int, playlistID string, force bool) {
@@ -818,6 +794,10 @@ func handleTSStream(resp *http.Response, stream ThisStream, streamID int, playli
 
 					bufferFile.Close()
 
+					// Add completed segment to the list
+					segmentName := fmt.Sprintf("%d.ts", *tmpSegment)
+					stream.CompletedSegments = append(stream.CompletedSegments, segmentName)
+
 					stream.Status = true
 
 					if p, ok := BufferInformation.Load(playlistID); ok {
@@ -861,6 +841,19 @@ func handleTSStream(resp *http.Response, stream ThisStream, streamID int, playli
 				}
 				ShowError(err, 0)
 				addErrorToStream(err)
+			} else {
+				// EOF reached, add the final segment if it has data
+				if fileSize > 0 {
+					segmentName := fmt.Sprintf("%d.ts", *tmpSegment)
+					stream.CompletedSegments = append(stream.CompletedSegments, segmentName)
+
+					// Update the stream in BufferInformation
+					if p, ok := BufferInformation.Load(playlistID); ok {
+						playlist := p.(Playlist)
+						playlist.Streams[streamID] = stream
+						BufferInformation.Store(playlistID, playlist)
+					}
+				}
 			}
 			stream.Status = true
 			stream.StreamFinished = true
@@ -876,7 +869,6 @@ func handleTSStream(resp *http.Response, stream ThisStream, streamID int, playli
 	}
 	return stream, nil
 }
-
 
 func switchBandwidth(stream *ThisStream) (err error) {
 	var bandwidth []int

@@ -63,7 +63,8 @@ type ThisStream struct {
 	DynamicStream map[int]DynamicStream
 
 	// Local Temp Files
-	OldSegments []string
+	OldSegments       []string
+	CompletedSegments []string
 
 	// Stream Status
 	StreamFinished bool

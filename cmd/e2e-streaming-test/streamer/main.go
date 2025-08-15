@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"sync/atomic"
 )
 
 const (
@@ -13,7 +14,11 @@ const (
 	defaultPort       = 8080
 )
 
-var testData []byte
+var (
+	testData         []byte
+	activeStreams    int64
+	totalConnections int64
+)
 
 func generateTestData(size int) error {
 	fmt.Printf("Generating %d bytes of test data...\n", size)
@@ -22,6 +27,18 @@ func generateTestData(size int) error {
 		testData[i] = byte(i % 256)
 	}
 	return nil
+}
+
+func streamHandler(w http.ResponseWriter, r *http.Request) {
+	atomic.AddInt64(&activeStreams, 1)
+	atomic.AddInt64(&totalConnections, 1)
+	defer atomic.AddInt64(&activeStreams, -1)
+
+	w.Header().Set("Content-Type", "video/mpeg")
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(testData)))
+	if _, err := w.Write(testData); err != nil {
+		log.Printf("Failed to write stream data: %v", err)
+	}
 }
 
 func main() {
@@ -42,13 +59,7 @@ func main() {
 	}
 
 	fmt.Printf("Starting streaming server on port %d...\n", port)
-	http.HandleFunc("/stream", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "video/mpeg")
-		w.Header().Set("Content-Length", fmt.Sprintf("%d", len(testData)))
-		if _, err := w.Write(testData); err != nil {
-			log.Printf("Failed to write stream data: %v", err)
-		}
-	})
+	http.HandleFunc("/stream", streamHandler)
 	http.HandleFunc("/test.m3u", func(w http.ResponseWriter, r *http.Request) {
 		m3uContent := fmt.Sprintf(`#EXTM3U
 #EXTINF:-1 tvg-id="test.stream" tvg-name="Test Stream" group-title="Test",Test Stream
@@ -58,6 +69,14 @@ http://localhost:%d/stream
 		if _, err := w.Write([]byte(m3uContent)); err != nil {
 			log.Printf("Failed to write m3u data: %v", err)
 		}
+	})
+
+	// Endpoints to check connection counts
+	http.HandleFunc("/connections/active", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, atomic.LoadInt64(&activeStreams))
+	})
+	http.HandleFunc("/connections/total", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, atomic.LoadInt64(&totalConnections))
 	})
 
 	if err := http.ListenAndServe(fmt.Sprintf(":%d", port), nil); err != nil {
