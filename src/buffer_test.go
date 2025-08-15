@@ -33,7 +33,7 @@ func TestConnectWithRetry(t *testing.T) {
 		req, _ := http.NewRequest("GET", server.URL+"/redirect", nil)
 		client := &http.Client{}
 
-		resp, err := connectWithRetry(client, req)
+		resp, err := ConnectWithRetry(client, req)
 		if err != nil {
 			t.Fatalf("connectWithRetry failed: %v", err)
 		}
@@ -78,7 +78,7 @@ func TestConnectWithRetry(t *testing.T) {
 		req, _ := http.NewRequest("GET", server.URL, nil)
 		client := &http.Client{}
 
-		resp, err := connectWithRetry(client, req)
+		resp, err := ConnectWithRetry(client, req)
 
 		if err != nil {
 			t.Fatalf("connectWithRetry failed: %v", err)

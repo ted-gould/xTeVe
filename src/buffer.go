@@ -18,9 +18,10 @@ import (
 	"strings"
 	"time"
 
+	"slices"
+
 	"github.com/avfs/avfs/vfs/memfs"
 	"github.com/avfs/avfs/vfs/osfs"
-	"slices"
 )
 
 func createStreamID(stream map[int]ThisStream) (streamID int) {
@@ -417,41 +418,6 @@ func clientConnection(stream ThisStream) (status bool) {
 	return
 }
 
-func connectWithRetry(client *http.Client, req *http.Request) (*http.Response, error) {
-	var resp *http.Response
-	var err error
-	var retries = 0
-
-	for {
-		resp, err = client.Do(req)
-
-		if err != nil {
-			if resp != nil {
-				debugResponse(resp)
-			}
-			if Settings.StreamRetryEnabled && retries < Settings.StreamMaxRetries {
-				retries++
-				showInfo(fmt.Sprintf("Stream Error (%s). Retry %d/%d in %d milliseconds.", err.Error(), retries, Settings.StreamMaxRetries, Settings.StreamRetryDelay))
-				time.Sleep(time.Duration(Settings.StreamRetryDelay) * time.Millisecond)
-				continue
-			}
-			return nil, err
-		}
-
-		if resp.StatusCode != http.StatusOK {
-			if Settings.StreamRetryEnabled && retries < Settings.StreamMaxRetries {
-				retries++
-				showInfo(fmt.Sprintf("Stream HTTP Status Error (%s). Retry %d/%d in %d milliseconds.", http.StatusText(resp.StatusCode), retries, Settings.StreamMaxRetries, Settings.StreamRetryDelay))
-				time.Sleep(time.Duration(Settings.StreamRetryDelay) * time.Millisecond)
-				continue
-			}
-			return resp, fmt.Errorf("bad status: %s", resp.Status)
-		}
-
-		return resp, nil
-	}
-}
-
 func connectToStreamingServer(streamID int, playlistID string) {
 	if p, ok := BufferInformation.Load(playlistID); ok {
 		var playlist = p.(Playlist)
@@ -462,7 +428,6 @@ func connectToStreamingServer(streamID int, playlistID string) {
 		var tmpFolder = playlist.Streams[streamID].Folder
 		var m3u8Segments []string
 		var bandwidth BandwidthCalculation
-		var networkBandwidth = Settings.M3U8AdaptiveBandwidthMBPS * 1e+6
 		// Size of the Buffer
 		var bufferSize = Settings.BufferSize
 		var buffer = make([]byte, 1024*bufferSize)
@@ -485,7 +450,7 @@ func connectToStreamingServer(streamID int, playlistID string) {
 			stream.HLS = false
 			stream.Sequence = 0
 			stream.Wait = 0
-			stream.NetworkBandwidth = networkBandwidth
+			stream.NetworkBandwidth = Settings.M3U8AdaptiveBandwidthMBPS * 1e+6
 
 			playlist.Streams[streamID] = stream
 
@@ -571,7 +536,7 @@ func connectToStreamingServer(streamID int, playlistID string) {
 
 			client := &http.Client{}
 
-			resp, err := connectWithRetry(client, req)
+			resp, err := ConnectWithRetry(client, req)
 
 			if err != nil {
 				ShowError(err, 0)
@@ -622,202 +587,26 @@ func connectToStreamingServer(streamID int, playlistID string) {
 			switch contentType {
 			// M3U8 Playlist
 			case "application/x-mpegurl", "application/vnd.apple.mpegurl", "audio/mpegurl", "audio/x-mpegurl":
-				body, err := io.ReadAll(resp.Body)
+				var err error
+				stream, err = handleHLSStream(resp, stream, tmpFolder, &tmpSegment, addErrorToStream, currentURL)
 				if err != nil {
-					ShowError(err, 0)
-					addErrorToStream(err)
-				}
-
-				stream.Body = string(body)
-				stream.HLS = true
-				stream.M3U8URL = currentURL
-
-				err = parseM3U8(&stream)
-				if err != nil {
-					ShowError(err, 4050)
-					addErrorToStream(err)
-				}
-
-				if stream.HLS {
-					client := &http.Client{}
-
-					for _, segment := range stream.Segment {
-						req, _ := http.NewRequest("GET", segment.URL, nil)
-						req.Header.Set("User-Agent", Settings.UserAgent)
-						req.Header.Set("Connection", "close")
-						req.Header.Set("Accept", "*/*")
-						debugRequest(req)
-
-						resp, err := connectWithRetry(client, req)
-						if err != nil {
-							ShowError(err, 0)
-							addErrorToStream(err)
-							return
-						}
-						defer resp.Body.Close()
-
-						body, err := io.ReadAll(resp.Body)
-						if err != nil {
-							ShowError(err, 0)
-							addErrorToStream(err)
-						}
-
-						tmpFile := fmt.Sprintf("%s%d.ts", tmpFolder, tmpSegment)
-						bufferFile, err := bufferVFS.Create(tmpFile)
-						if err != nil {
-							addErrorToStream(err)
-							bufferFile.Close()
-							resp.Body.Close()
-							return
-						}
-
-						if _, err := bufferFile.Write(body); err != nil {
-							ShowError(err, 0)
-							addErrorToStream(err)
-							resp.Body.Close()
-							return
-						}
-						bufferFile.Close()
-						tmpSegment++
-					}
+					// handleHLSStream logs and adds errors, so we just need to return
+					return
 				}
 			// Video Stream (TS)
 			case "video/mpeg", "video/mp4", "video/mp2t", "video/m2ts", "application/octet-stream", "binary/octet-stream", "application/mp2t", "video/x-matroska":
-				var fileSize int
-				var bytesWritten int
-
-				// Size of the Buffer
-				buffer = make([]byte, 1024*bufferSize)
-				var tmpFileSize = 1024 * bufferSize * 1
-
-				debug = fmt.Sprintf("Buffer Size:%d KB [SERVER CONNECTION]", len(buffer)/1024)
-				showDebug(debug, 3)
-
-				debug = fmt.Sprintf("Buffer Size:%d KB [CLIENT CONNECTION]", tmpFileSize/1024)
-				showDebug(debug, 3)
-
-				var tmpFile = fmt.Sprintf("%s%d.ts", tmpFolder, tmpSegment)
-
-				if !clientConnection(stream) {
-					resp.Body.Close()
-					return
-				}
-
-				bufferFile, err := bufferVFS.Create(tmpFile)
+				var err error
+				stream, err = handleTSStream(resp, stream, streamID, playlistID, tmpFolder, &tmpSegment, addErrorToStream, buffer, &bandwidth, retries)
 				if err != nil {
+					if err.Error() == "redirect" {
+						goto Redirect
+					}
 					addErrorToStream(err)
-					bufferFile.Close()
-					resp.Body.Close()
 					return
 				}
+				playlist.Streams[streamID] = stream
+				BufferInformation.Store(playlistID, playlist)
 
-				defer resp.Body.Close()
-				for {
-					if fileSize == 0 {
-						debug = fmt.Sprintf("Buffer Status:Buffering (%s)", tmpFile)
-						showDebug(debug, 2)
-					}
-
-					n, err := resp.Body.Read(buffer)
-					if n > 0 {
-						bytesWritten = 0
-						for bytesWritten < n {
-							// Calculate how much to write in this chunk
-							writeSize := n - bytesWritten
-							if fileSize+writeSize > tmpFileSize {
-								writeSize = tmpFileSize - fileSize
-							}
-
-							if _, err := bufferFile.Write(buffer[bytesWritten : bytesWritten+writeSize]); err != nil {
-								ShowError(err, 0)
-								addErrorToStream(err)
-								bufferFile.Close()
-								return
-							}
-							fileSize += writeSize
-							bytesWritten += writeSize
-
-							// If the file is full, create a new one
-							if fileSize >= tmpFileSize {
-								Lock.Lock()
-
-								bandwidth.Stop = time.Now()
-								bandwidth.Size += fileSize
-
-								bandwidth.TimeDiff = bandwidth.Stop.Sub(bandwidth.Start).Seconds()
-
-								networkBandwidth = int(float64(bandwidth.Size) / bandwidth.TimeDiff * 1000)
-
-								stream.NetworkBandwidth = networkBandwidth
-
-								debug = fmt.Sprintf("Buffer Status:Done (%s)", tmpFile)
-								showDebug(debug, 2)
-
-								bufferFile.Close()
-
-								stream.Status = true
-								stream.CompletedSegments = append(stream.CompletedSegments, path.Base(tmpFile))
-								playlist.Streams[streamID] = stream
-								BufferInformation.Store(playlistID, playlist)
-								Lock.Unlock()
-
-								tmpSegment++
-
-								tmpFile = fmt.Sprintf("%s%d.ts", tmpFolder, tmpSegment)
-
-								if !clientConnection(stream) {
-									if err = bufferVFS.RemoveAll(stream.Folder); err != nil {
-										ShowError(err, 4005)
-									}
-									return
-								}
-
-								bufferFile, err = bufferVFS.Create(tmpFile)
-								if err != nil {
-									addErrorToStream(err)
-									return
-								}
-
-								fileSize = 0
-							}
-						}
-					}
-
-					if err != nil {
-						if err != io.EOF {
-							if Settings.StreamRetryEnabled && retries < Settings.StreamMaxRetries {
-								retries++
-								showInfo(fmt.Sprintf("Stream Read Error (%s). Retry %d/%d in %d seconds.", err.Error(), retries, Settings.StreamMaxRetries, Settings.StreamRetryDelay))
-								time.Sleep(time.Duration(Settings.StreamRetryDelay) * time.Second)
-								bufferFile.Close()
-								goto Redirect
-							}
-							ShowError(err, 0)
-							addErrorToStream(err)
-						}
-
-						// Handle the final segment on EOF
-						Lock.Lock()
-						if fileSize > 0 {
-							stream.CompletedSegments = append(stream.CompletedSegments, path.Base(tmpFile))
-						}
-						stream.Status = true
-						stream.StreamFinished = true
-						playlist.Streams[streamID] = stream
-						BufferInformation.Store(playlistID, playlist)
-						Lock.Unlock()
-
-						bufferFile.Close()
-						break
-					}
-					retries = 0
-
-					if !clientConnection(stream) {
-						bufferFile.Close()
-						return
-					}
-				}
-				//--
 			// Unknown Format
 			default:
 				showInfo("Content Type:" + resp.Header.Get("Content-Type"))
@@ -866,206 +655,216 @@ func connectToStreamingServer(streamID int, playlistID string) {
 	} // End of BufferInformation
 }
 
-func parseM3U8(stream *ThisStream) (err error) {
+func handleHLSStream(resp *http.Response, stream ThisStream, tmpFolder string, tmpSegment *int, addErrorToStream func(err error), currentURL string) (ThisStream, error) {
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		ShowError(err, 0)
+		addErrorToStream(err)
+		return stream, err
+	}
+
+	stream.Body = string(body)
+	stream.HLS = true
+	stream.M3U8URL = currentURL
+
+	err = ParseM3U8(&stream)
+	if err != nil {
+		ShowError(err, 4050)
+		addErrorToStream(err)
+		return stream, err
+	}
+
+	if stream.HLS {
+		client := &http.Client{}
+
+		for _, segment := range stream.Segment {
+			req, _ := http.NewRequest("GET", segment.URL, nil)
+			req.Header.Set("User-Agent", Settings.UserAgent)
+			req.Header.Set("Connection", "close")
+			req.Header.Set("Accept", "*/*")
+			debugRequest(req)
+
+			segResp, err := ConnectWithRetry(client, req)
+			if err != nil {
+				ShowError(err, 0)
+				addErrorToStream(err)
+				return stream, err
+			}
+
+			body, err := io.ReadAll(segResp.Body)
+			segResp.Body.Close() // Close body immediately after reading
+			if err != nil {
+				ShowError(err, 0)
+				addErrorToStream(err)
+				continue // Skip this segment
+			}
+
+			tmpFile := fmt.Sprintf("%s%d.ts", tmpFolder, *tmpSegment)
+			bufferFile, err := bufferVFS.Create(tmpFile)
+			if err != nil {
+				addErrorToStream(err)
+				bufferFile.Close()
+				return stream, err
+			}
+
+			if _, err := bufferFile.Write(body); err != nil {
+				ShowError(err, 0)
+				addErrorToStream(err)
+				bufferFile.Close()
+				return stream, err
+			}
+			bufferFile.Close()
+			*tmpSegment++
+		}
+	}
+
+	return stream, nil
+}
+
+func handleTSStream(resp *http.Response, stream ThisStream, streamID int, playlistID, tmpFolder string, tmpSegment *int, addErrorToStream func(err error), buffer []byte, bandwidth *BandwidthCalculation, retries int) (ThisStream, error) {
+	var fileSize int
+	var bytesWritten int
+	var bufferSize = Settings.BufferSize
+	var tmpFileSize = 1024 * bufferSize * 1
 	var debug string
-	var noNewSegment = false
-	var lastSegmentDuration float64
-	var segment Segment
-	var m3u8Segments []Segment
-	var sequence int64
 
-	stream.DynamicBandwidth = false
-
-	debug = fmt.Sprintf(`M3U8 Playlist:`+"\n"+`%s`, stream.Body)
+	debug = fmt.Sprintf("Buffer Size:%d KB [SERVER CONNECTION]", len(buffer)/1024)
 	showDebug(debug, 3)
 
-	var getBandwidth = func(line string) int {
-		var infos = strings.Split(line, ",")
+	debug = fmt.Sprintf("Buffer Size:%d KB [CLIENT CONNECTION]", tmpFileSize/1024)
+	showDebug(debug, 3)
 
-		for _, info := range infos {
-			if strings.Contains(info, "BANDWIDTH=") {
-				var bandwidth = strings.Replace(info, "BANDWIDTH=", "", -1)
-				n, err := strconv.Atoi(bandwidth)
-				if err == nil {
-					return n
-				}
-			}
-		}
-		return 0
+	var tmpFile = fmt.Sprintf("%s%d.ts", tmpFolder, *tmpSegment)
+
+	if !clientConnection(stream) {
+		resp.Body.Close()
+		return stream, nil
 	}
 
-	var parseParameter = func(line string, segment *Segment) (err error) {
-		line = strings.Trim(line, "\r\n")
+	bufferFile, err := bufferVFS.Create(tmpFile)
+	if err != nil {
+		addErrorToStream(err)
+		bufferFile.Close()
+		resp.Body.Close()
+		return stream, err
+	}
 
-		var parameters = []string{"#EXT-X-VERSION:", "#EXT-X-PLAYLIST-TYPE:", "#EXT-X-MEDIA-SEQUENCE:", "#EXT-X-STREAM-INF:", "#EXTINF:"}
+	defer resp.Body.Close()
+	for {
+		if fileSize == 0 {
+			debug = fmt.Sprintf("Buffer Status:Buffering (%s)", tmpFile)
+			showDebug(debug, 2)
+		}
 
-		for _, parameter := range parameters {
-			if strings.Contains(line, parameter) {
-				var value = strings.Replace(line, parameter, "", -1)
+		n, err := resp.Body.Read(buffer)
+		if n > 0 {
+			bytesWritten = 0
+			for bytesWritten < n {
+				// Calculate how much to write in this chunk
+				writeSize := n - bytesWritten
+				if fileSize+writeSize > tmpFileSize {
+					writeSize = tmpFileSize - fileSize
+				}
 
-				switch parameter {
-				case "#EXT-X-VERSION:":
-					version, err := strconv.Atoi(value)
-					if err == nil {
-						segment.Version = version
+				if _, err := bufferFile.Write(buffer[bytesWritten : bytesWritten+writeSize]); err != nil {
+					ShowError(err, 0)
+					addErrorToStream(err)
+					bufferFile.Close()
+					return stream, err
+				}
+				fileSize += writeSize
+				bytesWritten += writeSize
+
+				// If the file is full, create a new one
+				if fileSize >= tmpFileSize {
+					Lock.Lock()
+
+					bandwidth.Stop = time.Now()
+					bandwidth.Size += fileSize
+
+					bandwidth.TimeDiff = bandwidth.Stop.Sub(bandwidth.Start).Seconds()
+
+					stream.NetworkBandwidth = int(float64(bandwidth.Size) / bandwidth.TimeDiff * 1000)
+
+					debug = fmt.Sprintf("Buffer Status:Done (%s)", tmpFile)
+					showDebug(debug, 2)
+
+					bufferFile.Close()
+
+					// Add completed segment to the list
+					segmentName := fmt.Sprintf("%d.ts", *tmpSegment)
+					stream.CompletedSegments = append(stream.CompletedSegments, segmentName)
+
+					stream.Status = true
+
+					if p, ok := BufferInformation.Load(playlistID); ok {
+						playlist := p.(Playlist)
+						playlist.Streams[streamID] = stream
+						BufferInformation.Store(playlistID, playlist)
 					}
-				case "#EXT-X-PLAYLIST-TYPE:":
-					segment.PlaylistType = value
-				case "#EXT-X-MEDIA-SEQUENCE:":
-					n, err := strconv.ParseInt(value, 10, 64)
-					if err == nil {
-						stream.Sequence = n
-						sequence = n
-					}
-				case "#EXT-X-STREAM-INF:":
-					segment.Info = true
-					segment.StreamInf.Bandwidth = getBandwidth(value)
-				case "#EXTINF:":
-					var d = strings.Split(value, ",")
-					if len(d) > 0 {
-						value = strings.Replace(d[0], ",", "", -1)
-						duration, err := strconv.ParseFloat(value, 64)
-						if err == nil {
-							segment.Duration = duration
-						} else {
-							ShowError(err, 1050)
-							return err
+
+					Lock.Unlock()
+
+					*tmpSegment++
+
+					tmpFile = fmt.Sprintf("%s%d.ts", tmpFolder, *tmpSegment)
+
+					if !clientConnection(stream) {
+						if err = bufferVFS.RemoveAll(stream.Folder); err != nil {
+							ShowError(err, 4005)
 						}
+						return stream, nil
 					}
-				}
-			}
-		}
-		return
-	}
 
-	var parseURL = func(line string, segment *Segment) {
-		// Check if the address is a valid URL (http://... or /path/to/stream)
-		_, err := url.ParseRequestURI(line)
-		if err == nil {
-			// Prüfen ob die Domain in der Adresse enhalten ist
-			u, _ := url.Parse(line)
-
-			if len(u.Host) == 0 {
-				// Check whether the domain is included in the address
-				segment.URL = stream.URLStreamingServer + line
-			} else {
-				// Domain included in the address
-				segment.URL = line
-			}
-		} else {
-			// not URL, but a file path (media/file-01.ts)
-			var serverURLPath = strings.Replace(stream.M3U8URL, path.Base(stream.M3U8URL), line, -1)
-			segment.URL = serverURLPath
-		}
-	}
-
-	if strings.Contains(stream.Body, "#EXTM3U") {
-		var lines = strings.Split(strings.Replace(stream.Body, "\r\n", "\n", -1), "\n")
-
-		if !stream.DynamicBandwidth {
-			stream.DynamicStream = make(map[int]DynamicStream)
-		}
-
-		// Parse Parameters
-		for i, line := range lines {
-			_ = i
-
-			if len(line) > 0 {
-				if line[0:1] == "#" {
-					err := parseParameter(line, &segment)
+					bufferFile, err = bufferVFS.Create(tmpFile)
 					if err != nil {
-						return err
+						addErrorToStream(err)
+						return stream, err
 					}
-					lastSegmentDuration = segment.Duration
-				}
 
-				// M3U8 contains several links to additional M3U8 Playlists (Bandwidth option)
-				if segment.Info && len(line) > 0 && line[0:1] != "#" {
-					var dynamicStream DynamicStream
-
-					segment.Duration = 0
-					noNewSegment = false
-
-					stream.DynamicBandwidth = true
-					parseURL(line, &segment)
-
-					dynamicStream.Bandwidth = segment.StreamInf.Bandwidth
-					dynamicStream.URL = segment.URL
-
-					stream.DynamicStream[dynamicStream.Bandwidth] = dynamicStream
-				}
-
-				// Segment with TS Stream
-				if segment.Duration > 0 && line[0:1] != "#" {
-					parseURL(line, &segment)
-
-					if len(segment.URL) > 0 {
-						segment.Sequence = sequence
-						m3u8Segments = append(m3u8Segments, segment)
-						sequence++
-					}
+					fileSize = 0
 				}
 			}
 		}
-	} else {
-		err = errors.New(getErrMsg(4051))
-		return
-	}
 
-	if len(m3u8Segments) > 0 {
-		noNewSegment = true
-
-		if !stream.Status {
-			if len(m3u8Segments) >= 2 {
-				m3u8Segments = m3u8Segments[0 : len(m3u8Segments)-1]
-			}
-		}
-
-		for _, s := range m3u8Segments {
-			segment = s
-
-			if !stream.Status {
-				noNewSegment = false
-				stream.LastSequence = segment.Sequence
-
-				// Stream is of type VOD. The first segment of the M3U8 playlist must be used.
-				if strings.ToUpper(segment.PlaylistType) == "VOD" {
-					break
+		if err != nil {
+			if err != io.EOF {
+				if Settings.StreamRetryEnabled && retries < Settings.StreamMaxRetries {
+					retries++
+					showInfo(fmt.Sprintf("Stream Read Error (%s). Retry %d/%d in %d seconds.", err.Error(), retries, Settings.StreamMaxRetries, Settings.StreamRetryDelay))
+					time.Sleep(time.Duration(Settings.StreamRetryDelay) * time.Second)
+					bufferFile.Close()
+					return stream, errors.New("redirect")
 				}
+				ShowError(err, 0)
+				addErrorToStream(err)
 			} else {
-				if segment.Sequence > stream.LastSequence {
-					stream.LastSequence = segment.Sequence
-					noNewSegment = false
-					break
+				// EOF reached, add the final segment if it has data
+				if fileSize > 0 {
+					segmentName := fmt.Sprintf("%d.ts", *tmpSegment)
+					stream.CompletedSegments = append(stream.CompletedSegments, segmentName)
+
+					// Update the stream in BufferInformation
+					if p, ok := BufferInformation.Load(playlistID); ok {
+						playlist := p.(Playlist)
+						playlist.Streams[streamID] = stream
+						BufferInformation.Store(playlistID, playlist)
+					}
 				}
 			}
+			stream.Status = true
+			stream.StreamFinished = true
+			bufferFile.Close()
+			break
+		}
+		retries = 0
+
+		if !clientConnection(stream) {
+			bufferFile.Close()
+			return stream, nil
 		}
 	}
-
-	if !noNewSegment {
-		if stream.DynamicBandwidth {
-			err = switchBandwidth(stream) // Check and assign error
-			if err != nil {
-				return err // Propagate error
-			}
-		} else {
-			stream.Segment = append(stream.Segment, segment)
-		}
-	}
-
-	if noNewSegment {
-		var sleep = lastSegmentDuration * 0.5
-
-		for i := 0.0; i < sleep*1000; i = i + 100 {
-			_ = i
-			time.Sleep(time.Duration(100) * time.Millisecond)
-
-			if _, err := bufferVFS.Stat(stream.Folder); fsIsNotExistErr(err) {
-				break
-			}
-		}
-	}
-	return
+	return stream, nil
 }
 
 func switchBandwidth(stream *ThisStream) (err error) {
