@@ -225,6 +225,7 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 				}
 
 				stream.OldSegments = []string{}
+				sentSegments := make(map[string]bool)
 
 				for { // Loop 2: Temporary files are available, Data can be sent to the Client
 					// Monitor HTTP Client connection
@@ -236,22 +237,30 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 					default:
 					}
 
-					// Get the latest stream state from BufferInformation
+					// --- New logic for handling multiple clients ---
+
+					// 1. Get a copy of the segments from the shared buffer, safely
+					var segmentsToProcess []SegmentInfo
+					var isStreamFinished bool
+					Lock.Lock()
 					if p, ok := BufferInformation.Load(playlistID); ok {
 						playlist := p.(Playlist)
 						if s, ok := playlist.Streams[streamID]; ok {
-							stream.StreamFinished = s.StreamFinished
+							segmentsToProcess = make([]SegmentInfo, len(s.CompletedSegments))
+							copy(segmentsToProcess, s.CompletedSegments)
+							isStreamFinished = s.StreamFinished
 						} else {
-							// Stream has been removed, so we can exit
-							return
+							Lock.Unlock()
+							return // Stream was removed
 						}
 					} else {
-						// Playlist has been removed, so we can exit
-						return
+						Lock.Unlock()
+						return // Playlist was removed
 					}
+					Lock.Unlock()
 
 					if c, ok := BufferClients.Load(playlistID + stream.MD5); ok {
-						var clients = c.(ClientConnection)
+						clients := c.(ClientConnection)
 						if clients.Error != nil {
 							ShowError(clients.Error, 0)
 							killClientConnection(streamID, playlistID, false)
@@ -266,22 +275,21 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 						return
 					}
 
-					Lock.Lock()
-					var filesToSend []string
-					if p, ok := BufferInformation.Load(playlistID); ok {
-						playlist := p.(Playlist)
-						if s, ok := playlist.Streams[streamID]; ok {
-							filesToSend = make([]string, len(s.CompletedSegments))
-							copy(filesToSend, s.CompletedSegments)
-							s.CompletedSegments = []string{}
-							playlist.Streams[streamID] = s
-							BufferInformation.Store(playlistID, playlist)
+					// 2. Determine which segments to send to this client
+					type segmentToSend struct {
+						Filename string
+						Index    int
+					}
+					var filesToSend []segmentToSend
+					for i, segInfo := range segmentsToProcess {
+						if _, alreadySent := sentSegments[segInfo.Filename]; !alreadySent {
+							filesToSend = append(filesToSend, segmentToSend{Filename: segInfo.Filename, Index: i})
 						}
 					}
-					Lock.Unlock()
 
-					for _, f := range filesToSend {
-						var fileName = stream.Folder + f
+					// 3. Send the files and update state
+					for _, fts := range filesToSend {
+						fileName := stream.Folder + fts.Filename
 						file, err := bufferVFS.Open(fileName)
 						if err != nil {
 							debug = fmt.Sprintf("Buffer Open (%s)", fileName)
@@ -293,45 +301,85 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 						if err == nil {
 							debug = fmt.Sprintf("Buffer Status:Send to client (%s)", fileName)
 							showDebug(debug, 2)
-
-							var buffer = make([]byte, int(l.Size()))
+							buffer := make([]byte, int(l.Size()))
 							_, err = file.Read(buffer)
-
 							if err == nil {
 								if !streaming {
 									contentType := http.DetectContentType(buffer)
 									w.Header().Set("Content-type", contentType)
 									w.Header().Set("Content-Length", "0")
 									w.Header().Set("Connection", "close")
+									streaming = true
 								}
-
 								if _, errWrite := w.Write(buffer); errWrite != nil {
 									file.Close()
 									killClientConnection(streamID, playlistID, false)
 									return
 								}
-
-								streaming = true
 							}
 						}
 						file.Close()
 
-						stream.OldSegments = append(stream.OldSegments, f)
+						// Mark as sent for this client
+						sentSegments[fts.Filename] = true
+						stream.OldSegments = append(stream.OldSegments, fts.Filename)
 
-						// Clean up old segments
-						if len(stream.OldSegments) > 20 {
-							var fileToRemove = stream.Folder + stream.OldSegments[0]
-							if err = bufferVFS.RemoveAll(getPlatformFile(fileToRemove)); err != nil {
-								ShowError(err, 4007)
+						// Update the shared SentCount
+						Lock.Lock()
+						if p, ok := BufferInformation.Load(playlistID); ok {
+							playlist := p.(Playlist)
+							if s, ok := playlist.Streams[streamID]; ok && fts.Index < len(s.CompletedSegments) && s.CompletedSegments[fts.Index].Filename == fts.Filename {
+								s.CompletedSegments[fts.Index].SentCount++
+								playlist.Streams[streamID] = s
+								BufferInformation.Store(playlistID, playlist)
 							}
-							stream.OldSegments = slices.Delete(stream.OldSegments, 0, 1)
 						}
+						Lock.Unlock()
+
+						// Cleanup completed segments
+						Lock.Lock()
+						if p, ok := BufferInformation.Load(playlistID); ok {
+							playlist := p.(Playlist)
+							if s, ok := playlist.Streams[streamID]; ok {
+								var numClients = 1
+								if c, ok := BufferClients.Load(playlistID + stream.MD5); ok {
+									numClients = c.(ClientConnection).Connection
+								}
+
+								// Find how many segments can be removed from the front
+								var removeCount int
+								for i, segInfo := range s.CompletedSegments {
+									if segInfo.SentCount >= numClients {
+										removeCount = i + 1
+									} else {
+										// Stop at the first segment not seen by all clients
+										break
+									}
+								}
+
+								if removeCount > 0 {
+									s.CompletedSegments = s.CompletedSegments[removeCount:]
+									playlist.Streams[streamID] = s
+									BufferInformation.Store(playlistID, playlist)
+								}
+							}
+						}
+						Lock.Unlock()
 					}
 
+					// Clean up old segment files from disk
+					if len(stream.OldSegments) > 20 {
+						fileToRemove := stream.Folder + stream.OldSegments[0]
+						if err := bufferVFS.RemoveAll(getPlatformFile(fileToRemove)); err != nil {
+							ShowError(err, 4007)
+						}
+						stream.OldSegments = slices.Delete(stream.OldSegments, 0, 1)
+					}
+
+					// 4. Wait if there's nothing to do
 					if len(filesToSend) == 0 {
-						if stream.StreamFinished {
-							// No more files and stream is finished, so we can exit
-							return
+						if isStreamFinished {
+							return // No more files and stream is finished
 						}
 						time.Sleep(time.Duration(100) * time.Millisecond)
 					}
@@ -793,7 +841,8 @@ func handleTSStream(resp *http.Response, stream ThisStream, streamID int, playli
 
 					// Add completed segment to the list
 					segmentName := fmt.Sprintf("%d.ts", *tmpSegment)
-					stream.CompletedSegments = append(stream.CompletedSegments, segmentName)
+					segmentInfo := SegmentInfo{Filename: segmentName, SentCount: 0}
+					stream.CompletedSegments = append(stream.CompletedSegments, segmentInfo)
 
 					stream.Status = true
 
@@ -842,7 +891,8 @@ func handleTSStream(resp *http.Response, stream ThisStream, streamID int, playli
 				// EOF reached, add the final segment if it has data
 				if fileSize > 0 {
 					segmentName := fmt.Sprintf("%d.ts", *tmpSegment)
-					stream.CompletedSegments = append(stream.CompletedSegments, segmentName)
+					segmentInfo := SegmentInfo{Filename: segmentName, SentCount: 0}
+					stream.CompletedSegments = append(stream.CompletedSegments, segmentInfo)
 
 					// Update the stream in BufferInformation
 					if p, ok := BufferInformation.Load(playlistID); ok {
