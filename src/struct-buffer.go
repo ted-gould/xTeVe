@@ -64,10 +64,16 @@ type ThisStream struct {
 
 	// Local Temp Files
 	OldSegments       []string
-	CompletedSegments []string
+	CompletedSegments []SegmentInfo
 
 	// Stream Status
 	StreamFinished bool
+}
+
+// SegmentInfo : Holds buffer segment information
+type SegmentInfo struct {
+	Filename  string
+	SentCount int
 }
 
 // Segment : URL Segments (HLS / M3U8)
