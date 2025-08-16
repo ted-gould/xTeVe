@@ -113,11 +113,10 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 				showDebug(debug, 1)
 
 				if c, ok := BufferClients.Load(playlistID + stream.MD5); ok {
-					var clients = c.(ClientConnection)
+					var clients = c.(*ClientConnection)
 					clients.Connection = clients.Connection + 1
 					showInfo(fmt.Sprintf("Streaming Status:Channel: %s (Clients: %d)", stream.ChannelName, clients.Connection))
 
-					BufferClients.Store(playlistID+stream.MD5, clients)
 				}
 				break
 			}
@@ -190,7 +189,7 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 
 		var clients ClientConnection
 		clients.Connection = 1
-		BufferClients.Store(playlistID+stream.MD5, clients)
+		BufferClients.Store(playlistID+stream.MD5, &clients)
 	}
 
 	w.WriteHeader(200)
@@ -206,7 +205,7 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 					time.Sleep(time.Duration(100) * time.Millisecond)
 
 					if c, ok := BufferClients.Load(playlistID + stream.MD5); ok {
-						var clients = c.(ClientConnection)
+						var clients = c.(*ClientConnection)
 
 						if clients.Error != nil || timeOut > 200 {
 							killClientConnection(streamID, stream.PlaylistID, false)
@@ -252,7 +251,7 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 					Lock.Unlock()
 
 					if c, ok := BufferClients.Load(playlistID + stream.MD5); ok {
-						clients := c.(ClientConnection)
+						clients := c.(*ClientConnection)
 						if clients.Error != nil {
 							ShowError(clients.Error, 0)
 							killClientConnection(streamID, playlistID, false)
@@ -335,7 +334,7 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 							if s, ok := playlist.Streams[streamID]; ok {
 								var numClients = 1
 								if c, ok := BufferClients.Load(playlistID + stream.MD5); ok {
-									numClients = c.(ClientConnection).Connection
+								numClients = c.(*ClientConnection).Connection
 								}
 
 								// Find how many segments can be removed from the front
@@ -371,6 +370,7 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 					// 4. Wait if there's nothing to do
 					if len(filesToSend) == 0 {
 						if isStreamFinished {
+							killClientConnection(streamID, playlistID, false)
 							return // No more files and stream is finished
 						}
 						time.Sleep(time.Duration(100) * time.Millisecond)
@@ -401,9 +401,8 @@ func killClientConnection(streamID int, playlistID string, force bool) {
 
 		if stream, ok := playlist.Streams[streamID]; ok {
 			if c, ok := BufferClients.Load(playlistID + stream.MD5); ok {
-				var clients = c.(ClientConnection)
-				clients.Connection = clients.Connection - 1
-				BufferClients.Store(playlistID+stream.MD5, clients)
+				var clients = c.(*ClientConnection)
+				clients.Connection--
 
 				showInfo("Streaming Status:Client has terminated the connection")
 				showInfo(fmt.Sprintf("Streaming Status:Channel: %s (Clients: %d)", stream.ChannelName, clients.Connection))
@@ -415,9 +414,11 @@ func killClientConnection(streamID int, playlistID string, force bool) {
 				}
 			}
 
-			BufferInformation.Store(playlistID, playlist)
-
-			if len(playlist.Streams) > 0 {
+			if len(playlist.Streams) == 0 {
+				BufferInformation.Delete(playlistID)
+				showInfo(fmt.Sprintf("Streaming Status:Playlist: %s - Tuner: 0 / %d", playlist.PlaylistName, playlist.Tuner))
+			} else {
+				BufferInformation.Store(playlistID, playlist)
 				showInfo(fmt.Sprintf("Streaming Status:Playlist: %s - Tuner: %d / %d", playlist.PlaylistName, len(playlist.Streams), playlist.Tuner))
 			}
 		}
@@ -498,12 +499,11 @@ func connectToStreamingServer(streamID int, playlistID string) {
 		}
 
 		var addErrorToStream = func(err error) {
-			var stream = playlist.Streams[streamID]
-
-			if c, ok := BufferClients.Load(playlistID + stream.MD5); ok {
-				var clients = c.(ClientConnection)
-				clients.Error = err
-				BufferClients.Store(playlistID+stream.MD5, clients)
+			if stream, ok := playlist.Streams[streamID]; ok {
+				if c, ok := BufferClients.Load(playlistID + stream.MD5); ok {
+					var clients = c.(*ClientConnection)
+					clients.Error = err
+				}
 			}
 		}
 
