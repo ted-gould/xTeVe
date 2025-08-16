@@ -7,4 +7,4 @@ fi
 
 # Create a blank video file for browsers that require a video stream to be present
 # This is used for the stream limit feature
-ffmpeg -f lavfi -i color=c=black:s=1280x720:r=5 -t 1 -pix_fmt yuv420p -y -f rawvideo src/html/video/stream-limit.bin
+ffmpeg -f lavfi -i color=c=black:s=1280x720:r=5 -t 1 -pix_fmt yuv420p -y -f mpegts src/html/video/stream-limit.bin
