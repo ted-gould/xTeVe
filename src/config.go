@@ -1,6 +1,7 @@
 package src
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"runtime"
@@ -181,6 +182,14 @@ func Init() (err error) {
 	// Set Domain Names
 	setGlobalDomain(fmt.Sprintf("%s:%s", Settings.HostIP, Settings.Port))
 
+	if Settings.OtelEnable {
+		err = InitOtel()
+		if err != nil {
+			ShowError(err, 0)
+			return
+		}
+	}
+
 	System.URLBase = fmt.Sprintf("%s://%s:%s", System.ServerProtocol.WEB, Settings.HostIP, Settings.Port)
 
 	// Start the DLNA Server
@@ -237,7 +246,7 @@ func StartSystem(updateProviderFiles bool) (err error) {
 		return
 	}
 
-	err = buildXEPG(false)
+	err = buildXEPG(context.Background(), false)
 	if err != nil {
 		ShowError(err, 0)
 		return

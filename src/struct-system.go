@@ -278,6 +278,9 @@ type SettingsStruct struct {
 	EpgSource             string   `json:"epgSource"`
 	FileM3U               []string `json:"file,omitempty"`  // In the Wizard, the M3U is saved in a Slice
 	FileXMLTV             []string `json:"xmltv,omitempty"` // Old Storage System of the provider XML File Slice (Required for the conversion to the new one)
+	OtelEnable            bool     `json:"otel.enable"`
+	OtelGRPCEndpoint      string   `json:"otel.grpc.endpoint"`
+	OtelServiceName       string   `json:"otel.service.name"`
 
 	Files struct {
 		HDHR  map[string]any `json:"hdhr"`

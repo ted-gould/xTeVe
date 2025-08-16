@@ -128,6 +128,9 @@ func loadSettings() (settings SettingsStruct, err error) {
 	defaults["stream.retry.enabled"] = true
 	defaults["stream.max.retries"] = 5
 	defaults["stream.retry.delay"] = 100
+	defaults["otel.enable"] = false
+	defaults["otel.grpc.endpoint"] = "localhost:4317"
+	defaults["otel.service.name"] = "xteve"
 
 	// Set Default Values
 	for key, value := range defaults {

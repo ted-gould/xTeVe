@@ -1,6 +1,7 @@
 package src
 
 import (
+	"context"
 	"fmt"
 	"strings"
 )
@@ -19,7 +20,7 @@ func ShowSystemInfo() {
 		return
 	}
 
-	err = buildXEPG(false)
+	err = buildXEPG(context.Background(), false)
 	if err != nil {
 		ShowError(err, 0)
 		return

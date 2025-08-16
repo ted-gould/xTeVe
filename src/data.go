@@ -1,6 +1,7 @@
 package src
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -142,7 +143,7 @@ func updateServerSettings(request RequestStruct) (settings SettingsStruct, err e
 			if err != nil {
 				return
 			}
-			if errBuild := buildXEPG(false); errBuild != nil {
+			if errBuild := buildXEPG(context.Background(), false); errBuild != nil {
 				// Log or potentially return this error as well
 				// log.Printf("Error building XEPG after settings save: %v", errBuild)
 				ShowError(errBuild, 0) // Assuming ShowError logs and is acceptable here
@@ -163,7 +164,7 @@ func updateServerSettings(request RequestStruct) (settings SettingsStruct, err e
 						// log.Printf("Error creating XMLTV file: %v", errXML)
 						ShowError(errXML, 0)
 					}
-					if errM3U := createM3UFile(); errM3U != nil {
+					if errM3U := createM3UFile(context.Background()); errM3U != nil {
 						// log.Printf("Error creating M3U file: %v", errM3U)
 						ShowError(errM3U, 0)
 					}
@@ -173,7 +174,7 @@ func updateServerSettings(request RequestStruct) (settings SettingsStruct, err e
 							// log.Printf("Error creating XMLTV file in goroutine: %v", errXML)
 							ShowError(errXML, 0)
 						}
-						if errM3U := createM3UFile(); errM3U != nil {
+						if errM3U := createM3UFile(context.Background()); errM3U != nil {
 							// log.Printf("Error creating M3U file in goroutine: %v", errM3U)
 							ShowError(errM3U, 0)
 						}
@@ -186,7 +187,7 @@ func updateServerSettings(request RequestStruct) (settings SettingsStruct, err e
 
 						System.ImageCachingInProgress = 0
 
-						if errBuild := buildXEPG(false); errBuild != nil {
+						if errBuild := buildXEPG(context.Background(), false); errBuild != nil {
 							// log.Printf("Error building XEPG after image caching: %v", errBuild)
 							ShowError(errBuild, 0)
 						}
@@ -201,7 +202,7 @@ func updateServerSettings(request RequestStruct) (settings SettingsStruct, err e
 					// log.Printf("Error creating XMLTV file (createXEPGFiles): %v", errXML)
 					ShowError(errXML, 0)
 				}
-				if errM3U := createM3UFile(); errM3U != nil {
+				if errM3U := createM3UFile(context.Background()); errM3U != nil {
 					// log.Printf("Error creating M3U file (createXEPGFiles): %v", errM3U)
 					ShowError(errM3U, 0)
 				}
@@ -304,7 +305,7 @@ func saveFiles(request RequestStruct, fileType string) (err error) {
 			if err != nil {
 				return err
 			}
-			if errBuild := buildXEPG(false); errBuild != nil {
+			if errBuild := buildXEPG(context.Background(), false); errBuild != nil {
 				// log.Printf("Error building XEPG after saving files: %v", errBuild)
 				ShowError(errBuild, 0)
 				// Depending on severity, might want to return errBuild here
@@ -335,7 +336,7 @@ func updateFile(request RequestStruct, fileType string) (err error) {
 			if err != nil { // Check error from buildDatabaseDVR before calling buildXEPG
 				return err
 			}
-			if errBuild := buildXEPG(false); errBuild != nil {
+			if errBuild := buildXEPG(context.Background(), false); errBuild != nil {
 				// log.Printf("Error building XEPG after updating file: %v", errBuild)
 				ShowError(errBuild, 0)
 				// Potentially return errBuild
@@ -450,7 +451,7 @@ func saveFilter(request RequestStruct) (settings SettingsStruct, err error) {
 		return Settings, err
 	}
 
-	if err := buildXEPG(false); err != nil {
+	if err := buildXEPG(context.Background(), false); err != nil {
 		// Log the error but don't fail the entire operation, consistent with other parts of the codebase
 		ShowError(err, 0)
 	}
@@ -483,7 +484,7 @@ func saveXEpgMapping(request RequestStruct) (err error) {
 		System.ScanInProgress = 1
 		cleanupXEPG() // Assuming cleanupXEPG does not return an error or handles its own.
 		System.ScanInProgress = 0
-		if errBuild := buildXEPG(true); errBuild != nil {
+		if errBuild := buildXEPG(context.Background(), true); errBuild != nil {
 			// log.Printf("Error building XEPG after saving XEPG mapping: %v", errBuild)
 			ShowError(errBuild, 0) // Using existing error display
 			// This function returns err, so we could propagate it.
@@ -507,7 +508,7 @@ func saveXEpgMapping(request RequestStruct) (err error) {
 			System.ScanInProgress = 1
 			cleanupXEPG() // Assuming cleanupXEPG does not return an error or handles its own.
 			System.ScanInProgress = 0
-			if errBuild := buildXEPG(false); errBuild != nil {
+			if errBuild := buildXEPG(context.Background(), false); errBuild != nil {
 				// log.Printf("Error building XEPG in goroutine after XEPG mapping: %v", errBuild)
 				ShowError(errBuild, 0) // Using existing error display
 			}
@@ -686,7 +687,7 @@ func saveWizard(request RequestStruct) (nextStep int, err error) {
 					delete(filesMap, dataID)
 					return
 				}
-				if errBuild := buildXEPG(false); errBuild != nil {
+				if errBuild := buildXEPG(context.Background(), false); errBuild != nil {
 					// log.Printf("Error building XEPG in wizard: %v", errBuild)
 					ShowError(errBuild, 0) // Using existing error display
 					// This function returns nextStep, err. Consider if this should be returned.

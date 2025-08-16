@@ -7,6 +7,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -43,7 +44,13 @@ var h = flag.Bool("h", false, ": Show help")
 var dev = flag.Bool("dev", false, ": Activates the developer mode, the source code must be available. The local files for the web interface are used.")
 
 func main() {
-
+	defer func() {
+		if src.TracerProvider != nil {
+			if err := src.TracerProvider.Shutdown(context.Background()); err != nil {
+				src.ShowError(err, 0)
+			}
+		}
+	}()
 	// Separate Build Number from Version Number
 	var build = strings.Split(src.Version, ".")
 

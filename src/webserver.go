@@ -3,12 +3,12 @@ package src
 import (
 	"context"
 	"encoding/json"
-	"mime"
 	"errors"
 	"fmt"
 	"io"
 	"io/fs"
 	"log" // Added for log.Printf
+	"mime"
 	"net"
 	"net/http"
 	"os"
@@ -20,6 +20,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/samber/lo"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 // webAlerts channel to send to client
@@ -33,16 +34,16 @@ func init() {
 
 // StartWebserver : Start the Webserver
 func StartWebserver() (err error) {
-	http.HandleFunc("/", Index)
-	http.HandleFunc("/stream/", Stream)
-	http.HandleFunc("/xmltv/", xTeVe)
-	http.HandleFunc("/m3u/", xTeVe)
-	http.HandleFunc("/data/", WS)
-	http.HandleFunc("/web/", Web)
-	http.HandleFunc("/download/", Download)
-	http.HandleFunc("/api/", API)
-	http.HandleFunc("/images/", Images)
-	http.HandleFunc("/data_images/", DataImages)
+	http.Handle("/", otelhttp.NewHandler(http.HandlerFunc(Index), "Index"))
+	http.Handle("/stream/", otelhttp.NewHandler(http.HandlerFunc(Stream), "Stream"))
+	http.Handle("/xmltv/", otelhttp.NewHandler(http.HandlerFunc(xTeVe), "xTeVe"))
+	http.Handle("/m3u/", otelhttp.NewHandler(http.HandlerFunc(xTeVe), "xTeVe"))
+	http.Handle("/data/", otelhttp.NewHandler(http.HandlerFunc(WS), "WS"))
+	http.Handle("/web/", otelhttp.NewHandler(http.HandlerFunc(Web), "Web"))
+	http.Handle("/download/", otelhttp.NewHandler(http.HandlerFunc(Download), "Download"))
+	http.Handle("/api/", otelhttp.NewHandler(http.HandlerFunc(API), "API"))
+	http.Handle("/images/", otelhttp.NewHandler(http.HandlerFunc(Images), "Images"))
+	http.Handle("/data_images/", otelhttp.NewHandler(http.HandlerFunc(DataImages), "DataImages"))
 	// http.HandleFunc("/auto/", Auto)
 
 	for {
@@ -278,7 +279,7 @@ func xTeVe(w http.ResponseWriter, r *http.Request) {
 			groups = strings.Split(groupTitle, ",")
 		}
 
-		content, err = buildM3U(groups)
+		content, err = buildM3U(r.Context(), groups)
 		if err != nil {
 			ShowError(err, 000)
 		}
@@ -996,7 +997,7 @@ func API(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 	case "update.xepg":
-		err = buildXEPG(false)
+		err = buildXEPG(r.Context(), false)
 	default:
 		err = errors.New(getErrMsg(5000))
 	}

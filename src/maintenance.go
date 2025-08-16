@@ -1,6 +1,7 @@
 package src
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"time"
@@ -58,7 +59,7 @@ func maintenance() {
 
 					// Create XEPG Files
 					Data.Cache.XMLTV = make(map[string]XMLTV)
-					if err := buildXEPG(false); err != nil {
+					if err := buildXEPG(context.Background(), false); err != nil {
 						ShowError(err, 0)
 					}
 				}

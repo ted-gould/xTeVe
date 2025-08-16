@@ -1,6 +1,7 @@
 package src
 
 import (
+	"context"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
@@ -40,7 +41,9 @@ func checkXMLCompatibility(id string, body []byte) (err error) {
 }
 
 // Create XEPG Data
-func buildXEPG(background bool) error { // Added error return type
+func buildXEPG(ctx context.Context, background bool) error { // Added error return type
+	_, span := tracer.Start(ctx, "buildXEPG")
+	defer span.End()
 	if System.ScanInProgress == 1 {
 		return nil // Or an error indicating it's busy
 	}
@@ -69,7 +72,7 @@ func buildXEPG(background bool) error { // Added error return type
 				if xmlErr := createXMLTVFile(); xmlErr != nil {
 					ShowError(fmt.Errorf("error creating XMLTV file in background: %w", xmlErr), 0)
 				}
-				if m3uErr := createM3UFile(); m3uErr != nil {
+				if m3uErr := createM3UFile(context.Background()); m3uErr != nil {
 					ShowError(fmt.Errorf("error creating M3U file in background: %w", m3uErr), 0)
 				}
 
@@ -85,7 +88,7 @@ func buildXEPG(background bool) error { // Added error return type
 						if err := createXMLTVFile(); err != nil {
 							ShowError(err, 0)
 						}
-						if err := createM3UFile(); err != nil {
+						if err := createM3UFile(context.Background()); err != nil {
 							ShowError(err, 0)
 						}
 						System.ImageCachingInProgress = 0
@@ -116,7 +119,7 @@ func buildXEPG(background bool) error { // Added error return type
 				ShowError(fmt.Errorf("error creating XMLTV file: %w", err), 0)
 				// Even with an error, we might want to try creating the M3U file
 			}
-			if err := createM3UFile(); err != nil {
+			if err := createM3UFile(ctx); err != nil {
 				ShowError(fmt.Errorf("error creating M3U file: %w", err), 0)
 				System.ScanInProgress = 0
 				return err // M3U file is critical for clients, so maybe return error
@@ -134,7 +137,7 @@ func buildXEPG(background bool) error { // Added error return type
 					if xmlErr := createXMLTVFile(); xmlErr != nil {
 						ShowError(fmt.Errorf("error creating XMLTV file post-cache: %w", xmlErr), 0)
 					}
-					if m3uErr := createM3UFile(); m3uErr != nil {
+					if m3uErr := createM3UFile(context.Background()); m3uErr != nil {
 						ShowError(fmt.Errorf("error creating M3U file post-cache: %w", m3uErr), 0)
 					}
 					System.ImageCachingInProgress = 0
@@ -225,6 +228,8 @@ func createXEPGMapping() {
 
 // Create / update XEPG Database
 func createXEPGDatabase() (err error) {
+	_, span := tracer.Start(context.Background(), "createXEPGDatabase")
+	defer span.End()
 	var allChannelNumbers = make([]float64, 0)
 	Data.Cache.Streams.Active = make([]string, 0)
 	Data.XEPG.Channels = make(map[string]any)
@@ -501,6 +506,8 @@ func processNewXEPGChannel(m3uChannel M3UChannelStructXEPG, allChannelNumbers *[
 
 // Automatically assign Channels and check the Mapping
 func mapping() (err error) {
+	_, span := tracer.Start(context.Background(), "mapping")
+	defer span.End()
 	showInfo("XEPG:" + "Map channels")
 
 	for xepgID, dxc := range Data.XEPG.Channels {
@@ -1019,9 +1026,9 @@ func getLocalXMLTV(file string, xmltv *XMLTV) (err error) {
 }
 
 // Create M3U File
-func createM3UFile() error { // Added error return type
+func createM3UFile(ctx context.Context) error { // Added error return type
 	showInfo("XEPG:" + fmt.Sprintf("Create M3U file (%s)", System.File.M3U))
-	_, err := buildM3U([]string{})
+	_, err := buildM3U(ctx, []string{})
 	if err != nil {
 		ShowError(err, 000)
 		return err // Propagate error

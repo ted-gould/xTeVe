@@ -1,6 +1,7 @@
 package src
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"path"
@@ -22,6 +23,8 @@ var (
 
 // Parse Playlists
 func parsePlaylist(filename, fileType string) (channels []any, err error) {
+	_, span := tracer.Start(context.Background(), "parsePlaylist")
+	defer span.End()
 	content, err := readByteFromFile(filename)
 	var id = strings.TrimSuffix(getFilenameFromPath(filename), path.Ext(getFilenameFromPath(filename)))
 	var playlistName = getProviderParameter(id, fileType, "name")
@@ -41,6 +44,8 @@ func parsePlaylist(filename, fileType string) (channels []any, err error) {
 // FilterThisStream checks if a stream should be filtered based on global filter rules.
 // It is used by benchmarks and potentially other parts of the application.
 func FilterThisStream(s any) (status bool) {
+	_, span := tracer.Start(context.Background(), "FilterThisStream")
+	defer span.End()
 	// status is false by default for a bool named return
 	stream, ok := s.(map[string]string)
 	if !ok {
@@ -176,7 +181,9 @@ func checkConditions(streamValues, conditions, coType string) (status bool) {
 }
 
 // Create xTeVe M3U file
-func buildM3U(groups []string) (m3u string, err error) {
+func buildM3U(ctx context.Context, groups []string) (m3u string, err error) {
+	_, span := tracer.Start(ctx, "buildM3U")
+	defer span.End()
 	var imgc = Data.Cache.Images
 	var m3uChannelsForSort []XEPGChannelStruct
 

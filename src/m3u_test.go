@@ -1,6 +1,7 @@
 package src
 
 import (
+	"context"
 	"os"
 	"testing"
 	"xteve/src/internal/imgcache"
@@ -183,7 +184,7 @@ func TestBuildM3U_PMSSource(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Execute
-	m3u, err := buildM3U([]string{})
+	m3u, err := buildM3U(context.Background(), []string{})
 
 	// Assert
 	assert.NoError(t, err)
