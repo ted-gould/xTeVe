@@ -418,8 +418,6 @@ func killClientConnection(streamID int, playlistID string, force bool) {
 
 				if clients.Connection <= 0 {
 					BufferClients.Delete(playlistID + stream.MD5)
-					delete(playlist.Streams, streamID)
-					delete(playlist.Clients, streamID)
 				}
 			}
 
@@ -432,7 +430,7 @@ func killClientConnection(streamID int, playlistID string, force bool) {
 	}
 }
 
-func clientConnection(stream ThisStream) (status bool) {
+func clientConnection(stream ThisStream, streamID int) (status bool) {
 	status = true
 	Lock.Lock()
 	defer Lock.Unlock()
@@ -454,6 +452,10 @@ func clientConnection(stream ThisStream) (status bool) {
 			showInfo(fmt.Sprintf("Streaming Status:Channel: %s - No client is using this channel anymore. Streaming Server connection has ended", stream.ChannelName))
 
 			var playlist = p.(Playlist)
+
+			delete(playlist.Streams, streamID)
+			delete(playlist.Clients, streamID)
+			BufferInformation.Store(stream.PlaylistID, playlist)
 
 			showInfo(fmt.Sprintf("Streaming Status:Playlist: %s - Tuner: %d / %d", playlist.PlaylistName, len(playlist.Streams), playlist.Tuner))
 
@@ -555,7 +557,7 @@ func connectToStreamingServer(streamID int, playlistID string) {
 		bandwidth.Size = 0
 
 		for {
-			if !clientConnection(stream) {
+			if !clientConnection(stream, streamID) {
 				return
 			}
 
@@ -784,7 +786,7 @@ func handleTSStream(resp *http.Response, stream ThisStream, streamID int, playli
 
 	var tmpFile = fmt.Sprintf("%s%d.ts", tmpFolder, *tmpSegment)
 
-	if !clientConnection(stream) {
+	if !clientConnection(stream, streamID) {
 		resp.Body.Close()
 		return stream, nil
 	}
@@ -858,7 +860,7 @@ func handleTSStream(resp *http.Response, stream ThisStream, streamID int, playli
 
 					tmpFile = fmt.Sprintf("%s%d.ts", tmpFolder, *tmpSegment)
 
-					if !clientConnection(stream) {
+					if !clientConnection(stream, streamID) {
 						if err = bufferVFS.RemoveAll(stream.Folder); err != nil {
 							ShowError(err, 4005)
 						}
@@ -909,7 +911,7 @@ func handleTSStream(resp *http.Response, stream ThisStream, streamID int, playli
 		}
 		retries = 0
 
-		if !clientConnection(stream) {
+		if !clientConnection(stream, streamID) {
 			bufferFile.Close()
 			return stream, nil
 		}
