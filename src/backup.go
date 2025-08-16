@@ -143,7 +143,13 @@ func xteveRestore(archive string) (newWebURL string, err error) {
 		return
 	}
 
-	backupVersion = newConfig["version"].(string)
+	if bv, ok := newConfig["version"].(string); ok {
+		backupVersion = bv
+	} else {
+		err = errors.New("backup version not found in settings.json")
+		return
+	}
+
 	if backupVersion < System.Compatibility {
 		err = errors.New(getErrMsg(1013))
 		return
@@ -167,7 +173,12 @@ func xteveRestore(archive string) (newWebURL string, err error) {
 		return
 	}
 
-	newPort = newConfig["port"].(string)
+	if np, ok := newConfig["port"].(string); ok {
+		newPort = np
+	} else {
+		err = errors.New("port not found in settings.json")
+		return
+	}
 	oldPort = Settings.Port
 
 	if newPort == oldPort {

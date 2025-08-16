@@ -183,7 +183,10 @@ func buildM3U(groups []string) (m3u string, err error) {
 	switch Settings.EpgSource {
 	case "PMS":
 		for i, dsa := range Data.Streams.Active {
-			var stream = dsa.(map[string]string)
+			var stream, ok = dsa.(map[string]string)
+			if !ok {
+				continue
+			}
 			var channel XEPGChannelStruct
 
 			channel.XName = stream["name"]

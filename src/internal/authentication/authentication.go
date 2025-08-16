@@ -72,7 +72,11 @@ func CreateDefaultUser(username, password string) (err error) {
 		return
 	}
 
-	var users = data["users"].(map[string]any)
+	var users, ok = data["users"].(map[string]any)
+	if !ok {
+		return createError(001)
+	}
+
 	// Check if the default user exists
 	if len(users) > 0 {
 		err = createError(001)
@@ -83,7 +87,13 @@ func CreateDefaultUser(username, password string) (err error) {
 	if err != nil {
 		return
 	}
-	users[defaults["_id"].(string)] = defaults
+
+	var defaultID, okID = defaults["_id"].(string)
+	if !okID {
+		return errors.New("default user has no ID")
+	}
+
+	users[defaultID] = defaults
 	err = saveDatabase(data)
 	return
 }
@@ -95,9 +105,21 @@ func CreateNewUser(username, password string) (userID string, err error) {
 		return
 	}
 
-	var checkIfTheUserAlreadyExists = func(username string, userData map[string]any) (err error) {
-		var salt = userData["_salt"].(string)
-		var loginUsername = userData["_username"].(string)
+	var checkIfTheUserAlreadyExists = func(username string, iUserData any) (err error) {
+		var userData, ok = iUserData.(map[string]any)
+		if !ok {
+			return errors.New("user data has to be a map")
+		}
+
+		var salt, okSalt = userData["_salt"].(string)
+		if !okSalt {
+			return errors.New("user has no salt")
+		}
+
+		var loginUsername, okLogin = userData["_username"].(string)
+		if !okLogin {
+			return errors.New("user has no username")
+		}
 
 		sUsername, err := SHA256(username, salt)
 		if err != nil {
@@ -110,9 +132,13 @@ func CreateNewUser(username, password string) (userID string, err error) {
 		return
 	}
 
-	var users = data["users"].(map[string]any)
+	var users, ok = data["users"].(map[string]any)
+	if !ok {
+		return "", errors.New("users in datebase are not a map")
+	}
+
 	for _, userData := range users {
-		err = checkIfTheUserAlreadyExists(username, userData.(map[string]any))
+		err = checkIfTheUserAlreadyExists(username, userData)
 		if err != nil {
 			return
 		}
@@ -122,7 +148,12 @@ func CreateNewUser(username, password string) (userID string, err error) {
 	if err != nil {
 		return
 	}
-	userID = defaults["_id"].(string)
+
+	userID, ok = defaults["_id"].(string)
+	if !ok {
+		return "", errors.New("default user has no ID")
+	}
+
 	users[userID] = defaults
 
 	err = saveDatabase(data)
@@ -136,12 +167,28 @@ func UserAuthentication(username, password string) (token string, err error) {
 		return
 	}
 
-	var login = func(username, password string, loginData map[string]any) (err error) {
+	var login = func(username, password string, iLoginData any) (err error) {
 		err = createError(010)
 
-		var salt = loginData["_salt"].(string)
-		var loginUsername = loginData["_username"].(string)
-		var loginPassword = loginData["_password"].(string)
+		var loginData, ok = iLoginData.(map[string]any)
+		if !ok {
+			return errors.New("user data has to be a map")
+		}
+
+		var salt, okSalt = loginData["_salt"].(string)
+		if !okSalt {
+			return errors.New("user has no salt")
+		}
+
+		var loginUsername, okLogin = loginData["_username"].(string)
+		if !okLogin {
+			return errors.New("user has no username")
+		}
+
+		var loginPassword, okPass = loginData["_password"].(string)
+		if !okPass {
+			return errors.New("user has no password")
+		}
 
 		sUsername, errSHA := SHA256(username, salt)
 		if errSHA != nil {
@@ -160,9 +207,13 @@ func UserAuthentication(username, password string) (token string, err error) {
 		return
 	}
 
-	var users = data["users"].(map[string]any)
+	var users, ok = data["users"].(map[string]any)
+	if !ok {
+		return "", errors.New("users in datebase are not a map")
+	}
+
 	for id, loginData := range users {
-		err = login(username, password, loginData.(map[string]any))
+		err = login(username, password, loginData)
 		if err == nil {
 			token, err = setToken(id, "-")
 			return
@@ -181,8 +232,20 @@ func CheckTheValidityOfTheToken(token string) (newToken string, err error) {
 	err = createError(011)
 
 	if v, ok := tokens[token]; ok {
-		var expires = v.(map[string]any)["expires"].(time.Time)
-		var userID = v.(map[string]any)["id"].(string)
+		var tokenData, okToken = v.(map[string]any)
+		if !okToken {
+			return "", errors.New("token data has to be a map")
+		}
+
+		var expires, okExpires = tokenData["expires"].(time.Time)
+		if !okExpires {
+			return "", errors.New("token has no expiration date")
+		}
+
+		var userID, okID = tokenData["id"].(string)
+		if !okID {
+			return "", errors.New("token has no ID")
+		}
 
 		if expires.Sub(time.Now().Local()) < 0 {
 			return
@@ -209,8 +272,20 @@ func GetUserID(token string) (userID string, err error) {
 	err = createError(002)
 
 	if v, ok := tokens[token]; ok {
-		var expires = v.(map[string]any)["expires"].(time.Time)
-		userID = v.(map[string]any)["id"].(string)
+		var tokenData, okToken = v.(map[string]any)
+		if !okToken {
+			return "", errors.New("token data has to be a map")
+		}
+
+		var expires, okExpires = tokenData["expires"].(time.Time)
+		if !okExpires {
+			return "", errors.New("token has no expiration date")
+		}
+
+		userID, ok = tokenData["id"].(string)
+		if !ok {
+			return "", errors.New("token has no ID")
+		}
 
 		if expires.Sub(time.Now().Local()) < 0 {
 			return
@@ -248,7 +323,10 @@ func ReadUserData(userID string) (userData map[string]any, err error) {
 	err = createError(031)
 
 	if v, ok := data["users"].(map[string]any)[userID].(map[string]any); ok {
-		userData = v["data"].(map[string]any)
+		userData, ok = v["data"].(map[string]any)
+		if !ok {
+			return nil, errors.New("user data is not a map")
+		}
 		err = nil
 		return
 	}
@@ -263,9 +341,13 @@ func RemoveUser(userID string) (err error) {
 	}
 
 	err = createError(032)
+	var users, ok = data["users"].(map[string]any)
+	if !ok {
+		return errors.New("users in datebase are not a map")
+	}
 
-	if _, ok := data["users"].(map[string]any)[userID]; ok {
-		delete(data["users"].(map[string]any), userID)
+	if _, ok := users[userID]; ok {
+		delete(users, userID)
 		err = saveDatabase(data)
 		return
 	}
@@ -280,8 +362,20 @@ func SetDefaultUserData(defaults map[string]any) (err error) {
 	}
 
 	for _, d := range allUserData {
-		var userDataMap = d.(map[string]any)["data"].(map[string]any) // Renamed to avoid conflict
-		var userID = d.(map[string]any)["_id"].(string)
+		var user, okUser = d.(map[string]any)
+		if !okUser {
+			return errors.New("user data has to be a map")
+		}
+
+		var userDataMap, okData = user["data"].(map[string]any) // Renamed to avoid conflict
+		if !okData {
+			return errors.New("data in user data has to be a map")
+		}
+
+		var userID, okID = user["_id"].(string)
+		if !okID {
+			return errors.New("user has no ID")
+		}
 
 		for k, v := range defaults {
 			if _, ok := userDataMap[k]; ok {
@@ -309,16 +403,29 @@ func ChangeCredentials(userID, username, password string) (err error) {
 
 	errCreate := createError(032) // Keep original error in case user not found
 
-	if userData, ok := data["users"].(map[string]any)[userID]; ok {
-		//var userData = tmp.(map[string]interface{})
-		var salt = userData.(map[string]any)["_salt"].(string)
+	var users, ok = data["users"].(map[string]any)
+	if !ok {
+		return errors.New("users in datebase are not a map")
+	}
+
+	if iUserData, ok := users[userID]; ok {
+		var userData, okUser = iUserData.(map[string]any)
+		if !okUser {
+			return errors.New("user data has to be a map")
+		}
+
+		var salt string
+		salt, ok = userData["_salt"].(string)
+		if !ok {
+			return errors.New("user has no salt")
+		}
 
 		if len(username) > 0 {
 			usernameHash, errSHA := SHA256(username, salt)
 			if errSHA != nil {
 				return errSHA
 			}
-			userData.(map[string]any)["_username"] = usernameHash
+			userData["_username"] = usernameHash
 		}
 
 		if len(password) > 0 {
@@ -326,7 +433,7 @@ func ChangeCredentials(userID, username, password string) (err error) {
 			if errSHA != nil {
 				return errSHA
 			}
-			userData.(map[string]any)["_password"] = passwordHash
+			userData["_password"] = passwordHash
 		}
 		err = saveDatabase(data)
 		if err != nil {
@@ -357,7 +464,12 @@ func GetAllUserData() (allUserData map[string]any, err error) {
 		data = defaults
 	}
 
-	allUserData = data["users"].(map[string]any)
+	var ok bool
+	allUserData, ok = data["users"].(map[string]any)
+	if !ok {
+		return nil, errors.New("users in datebase are not a map")
+	}
+
 	return
 }
 

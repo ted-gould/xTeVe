@@ -261,8 +261,12 @@ func TestTunerCountOnDisconnect(t *testing.T) {
 
 	// Verify initial state
 	p, _ := BufferInformation.Load(playlistID)
-	if len(p.(Playlist).Streams) != 1 {
-		t.Fatalf("Initial stream count should be 1, but was %d", len(p.(Playlist).Streams))
+	if playlist, ok := p.(Playlist); ok {
+		if len(playlist.Streams) != 1 {
+			t.Fatalf("Initial stream count should be 1, but was %d", len(playlist.Streams))
+		}
+	} else {
+		t.Fatalf("Failed to cast to Playlist")
 	}
 
 	// 2. Action: Simulate client disconnect
@@ -276,9 +280,12 @@ func TestTunerCountOnDisconnect(t *testing.T) {
 		return
 	}
 
-	finalPlaylist := p.(Playlist)
-	if len(finalPlaylist.Streams) != 0 {
-		t.Errorf("Expected stream count to be 0 after disconnect, but was %d", len(finalPlaylist.Streams))
+	if finalPlaylist, ok := p.(Playlist); ok {
+		if len(finalPlaylist.Streams) != 0 {
+			t.Errorf("Expected stream count to be 0 after disconnect, but was %d", len(finalPlaylist.Streams))
+		}
+	} else {
+		t.Fatalf("Failed to cast to Playlist")
 	}
 
 	_, clientExists := BufferClients.Load(playlistID + md5)

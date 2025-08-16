@@ -35,16 +35,23 @@ func updateServerSettings(request RequestStruct) (settings SettingsStruct, err e
 			case "update":
 				// Remove spaces from the Values and check the formatting of the Time (0000 - 2359)
 				var newUpdateTimes = make([]string, 0)
+				if values, ok := value.([]any); ok {
+					for _, v := range values {
+						if s, ok := v.(string); ok {
+							s = strings.Replace(s, " ", "", -1)
 
-				for _, v := range value.([]any) {
-					v = strings.Replace(v.(string), " ", "", -1)
-
-					_, err := time.Parse("1504", v.(string))
-					if err != nil {
-						ShowError(err, 1012)
-						return Settings, err
+							_, err := time.Parse("1504", s)
+							if err != nil {
+								ShowError(err, 1012)
+								return Settings, err
+							}
+							newUpdateTimes = append(newUpdateTimes, s)
+						} else {
+							return Settings, fmt.Errorf("invalid type in update times array: expected string, got %T", v)
+						}
 					}
-					newUpdateTimes = append(newUpdateTimes, v.(string))
+				} else {
+					return Settings, fmt.Errorf("invalid type for update times: expected []any, got %T", value)
 				}
 
 				value = newUpdateTimes
@@ -53,20 +60,28 @@ func updateServerSettings(request RequestStruct) (settings SettingsStruct, err e
 			case "xepg.replace.missing.images":
 				createXEPGFiles = true
 			case "backup.path":
-				value = strings.TrimRight(value.(string), string(os.PathSeparator)) + string(os.PathSeparator)
-				err = checkFolder(value.(string))
-				if err == nil {
-					err = checkFilePermission(value.(string))
+				if s, ok := value.(string); ok {
+					s = strings.TrimRight(s, string(os.PathSeparator)) + string(os.PathSeparator)
+					err = checkFolder(s)
+					if err == nil {
+						err = checkFilePermission(s)
+					}
+
 					if err != nil {
 						return
 					}
-				}
-
-				if err != nil {
+					value = s
+				} else {
+					err = fmt.Errorf("backup.path has to be a string, but it is %T", value)
 					return
 				}
 			case "temp.path":
-				value = getValidTempDir(value.(string))
+				if s, ok := value.(string); ok {
+					value = getValidTempDir(s)
+				} else {
+					err = fmt.Errorf("temp.path has to be a string, but it is %T", value)
+					return
+				}
 			case "scheme.m3u", "scheme.xml":
 				createXEPGFiles = true
 			case "defaultMissingEPG":
@@ -91,7 +106,11 @@ func updateServerSettings(request RequestStruct) (settings SettingsStruct, err e
 			case "[]interface {}":
 				debug = fmt.Sprintf("Save Setting:Key: %s | Value: %v (%T)", key, value, value)
 			case "float64":
-				debug = fmt.Sprintf("Save Setting:Key: %s | Value: %d (%T)", key, int(value.(float64)), value)
+				if f, ok := value.(float64); ok {
+					debug = fmt.Sprintf("Save Setting:Key: %s | Value: %d (%T)", key, int(f), value)
+				} else {
+					debug = fmt.Sprintf("Save Setting:Key: %s | Value: ERROR (unexpected type %T)", key, value)
+				}
 			default:
 				debug = fmt.Sprintf("%T", value)
 			}
@@ -222,18 +241,28 @@ func saveFiles(request RequestStruct, fileType string) (err error) {
 		if dataID == "-" {
 			// New Provider File
 			dataID = indicator + randomString(19)
-			dMap := data.(map[string]any)
-			dMap["new"] = true
-			if url, ok := dMap["url"]; ok {
-				dMap["file.source"] = url
-				delete(dMap, "url")
+			if dMap, ok := data.(map[string]any); ok {
+				dMap["new"] = true
+				if url, ok := dMap["url"]; ok {
+					dMap["file.source"] = url
+					delete(dMap, "url")
+				}
+				filesMap[dataID] = dMap
+			} else {
+				return fmt.Errorf("invalid data format for new file")
 			}
-			filesMap[dataID] = dMap
 		} else {
 			// Existing Provider File
-			for key, value := range data.(map[string]any) {
-				var oldData = filesMap[dataID].(map[string]any)
-				oldData[key] = value
+			if newMap, ok := data.(map[string]any); ok {
+				if oldMap, ok := filesMap[dataID].(map[string]any); ok {
+					for key, value := range newMap {
+						oldMap[key] = value
+					}
+				} else {
+					return fmt.Errorf("invalid data format for existing file: %s", dataID)
+				}
+			} else {
+				return fmt.Errorf("invalid data format for existing file: %s", dataID)
 			}
 		}
 
@@ -246,21 +275,23 @@ func saveFiles(request RequestStruct, fileType string) (err error) {
 			Settings.Files.XMLTV = filesMap
 		}
 
-		// New Provider File
-		if _, ok := data.(map[string]any)["new"]; ok {
-			reloadData = true
-			err = getProviderData(fileType, dataID)
-			delete(data.(map[string]any), "new")
+		if dMap, ok := data.(map[string]any); ok {
+			// New Provider File
+			if _, ok := dMap["new"]; ok {
+				reloadData = true
+				err = getProviderData(fileType, dataID)
+				delete(dMap, "new")
 
-			if err != nil {
-				delete(filesMap, dataID)
-				return
+				if err != nil {
+					delete(filesMap, dataID)
+					return
+				}
 			}
-		}
 
-		if _, ok := data.(map[string]any)["delete"]; ok {
-			deleteLocalProviderFiles(dataID, fileType)
-			reloadData = true
+			if _, ok := dMap["delete"]; ok {
+				deleteLocalProviderFiles(dataID, fileType)
+				reloadData = true
+			}
 		}
 
 		err = saveSettings(Settings)
@@ -508,8 +539,14 @@ func saveUserData(request RequestStruct) (err error) {
 		return
 	}
 
-	for userID, newUserData := range userData {
-		err = newCredentials(userID, newUserData.(map[string]any))
+	for userID, iNewUserData := range userData {
+		var newUserData, ok = iNewUserData.(map[string]any)
+		if !ok {
+			err = errors.New("user data has to be a map")
+			return
+		}
+
+		err = newCredentials(userID, newUserData)
 		if err != nil {
 			return
 		}
@@ -519,10 +556,10 @@ func saveUserData(request RequestStruct) (err error) {
 			return
 		}
 
-		delete(newUserData.(map[string]any), "password")
-		delete(newUserData.(map[string]any), "confirm")
+		delete(newUserData, "password")
+		delete(newUserData, "confirm")
 
-		if _, ok := newUserData.(map[string]any)["delete"]; ok {
+		if _, ok := newUserData["delete"]; ok {
 			if errRemove := authentication.RemoveUser(userID); errRemove != nil {
 				// log.Printf("Error removing user %s: %v", userID, errRemove)
 				ShowError(errRemove, 0) // Using existing error display
@@ -530,7 +567,7 @@ func saveUserData(request RequestStruct) (err error) {
 				// For now, let's assume it's not critical enough to stop processing other users.
 			}
 		} else {
-			err = authentication.WriteUserData(userID, newUserData.(map[string]any))
+			err = authentication.WriteUserData(userID, newUserData)
 			if err != nil {
 				return
 			}
@@ -542,8 +579,16 @@ func saveUserData(request RequestStruct) (err error) {
 // Create New User (WebUI)
 func saveNewUser(request RequestStruct) (err error) {
 	var data = request.UserData
-	var username = data["username"].(string)
-	var password = data["password"].(string)
+	var username, ok = data["username"].(string)
+	if !ok {
+		return errors.New("username has to be a string")
+	}
+
+	var password string
+	password, ok = data["password"].(string)
+	if !ok {
+		return errors.New("password has to be a string")
+	}
 
 	delete(data, "password")
 	delete(data, "confirm")
@@ -564,11 +609,19 @@ func saveWizard(request RequestStruct) (nextStep int, err error) {
 	for key, value := range wizard {
 		switch key {
 		case "tuner":
-			Settings.Tuner = int(value.(float64))
-			nextStep = 1
+			if v, ok := value.(float64); ok {
+				Settings.Tuner = int(v)
+				nextStep = 1
+			} else {
+				return nextStep, fmt.Errorf("invalid tuner value: expected float64, got %T", value)
+			}
 		case "epgSource":
-			Settings.EpgSource = value.(string)
-			nextStep = 2
+			if v, ok := value.(string); ok {
+				Settings.EpgSource = v
+				nextStep = 2
+			} else {
+				return nextStep, fmt.Errorf("invalid epgSource value: expected string, got %T", value)
+			}
 		case "m3u", "xmltv":
 			var filesMap map[string]any // Declare without initializing
 			var data = make(map[string]any)
@@ -591,7 +644,11 @@ func saveWizard(request RequestStruct) (nextStep int, err error) {
 			}
 
 			dataID = indicator + randomString(19)
-			data["file.source"] = value.(string)
+			if s, ok := value.(string); ok {
+				data["file.source"] = s
+			} else {
+				return nextStep, fmt.Errorf("invalid file.source value: expected string, got %T", value)
+			}
 
 			filesMap[dataID] = data
 
@@ -738,7 +795,10 @@ func buildDatabaseDVR() (err error) {
 
 			// Analyze Streams
 			for _, stream := range channels {
-				var s = stream.(map[string]string)
+				var s, ok = stream.(map[string]string)
+				if !ok {
+					continue
+				}
 				s["_file.m3u.path"] = i
 				s["_file.m3u.name"] = playlistName
 				s["_file.m3u.id"] = id

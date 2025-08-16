@@ -244,8 +244,12 @@ func verifyTunerCountIsZero() error {
 	}
 
 	if tunerActive, ok := responseMap["tuners.active"]; ok {
-		if tunerActive.(float64) != 0 {
-			return fmt.Errorf("expected active tuner count to be 0, but got %v", tunerActive)
+		if ta, ok := tunerActive.(float64); ok {
+			if ta != 0 {
+				return fmt.Errorf("expected active tuner count to be 0, but got %v", tunerActive)
+			}
+		} else {
+			return fmt.Errorf("invalid type for tuners.active: expected float64, got %T", tunerActive)
 		}
 	} else {
 		// If the key doesn't exist, it means the count is 0 because of omitempty
