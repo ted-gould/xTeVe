@@ -153,7 +153,7 @@ func TestConnectToStreamingServer_Buffering(t *testing.T) {
 
 	var clients ClientConnection
 	clients.Connection = 1
-	BufferClients.Store(playlistID+stream.MD5, clients)
+	BufferClients.Store(playlistID+stream.MD5, &clients)
 
 	// 3. Call the function to be tested
 	go connectToStreamingServer(streamID, playlistID)
@@ -216,6 +216,77 @@ func TestConnectToStreamingServer_Buffering(t *testing.T) {
 	BufferClients.Delete(playlistID + stream.MD5)
 }
 
+func TestTunerCountOnDisconnect(t *testing.T) {
+	// 1. Setup
+	initBufferVFS(true) // Use in-memory VFS
+
+	playlistID := "M1"
+	streamID := 0
+	streamURL := "http://localhost/stream"
+	channelName := "TestChannel"
+	tempFolder := "/tmp/xteve_test_disconnect/"
+	md5 := getMD5(streamURL)
+	streamFolder := tempFolder + md5 + string(os.PathSeparator)
+
+	// Create a dummy playlist and stream info
+	playlist := Playlist{
+		Folder:       tempFolder,
+		PlaylistID:   playlistID,
+		PlaylistName: "TestPlaylist",
+		Tuner:        1,
+		Streams:      make(map[int]ThisStream),
+		Clients:      make(map[int]ThisClient),
+	}
+
+	stream := ThisStream{
+		URL:         streamURL,
+		ChannelName: channelName,
+		Status:      true,
+		Folder:      streamFolder,
+		MD5:         md5,
+		PlaylistID:  playlistID,
+	}
+	playlist.Streams[streamID] = stream
+
+	client := ThisClient{
+		Connection: 1,
+	}
+	playlist.Clients[streamID] = client
+
+	BufferInformation.Store(playlistID, playlist)
+
+	var clients ClientConnection
+	clients.Connection = 1
+	BufferClients.Store(playlistID+md5, &clients)
+
+	// Verify initial state
+	p, _ := BufferInformation.Load(playlistID)
+	if len(p.(Playlist).Streams) != 1 {
+		t.Fatalf("Initial stream count should be 1, but was %d", len(p.(Playlist).Streams))
+	}
+
+	// 2. Action: Simulate client disconnect
+	killClientConnection(streamID, playlistID, false)
+
+	// 3. Verification
+	p, ok := BufferInformation.Load(playlistID)
+	if !ok {
+		// If the playlist is gone, that's also a success condition for this test
+		// as it means the last stream was cleaned up.
+		return
+	}
+
+	finalPlaylist := p.(Playlist)
+	if len(finalPlaylist.Streams) != 0 {
+		t.Errorf("Expected stream count to be 0 after disconnect, but was %d", len(finalPlaylist.Streams))
+	}
+
+	_, clientExists := BufferClients.Load(playlistID + md5)
+	if clientExists {
+		t.Error("ClientConnection info should be deleted after last client disconnects")
+	}
+}
+
 func TestBufferingStream_ClosesOnStreamEnd(t *testing.T) {
 	// 1. Setup mock server that serves a small amount of data and then closes
 	content := []byte("some finite stream data")
@@ -270,7 +341,7 @@ func TestBufferingStream_ClosesOnStreamEnd(t *testing.T) {
 
 	var clients ClientConnection
 	clients.Connection = 1
-	BufferClients.Store(playlistID+stream.MD5, clients)
+	BufferClients.Store(playlistID+stream.MD5, &clients)
 
 	// 3. Start buffering in a goroutine
 	go connectToStreamingServer(streamID, playlistID)
