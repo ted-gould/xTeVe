@@ -13,8 +13,6 @@ import (
 	"encoding/base64"
 
 	"time"
-	//"fmt"
-	//"log"
 )
 
 const tokenLength = 40
@@ -40,90 +38,6 @@ type Cookie struct {
 	Expires    time.Time
 	RawExpires string
 }
-
-// Framework examples
-
-/*
-func main() {
-  var err error
-
-  var checkErr = func(err error) {
-     log.Println(err)
-     os.Exit(0)
-  }
-
-  err = Init("", 10)          // Path to save the data, Validity of tokens in minutes | (error)
-  if err != nil {
-    checkErr(err)
-  }
-
-
-  err = CreateDefaultUser("admin", "123")
-  if err != nil {
-    checkErr(err)
-  }
-
-
-
-
-  err = CreateNewUser("xteve", "xteve")          // Username, Password | (error)
-  if err != nil {
-    checkErr(err)
-  }
-
-
-
-  err, token := UserAuthentication("xteve", "xteve")          // Username, Password | (error, token)
-  if err != nil {
-    checkErr(err)
-  } else {
-    fmt.Println("UserAuthentication()")
-    fmt.Println("Token:", token)
-    fmt.Println("---")
-  }
-
-  err, newToken := CheckTheValidityOfTheToken(token)        // Current token | (error, new token)
-  if err != nil {
-    checkErr(err)
-  } else {
-    fmt.Println("CheckTheValidityOfTheToken()")
-    fmt.Println("New Token:", newToken)
-    fmt.Println("---")
-  }
-
-  err, userID := GetUserID(newToken)                        // Current token | (error, user id)
-  if err != nil {
-    checkErr(err)
-  } else {
-    fmt.Println("GetUserID()")
-    fmt.Println("User ID:", userID)
-    fmt.Println("---")
-  }
-
-
-  var userData = make(map[string]interface{})
-  userData["type"] = "Administrator"
-  err = WriteUserData(userID, userData)          // User id, user data | (error)
-  if err != nil {
-    checkErr(err)
-  }
-
-  err, userData = ReadUserData(userID)          // User id | (error, userData)
-  if err != nil {
-    checkErr(err)
-  } else {
-    fmt.Println("ReadUserData()")
-    fmt.Println("User data:", userData)
-    fmt.Println("---")
-  }
-
-  err = RemoveUser(userID)
-  if err != nil {
-    checkErr(err)
-  }
-
-}
-*/
 
 // Init : databasePath = Path to authentication.json
 func Init(databasePath string, validity int) (err error) {
@@ -460,7 +374,6 @@ func CheckTheValidityOfTheTokenFromHTTPHeader(w http.ResponseWriter, r *http.Req
 				err = errCheck // Assign the specific error from CheckTheValidityOfTheToken
 				return writer, "", err
 			}
-			//fmt.Println("T", token, errCheck)
 			writer = SetCookieToken(w, token)
 			newToken = token
 			err = nil // Token was valid and processed, clear default error
@@ -596,10 +509,6 @@ func defaultsForNewUser(username, password string) (map[string]any, error) {
 	defaults["_password"] = passwordHash
 	defaults["_salt"] = salt
 	defaults["_id"] = "id-" + idSuffix
-	//defaults["_one.time.token"], err = randomString(tokenLength)
-	//if err != nil {
-	//	return nil, err
-	//}
 	defaults["data"] = make(map[string]any)
 	return defaults, nil
 }

@@ -1,10 +1,5 @@
 package src
 
-/*
-  Render Tuner Stream-Limit image as Video [ffmpeg]
-  -loop 1 -i stream-limit.jpg -c:v libx264 -t 1 -pix_fmt yuv420p -vf scale=1920:1080  stream-limit.bin
-*/
-
 import (
 	"errors"
 	"fmt"
@@ -53,7 +48,6 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 	var timeOut = 0
 	var newStream = true
 
-	//w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("Connection", "close")
 
 	// Check whether the Playlist is already in use
@@ -110,7 +104,6 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 				newStream = false
 				client.Connection++
 
-				//playlist.Streams[streamID] = stream
 				playlist.Clients[streamID] = client
 
 				BufferInformation.Store(playlistID, playlist)
@@ -146,7 +139,6 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 						_ = i
 						if _, errWrite := w.Write(content); errWrite != nil {
 							// Log error and break, client connection is likely gone
-							// log.Printf("Error writing stream-limit content to client: %v", errWrite)
 							return
 						}
 						time.Sleep(time.Duration(500) * time.Millisecond)
