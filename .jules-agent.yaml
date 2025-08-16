@@ -1,0 +1,12 @@
+# Instructions for Jules, the AI software engineer.
+---
+environment_setup:
+  - "When creating a new VM, run `make build` and fix dependency issues until it passes. This ensures the development environment is ready."
+  - "Always use `sudo` when running `apt-get` commands for package installation or system updates."
+
+testing:
+  - "For any new code, a test should be created for that code."
+  - "If fixing a bug, first build a test that proves you've found the bug. Then fix it. Then verify your new test passes."
+
+code_quality:
+  - "Prioritize code readability and maintainability."

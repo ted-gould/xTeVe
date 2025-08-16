@@ -74,9 +74,9 @@ The following steps will create the `xteve`, `xteve-inactive`, and `xteve-status
    npm install
    ```
 
-3. **Run the build script:**
+3. **Run the build command:**
    ```sh
-   sh build.sh
+   make build
    ```
 
 To enable this feature, go to `Settings -> Streaming` and check the `Enable Stream Retry` box. You can also configure the maximum number of retries and the delay between retries.
