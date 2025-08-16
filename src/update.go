@@ -122,7 +122,9 @@ func convertToNewFilter(oldFilter []any) (newFilterMap map[int]any) {
 			var newFilter FilterStruct
 			newFilter.Active = true
 			newFilter.Name = fmt.Sprintf("Custom filter %d", i+1)
-			newFilter.Filter = s.Index(i).Interface().(string)
+			if filter, ok := s.Index(i).Interface().(string); ok {
+				newFilter.Filter = filter
+			}
 			newFilter.Type = "custom-filter"
 			newFilter.CaseSensitive = false
 
@@ -136,7 +138,10 @@ func setValueForUUID() (err error) {
 	xepg, _ := loadJSONFileToMap(System.File.XEPG)
 
 	for _, c := range xepg {
-		var xepgChannel = c.(map[string]any)
+		var xepgChannel, ok = c.(map[string]any)
+		if !ok {
+			continue
+		}
 
 		if uuidKey, ok := xepgChannel["_uuid.key"].(string); ok {
 			if value, ok := xepgChannel[uuidKey].(string); ok {

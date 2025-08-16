@@ -18,13 +18,22 @@ func makeInteraceFromHDHR(content []byte, playlistName, id string) (channels []a
 	if err == nil {
 		for _, d := range hdhrData {
 			var channel = make(map[string]string)
-			var data = d.(map[string]any)
+			var data, ok = d.(map[string]any)
+			if !ok {
+				continue
+			}
 
 			channel["group-title"] = playlistName
-			channel["name"] = data["GuideName"].(string)
-			channel["tvg-id"] = data["GuideName"].(string)
-			channel["url"] = data["URL"].(string)
-			channel["ID-"+id] = data["GuideNumber"].(string)
+			if guideName, ok := data["GuideName"].(string); ok {
+				channel["name"] = guideName
+				channel["tvg-id"] = guideName
+			}
+			if guideURL, ok := data["URL"].(string); ok {
+				channel["url"] = guideURL
+			}
+			if guideNumber, ok := data["GuideNumber"].(string); ok {
+				channel["ID-"+id] = guideNumber
+			}
 			channel["_uuid.key"] = "ID-" + id
 			channel["_values"] = playlistName + " " + channel["name"]
 
@@ -155,8 +164,19 @@ func getLineup() (jsonContent []byte, err error) {
 	// Have to use type assertions (https://golang.org/ref/spec#Type_assertions) to cast generic interface{} into LineupStream
 	sort.Slice(lineup, func(i, j int) bool {
 		var chanA, chanB float64
-		chanA, _ = strconv.ParseFloat(lineup[i].(LineupStream).GuideNumber, 64)
-		chanB, _ = strconv.ParseFloat(lineup[j].(LineupStream).GuideNumber, 64)
+		var ok bool
+		var lineupI, lineupJ LineupStream
+
+		if lineupI, ok = lineup[i].(LineupStream); !ok {
+			return false
+		}
+
+		if lineupJ, ok = lineup[j].(LineupStream); !ok {
+			return false
+		}
+
+		chanA, _ = strconv.ParseFloat(lineupI.GuideNumber, 64)
+		chanB, _ = strconv.ParseFloat(lineupJ.GuideNumber, 64)
 		return chanA < chanB
 	})
 
@@ -182,7 +202,9 @@ func getGuideNumberPMS(channelName string) (pmsID string, err error) {
 		}
 
 		for key, value := range pms {
-			Data.Cache.PMS[key] = value.(string)
+			if v, ok := value.(string); ok {
+				Data.Cache.PMS[key] = v
+			}
 		}
 	}
 

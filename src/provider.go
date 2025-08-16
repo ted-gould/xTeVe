@@ -90,13 +90,20 @@ func getProviderData(fileType, fileID string) (err error) {
 			return
 		}
 
-		var filePath = System.Folder.Data + data["file."+System.AppName].(string)
+		var filePath string
+		if f, ok := data["file."+System.AppName].(string); ok {
+			filePath = System.Folder.Data + f
+		} else {
+			return fmt.Errorf("invalid file path in provider data")
+		}
 
 		err = writeByteToFile(filePath, body)
 
 		if err == nil {
 			data["last.update"] = time.Now().Format("2006-01-02 15:04:05")
-			data["counter.download"] = data["counter.download"].(float64) + 1
+			if v, ok := data["counter.download"].(float64); ok {
+				data["counter.download"] = v + 1
+			}
 		}
 		return
 	}
@@ -114,8 +121,14 @@ func getProviderData(fileType, fileID string) (err error) {
 	}
 
 	for dataID, d := range dataMap {
-		var data = d.(map[string]any)
-		var fileSource = data["file.source"].(string)
+		var data, ok = d.(map[string]any)
+		if !ok {
+			continue
+		}
+		var fileSource, okSource = data["file.source"].(string)
+		if !okSource {
+			continue
+		}
 		var newProvider = false // Declare and initialize newProvider inside the loop
 
 		if _, ok := data["new"]; ok {
@@ -179,8 +192,12 @@ func getProviderData(fileType, fileID string) (err error) {
 				// Increase Error Counter by 1
 				if value, ok := dataMap[dataID].(map[string]any); ok {
 					// Directly modify the map obtained from dataMap
-					value["counter.error"] = value["counter.error"].(float64) + 1
-					value["counter.download"] = value["counter.download"].(float64) + 1
+					if v, ok := value["counter.error"].(float64); ok {
+						value["counter.error"] = v + 1
+					}
+					if v, ok := value["counter.download"].(float64); ok {
+						value["counter.download"] = v + 1
+					}
 					// No need for the separate 'data' variable here
 				}
 			} else {
@@ -191,10 +208,14 @@ func getProviderData(fileType, fileID string) (err error) {
 		// Calculate the Margin of Error
 		if !newProvider {
 			if value, ok := dataMap[dataID].(map[string]any); ok {
-				if value["counter.error"].(float64) == 0 {
-					value["provider.availability"] = 100
-				} else {
-					value["provider.availability"] = int(value["counter.error"].(float64)*100/value["counter.download"].(float64)*-1 + 100)
+				var counterError, okError = value["counter.error"].(float64)
+				var counterDownload, okDownload = value["counter.download"].(float64)
+				if okError && okDownload {
+					if counterError == 0 {
+						value["provider.availability"] = 100
+					} else {
+						value["provider.availability"] = int(counterError*100/counterDownload*-1 + 100)
+					}
 				}
 			}
 		}

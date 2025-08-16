@@ -216,7 +216,9 @@ func createXEPGMapping() {
 		dummyChannel["display-names"] = []DisplayName{{Value: i + " Minutes"}}
 		dummyChannel["id"] = i + "_Minutes"
 		dummyChannel["icon"] = ""
-		dummy[dummyChannel["id"].(string)] = dummyChannel
+		if id, ok := dummyChannel["id"].(string); ok {
+			dummy[id] = dummyChannel
+		}
 	}
 	Data.XMLTV.Mapping["xTeVe Dummy"] = dummy
 }
@@ -619,16 +621,18 @@ func performAutomaticChannelMapping(xepgChannel XEPGChannelStruct, _ string) (XE
 						xepgNameSolid := strings.ReplaceAll(xepgChannel.Name, " ", "")
 
 						if strings.EqualFold(xmltvNameSolid, xepgNameSolid) {
-							xepgChannel.XmltvFile = file
-							xepgChannel.XMapping = channelData["id"].(string)
-							mappingMade = true
-							if icon, ok := channelData["icon"].(string); ok {
-								if len(icon) > 0 {
-									xepgChannel.TvgLogo = icon
+							if id, ok := channelData["id"].(string); ok {
+								xepgChannel.XmltvFile = file
+								xepgChannel.XMapping = id
+								mappingMade = true
+								if icon, ok := channelData["icon"].(string); ok {
+									if len(icon) > 0 {
+										xepgChannel.TvgLogo = icon
+									}
 								}
+								mappingFound = true // Set flag to break outer and inner loops
+								break               // Break from inner loop over displayNamesArray
 							}
-							mappingFound = true // Set flag to break outer and inner loops
-							break               // Break from inner loop over displayNamesArray
 						}
 					}
 					// if mappingFound, the inner loop over xmltvMap will break in next iter

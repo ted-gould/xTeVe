@@ -92,8 +92,9 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 	} else {
 		// Playlist is already being used for streaming
 		// Check if the URL is already being streamed by another Client
-
-		playlist = p.(Playlist)
+		if pl, ok := p.(Playlist); ok {
+			playlist = pl
+		}
 
 		for id := range playlist.Streams {
 			stream = playlist.Streams[id]
@@ -113,10 +114,10 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 				showDebug(debug, 1)
 
 				if c, ok := BufferClients.Load(playlistID + stream.MD5); ok {
-					var clients = c.(*ClientConnection)
-					clients.Connection = clients.Connection + 1
-					showInfo(fmt.Sprintf("Streaming Status:Channel: %s (Clients: %d)", stream.ChannelName, clients.Connection))
-
+					if clients, ok := c.(*ClientConnection); ok {
+						clients.Connection = clients.Connection + 1
+						showInfo(fmt.Sprintf("Streaming Status:Channel: %s (Clients: %d)", stream.ChannelName, clients.Connection))
+					}
 				}
 				break
 			}
@@ -196,7 +197,9 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 
 	for { // Loop 1: Wait until the first Segment has been downloaded by the Buffer
 		if p, ok := BufferInformation.Load(playlistID); ok {
-			var playlist = p.(Playlist)
+			if pl, ok := p.(Playlist); ok {
+				playlist = pl
+			}
 
 			if stream, ok := playlist.Streams[streamID]; ok {
 				if !stream.Status {
@@ -205,11 +208,11 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 					time.Sleep(time.Duration(100) * time.Millisecond)
 
 					if c, ok := BufferClients.Load(playlistID + stream.MD5); ok {
-						var clients = c.(*ClientConnection)
-
-						if clients.Error != nil || timeOut > 200 {
-							killClientConnection(streamID, stream.PlaylistID, false)
-							return
+						if clients, ok := c.(*ClientConnection); ok {
+							if clients.Error != nil || timeOut > 200 {
+								killClientConnection(streamID, stream.PlaylistID, false)
+								return
+							}
 						}
 					}
 					continue
@@ -235,7 +238,9 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 					var isStreamFinished bool
 					Lock.Lock()
 					if p, ok := BufferInformation.Load(playlistID); ok {
-						playlist := p.(Playlist)
+						if pl, ok := p.(Playlist); ok {
+							playlist = pl
+						}
 						if s, ok := playlist.Streams[streamID]; ok {
 							segmentsToProcess = make([]SegmentInfo, len(s.CompletedSegments))
 							copy(segmentsToProcess, s.CompletedSegments)
@@ -251,11 +256,12 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 					Lock.Unlock()
 
 					if c, ok := BufferClients.Load(playlistID + stream.MD5); ok {
-						clients := c.(*ClientConnection)
-						if clients.Error != nil {
-							ShowError(clients.Error, 0)
-							killClientConnection(streamID, playlistID, false)
-							return
+						if clients, ok := c.(*ClientConnection); ok {
+							if clients.Error != nil {
+								ShowError(clients.Error, 0)
+								killClientConnection(streamID, playlistID, false)
+								return
+							}
 						}
 					} else {
 						return
@@ -318,7 +324,9 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 						// Update the shared SentCount
 						Lock.Lock()
 						if p, ok := BufferInformation.Load(playlistID); ok {
-							playlist := p.(Playlist)
+							if pl, ok := p.(Playlist); ok {
+								playlist = pl
+							}
 							if s, ok := playlist.Streams[streamID]; ok && fts.Index < len(s.CompletedSegments) && s.CompletedSegments[fts.Index].Filename == fts.Filename {
 								s.CompletedSegments[fts.Index].SentCount++
 								playlist.Streams[streamID] = s
@@ -330,11 +338,15 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 						// Cleanup completed segments
 						Lock.Lock()
 						if p, ok := BufferInformation.Load(playlistID); ok {
-							playlist := p.(Playlist)
+							if pl, ok := p.(Playlist); ok {
+								playlist = pl
+							}
 							if s, ok := playlist.Streams[streamID]; ok {
 								var numClients = 1
 								if c, ok := BufferClients.Load(playlistID + stream.MD5); ok {
-								numClients = c.(*ClientConnection).Connection
+									if clients, ok := c.(*ClientConnection); ok {
+										numClients = clients.Connection
+									}
 								}
 
 								// Find how many segments can be removed from the front
@@ -391,7 +403,10 @@ func killClientConnection(streamID int, playlistID string, force bool) {
 	defer Lock.Unlock()
 
 	if p, ok := BufferInformation.Load(playlistID); ok {
-		var playlist = p.(Playlist)
+		var playlist Playlist
+		if pl, ok := p.(Playlist); ok {
+			playlist = pl
+		}
 
 		if force {
 			delete(playlist.Streams, streamID)
@@ -401,16 +416,17 @@ func killClientConnection(streamID int, playlistID string, force bool) {
 
 		if stream, ok := playlist.Streams[streamID]; ok {
 			if c, ok := BufferClients.Load(playlistID + stream.MD5); ok {
-				var clients = c.(*ClientConnection)
-				clients.Connection--
+				if clients, ok := c.(*ClientConnection); ok {
+					clients.Connection--
 
-				showInfo("Streaming Status:Client has terminated the connection")
-				showInfo(fmt.Sprintf("Streaming Status:Channel: %s (Clients: %d)", stream.ChannelName, clients.Connection))
+					showInfo("Streaming Status:Client has terminated the connection")
+					showInfo(fmt.Sprintf("Streaming Status:Channel: %s (Clients: %d)", stream.ChannelName, clients.Connection))
 
-				if clients.Connection <= 0 {
-					BufferClients.Delete(playlistID + stream.MD5)
-					delete(playlist.Streams, streamID)
-					delete(playlist.Clients, streamID)
+					if clients.Connection <= 0 {
+						BufferClients.Delete(playlistID + stream.MD5)
+						delete(playlist.Streams, streamID)
+						delete(playlist.Clients, streamID)
+					}
 				}
 			}
 
@@ -446,12 +462,11 @@ func clientConnection(stream ThisStream) (status bool) {
 		if p, ok := BufferInformation.Load(stream.PlaylistID); ok {
 			showInfo(fmt.Sprintf("Streaming Status:Channel: %s - No client is using this channel anymore. Streaming Server connection has ended", stream.ChannelName))
 
-			var playlist = p.(Playlist)
-
-			showInfo(fmt.Sprintf("Streaming Status:Playlist: %s - Tuner: %d / %d", playlist.PlaylistName, len(playlist.Streams), playlist.Tuner))
-
-			if len(playlist.Streams) <= 0 {
-				BufferInformation.Delete(stream.PlaylistID)
+			if playlist, ok := p.(Playlist); ok {
+				showInfo(fmt.Sprintf("Streaming Status:Playlist: %s - Tuner: %d / %d", playlist.PlaylistName, len(playlist.Streams), playlist.Tuner))
+				if len(playlist.Streams) <= 0 {
+					BufferInformation.Delete(stream.PlaylistID)
+				}
 			}
 		}
 		status = false
@@ -461,7 +476,10 @@ func clientConnection(stream ThisStream) (status bool) {
 
 func connectToStreamingServer(streamID int, playlistID string) {
 	if p, ok := BufferInformation.Load(playlistID); ok {
-		var playlist = p.(Playlist)
+		var playlist Playlist
+		if pl, ok := p.(Playlist); ok {
+			playlist = pl
+		}
 
 		var timeOut = 0
 		var debug string
@@ -501,8 +519,9 @@ func connectToStreamingServer(streamID int, playlistID string) {
 		var addErrorToStream = func(err error) {
 			if stream, ok := playlist.Streams[streamID]; ok {
 				if c, ok := BufferClients.Load(playlistID + stream.MD5); ok {
-					var clients = c.(*ClientConnection)
-					clients.Error = err
+					if clients, ok := c.(*ClientConnection); ok {
+						clients.Error = err
+					}
 				}
 			}
 		}
@@ -839,9 +858,10 @@ func handleTSStream(resp *http.Response, stream ThisStream, streamID int, playli
 					stream.Status = true
 
 					if p, ok := BufferInformation.Load(playlistID); ok {
-						playlist := p.(Playlist)
-						playlist.Streams[streamID] = stream
-						BufferInformation.Store(playlistID, playlist)
+						if playlist, ok := p.(Playlist); ok {
+							playlist.Streams[streamID] = stream
+							BufferInformation.Store(playlistID, playlist)
+						}
 					}
 
 					Lock.Unlock()
@@ -888,9 +908,10 @@ func handleTSStream(resp *http.Response, stream ThisStream, streamID int, playli
 
 					// Update the stream in BufferInformation
 					if p, ok := BufferInformation.Load(playlistID); ok {
-						playlist := p.(Playlist)
-						playlist.Streams[streamID] = stream
-						BufferInformation.Store(playlistID, playlist)
+						if playlist, ok := p.(Playlist); ok {
+							playlist.Streams[streamID] = stream
+							BufferInformation.Store(playlistID, playlist)
+						}
 					}
 				}
 			}
