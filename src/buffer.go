@@ -370,6 +370,7 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 					// 4. Wait if there's nothing to do
 					if len(filesToSend) == 0 {
 						if isStreamFinished {
+							killClientConnection(streamID, playlistID, false)
 							return // No more files and stream is finished
 						}
 						time.Sleep(time.Duration(100) * time.Millisecond)

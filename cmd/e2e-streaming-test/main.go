@@ -29,6 +29,11 @@ type WebSocketResponse struct {
 	Error  string `json:"err,omitempty"`
 }
 
+// StatusResponse defines the structure for the /api/status response.
+type StatusResponse struct {
+	TunerActive int `json:"tuners.active"`
+}
+
 func main() {
 	if err := run(); err != nil {
 		log.Printf("E2E test failed: %v", err)
@@ -202,6 +207,52 @@ func runTests() error {
 		return fmt.Errorf("client disconnect test failed with buffer disabled: %w", err)
 	}
 
+	if err := verifyTunerCountIsZero(); err != nil {
+		return fmt.Errorf("tuner count verification failed: %w", err)
+	}
+
+	return nil
+}
+
+func verifyTunerCountIsZero() error {
+	// Give the server a moment to clean up resources
+	time.Sleep(2 * time.Second)
+
+	fmt.Println("Verifying tuner count is zero...")
+	apiURL := fmt.Sprintf("http://localhost:%d/api/", xtevePort)
+	requestBody := strings.NewReader(`{"cmd":"status"}`)
+	resp, err := http.Post(apiURL, "application/json", requestBody)
+	if err != nil {
+		return fmt.Errorf("failed to make status API request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("status API request failed with status code: %d, body: %s", resp.StatusCode, string(body))
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read status API response body: %w", err)
+	}
+
+	// The response is a map, so we need to decode it into a map first
+	var responseMap map[string]interface{}
+	if err := json.Unmarshal(body, &responseMap); err != nil {
+		return fmt.Errorf("failed to unmarshal status API response into map: %w, body: %s", err, string(body))
+	}
+
+	if tunerActive, ok := responseMap["tuners.active"]; ok {
+		if tunerActive.(float64) != 0 {
+			return fmt.Errorf("expected active tuner count to be 0, but got %v", tunerActive)
+		}
+	} else {
+		// If the key doesn't exist, it means the count is 0 because of omitempty
+		fmt.Println("'tuners.active' field not found, assuming 0.")
+	}
+
+	fmt.Println("Tuner count verified successfully.")
 	return nil
 }
 
