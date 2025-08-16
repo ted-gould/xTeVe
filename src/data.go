@@ -47,10 +47,6 @@ func updateServerSettings(request RequestStruct) (settings SettingsStruct, err e
 					newUpdateTimes = append(newUpdateTimes, v.(string))
 				}
 
-				// if len(newUpdateTimes) == 0 {
-				// 	//newUpdateTimes = append(newUpdateTimes, "0000")
-				// }
-
 				value = newUpdateTimes
 			case "cache.images":
 				cacheImages = true
@@ -768,11 +764,6 @@ func buildDatabaseDVR() (err error) {
 					case "group-title":
 						if value, ok := s[key]; ok {
 							if len(value) > 0 {
-								// if _, ok := tmpGroupsM3U[value]; ok {
-								// 	tmpGroupsM3U[value]++
-								// } else {
-								// 	tmpGroupsM3U[value] = 1
-								// }
 								tmpGroupsM3U[value]++
 								groupTitle++
 							}

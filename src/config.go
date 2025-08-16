@@ -162,7 +162,6 @@ func Init() (err error) {
 	}
 
 	// Separate tmp Folder for each Instance
-	// System.Folder.Temp = System.Folder.Temp + Settings.UUID + string(os.PathSeparator)
 	showInfo(fmt.Sprintf("Temporary Folder:%s", getPlatformPath(System.Folder.Temp)))
 
 	err = checkFolder(System.Folder.Temp)
@@ -174,9 +173,6 @@ func Init() (err error) {
 	if err != nil {
 		return
 	}
-
-	// showInfo(fmt.Sprintf("GitHub:https://github.com/%s", System.GitHub.User)) // System.GitHub.User removed
-	// showInfo(fmt.Sprintf("Git Branch:%s", System.Branch)) // System.GitHub.User removed & System.Branch removed
 
 	if len(strings.TrimSpace(Settings.HostName)) > 0 {
 		Settings.HostIP = strings.TrimSpace(Settings.HostName)
