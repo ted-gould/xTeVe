@@ -38,7 +38,6 @@ func TestWebUIEmbed(t *testing.T) {
 }
 
 func TestWebHandler(t *testing.T) {
-	t.Skip("Skipping test because ffmpeg is not available in the test environment")
 	// GIVEN
 	// A list of all files in the "src/html" directory
 	var testFiles []string
