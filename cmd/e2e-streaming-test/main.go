@@ -43,6 +43,9 @@ func main() {
 }
 
 func run() error {
+	if err := buildCommands(); err != nil {
+		return fmt.Errorf("failed to build commands: %w", err)
+	}
 	// 1. Start streamer
 	fmt.Println("Starting streamer...")
 	streamerCmd := exec.Command("./streamer_binary")
@@ -82,6 +85,14 @@ func run() error {
 	// 4. Cleanup
 	stopXteve(xteveCmd)
 	stopStreamer(streamerCmd)
+
+	if err := runStatusTest(false); err != nil {
+		return fmt.Errorf("post-run status test failed: %w", err)
+	}
+
+	if err := runInactiveTest(false, false); err != nil {
+		return fmt.Errorf("post-run inactive test failed: %w", err)
+	}
 
 	if testErr != nil {
 		return testErr
@@ -160,6 +171,10 @@ func sendRequest(conn *websocket.Conn, request map[string]interface{}) (*WebSock
 func runTests() error {
 	fmt.Println("Running tests...")
 
+	if err := runStatusTest(true); err != nil {
+		return fmt.Errorf("initial status test failed: %w", err)
+	}
+
 	// 1. Connect to the WebSocket
 	wsURL := fmt.Sprintf("ws://localhost:%d/data/", xtevePort)
 	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
@@ -209,6 +224,10 @@ func runTests() error {
 
 	if err := verifyTunerCountIsZero(); err != nil {
 		return fmt.Errorf("tuner count verification failed: %w", err)
+	}
+
+	if err := runInactiveTest(false, true); err != nil {
+		return fmt.Errorf("inactive test failed after streaming: %w", err)
 	}
 
 	return nil
@@ -384,6 +403,12 @@ func runStreamingTest(conn *websocket.Conn, buffered bool) (string, error) {
 	}
 	defer streamResp.Body.Close()
 
+	if buffered {
+		if err := runInactiveTest(true, true); err != nil {
+			return "", fmt.Errorf("inactive test failed during stream: %w", err)
+		}
+	}
+
 	receivedData, err := io.ReadAll(streamResp.Body)
 	if err != nil {
 		return "", fmt.Errorf("failed to read stream data: %w", err)
@@ -405,5 +430,83 @@ func verifyStreamedData(data []byte) error {
 		}
 	}
 	fmt.Println("Streamed data verified successfully.")
+	return nil
+}
+
+func buildCommands() error {
+	fmt.Println("Building helper commands...")
+	commands := []struct {
+		Name       string
+		SourcePath string
+	}{
+		{"xteve-status", "./cmd/xteve-status"},
+		{"xteve-inactive", "./cmd/xteve-inactive"},
+	}
+
+	for _, cmdInfo := range commands {
+		fmt.Printf("Building %s...\n", cmdInfo.Name)
+		cmd := exec.Command("go", "build", "-o", cmdInfo.Name, cmdInfo.SourcePath)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("failed to build %s: %w", cmdInfo.Name, err)
+		}
+	}
+
+	return nil
+}
+
+func runStatusTest(serverIsRunning bool) error {
+	fmt.Println("Running status test...")
+	cmd := exec.Command("./xteve-status", fmt.Sprintf("-port=%d", xtevePort))
+	output, err := cmd.CombinedOutput()
+
+	if serverIsRunning {
+		if err != nil {
+			return fmt.Errorf("xteve-status failed when server is running: %w, output: %s", err, string(output))
+		}
+		if !strings.Contains(string(output), "xTeVe status:") {
+			return fmt.Errorf("xteve-status output did not contain expected string. got: %s", string(output))
+		}
+		fmt.Println("Status test passed (server running).")
+	} else {
+		if err == nil {
+			return fmt.Errorf("xteve-status succeeded when server is not running")
+		}
+		if !strings.Contains(string(output), "Unable to get API") {
+			return fmt.Errorf("xteve-status output did not contain expected error string. got: %s", string(output))
+		}
+		fmt.Println("Status test passed (server not running).")
+	}
+
+	return nil
+}
+
+func runInactiveTest(expectingActive, serverIsRunning bool) error {
+	fmt.Println("Running inactive test...")
+	cmd := exec.Command("./xteve-inactive", fmt.Sprintf("-port=%d", xtevePort))
+	err := cmd.Run()
+
+	if !serverIsRunning {
+		if err == nil {
+			return fmt.Errorf("xteve-inactive succeeded when server is not running")
+		}
+		fmt.Println("Inactive test passed (server not running).")
+		return nil
+	}
+
+	exitCode := cmd.ProcessState.ExitCode()
+	if expectingActive {
+		if exitCode == 0 {
+			return fmt.Errorf("xteve-inactive returned exit code 0 when expecting active stream")
+		}
+		fmt.Printf("Inactive test passed (expecting active), exit code: %d\n", exitCode)
+	} else {
+		if exitCode != 0 {
+			return fmt.Errorf("xteve-inactive returned exit code %d when expecting no active stream", exitCode)
+		}
+		fmt.Println("Inactive test passed (expecting inactive).")
+	}
+
 	return nil
 }

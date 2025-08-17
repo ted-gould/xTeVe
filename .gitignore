@@ -20,3 +20,5 @@ test-results/
 # E2E test binaries
 streamer_binary
 e2e-streaming-test
+xteve-status
+xteve-inactive
