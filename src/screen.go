@@ -5,7 +5,6 @@ import (
 	"log"
 	"runtime"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -30,6 +29,9 @@ func showInfo(str string) {
 
 		printLogOnScreen(logMsg, "info")
 
+		WebScreenLog.Mu.Lock()
+		defer WebScreenLog.Mu.Unlock()
+
 		logMsg = strings.Replace(logMsg, " ", "&nbsp;", -1)
 		WebScreenLog.Log = append(WebScreenLog.Log, time.Now().Format("2006-01-02 15:04:05")+" "+logMsg)
 		logCleanUp()
@@ -45,7 +47,6 @@ func showDebug(str string, level int) {
 	var msg = strings.SplitN(str, ":", 2)
 	var length = len(msg[0])
 	var space string
-	var mutex = sync.RWMutex{}
 
 	if len(msg) == 2 {
 		for i := length; i < max; i++ {
@@ -57,11 +58,11 @@ func showDebug(str string, level int) {
 
 		printLogOnScreen(logMsg, "debug")
 
-		mutex.Lock()
+		WebScreenLog.Mu.Lock()
+		defer WebScreenLog.Mu.Unlock()
 		logMsg = strings.Replace(logMsg, " ", "&nbsp;", -1)
 		WebScreenLog.Log = append(WebScreenLog.Log, time.Now().Format("2006-01-02 15:04:05")+" "+logMsg)
 		logCleanUp()
-		mutex.Unlock()
 	}
 }
 
@@ -97,29 +98,26 @@ func showHighlight(str string) {
 func showWarning(errCode int) {
 	var errMsg = getErrMsg(errCode)
 	var logMsg = fmt.Sprintf("[%s] [WARNING] %s", System.Name, errMsg)
-	var mutex = sync.RWMutex{}
 
 	printLogOnScreen(logMsg, "warning")
 
-	mutex.Lock()
+	WebScreenLog.Mu.Lock()
+	defer WebScreenLog.Mu.Unlock()
 	WebScreenLog.Log = append(WebScreenLog.Log, time.Now().Format("2006-01-02 15:04:05")+" "+logMsg)
 	WebScreenLog.Warnings++
-	mutex.Unlock()
 }
 
 // ShowError : Shows the Error Messages in the Console
 func ShowError(err error, errCode int) {
-	var mutex = sync.RWMutex{}
-
 	var errMsg = getErrMsg(errCode)
 	var logMsg = fmt.Sprintf("[%s] [ERROR] %s (%s) - EC: %d", System.Name, err, errMsg, errCode)
 
 	printLogOnScreen(logMsg, "error")
 
-	mutex.Lock()
+	WebScreenLog.Mu.Lock()
+	defer WebScreenLog.Mu.Unlock()
 	WebScreenLog.Log = append(WebScreenLog.Log, time.Now().Format("2006-01-02 15:04:05")+" "+logMsg)
 	WebScreenLog.Errors++
-	mutex.Unlock()
 }
 
 func printLogOnScreen(logMsg string, logType string) {

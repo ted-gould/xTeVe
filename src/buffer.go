@@ -244,26 +244,10 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 					// --- New logic for handling multiple clients ---
 
 					// 1. Get a copy of the segments from the shared buffer, safely
-					var segmentsToProcess []SegmentInfo
-					var isStreamFinished bool
-					Lock.Lock()
-					if p, ok := BufferInformation.Load(playlistID); ok {
-						if pl, ok := p.(Playlist); ok {
-							playlist = pl
-						}
-						if s, ok := playlist.Streams[streamID]; ok {
-							segmentsToProcess = make([]SegmentInfo, len(s.CompletedSegments))
-							copy(segmentsToProcess, s.CompletedSegments)
-							isStreamFinished = s.StreamFinished
-						} else {
-							Lock.Unlock()
-							return // Stream was removed
-						}
-					} else {
-						Lock.Unlock()
-						return // Playlist was removed
+					segmentsToProcess, isStreamFinished, streamRemoved := getSegmentsAndStatus(playlistID, streamID)
+					if streamRemoved {
+						return
 					}
-					Lock.Unlock()
 
 					if c, ok := BufferClients.Load(playlistID + stream.MD5); ok {
 						if clients, ok := c.(*ClientConnection); ok {
@@ -332,52 +316,10 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 						stream.OldSegments = append(stream.OldSegments, fts.Filename)
 
 						// Update the shared SentCount
-						Lock.Lock()
-						if p, ok := BufferInformation.Load(playlistID); ok {
-							if pl, ok := p.(Playlist); ok {
-								playlist = pl
-							}
-							if s, ok := playlist.Streams[streamID]; ok && fts.Index < len(s.CompletedSegments) && s.CompletedSegments[fts.Index].Filename == fts.Filename {
-								s.CompletedSegments[fts.Index].SentCount++
-								playlist.Streams[streamID] = s
-								BufferInformation.Store(playlistID, playlist)
-							}
-						}
-						Lock.Unlock()
+						updateSegmentSentCount(playlistID, streamID, fts.Index, fts.Filename)
 
 						// Cleanup completed segments
-						Lock.Lock()
-						if p, ok := BufferInformation.Load(playlistID); ok {
-							if pl, ok := p.(Playlist); ok {
-								playlist = pl
-							}
-							if s, ok := playlist.Streams[streamID]; ok {
-								var numClients = 1
-								if c, ok := BufferClients.Load(playlistID + stream.MD5); ok {
-									if clients, ok := c.(*ClientConnection); ok {
-										numClients = clients.Connection
-									}
-								}
-
-								// Find how many segments can be removed from the front
-								var removeCount int
-								for i, segInfo := range s.CompletedSegments {
-									if segInfo.SentCount >= numClients {
-										removeCount = i + 1
-									} else {
-										// Stop at the first segment not seen by all clients
-										break
-									}
-								}
-
-								if removeCount > 0 {
-									s.CompletedSegments = s.CompletedSegments[removeCount:]
-									playlist.Streams[streamID] = s
-									BufferInformation.Store(playlistID, playlist)
-								}
-							}
-						}
-						Lock.Unlock()
+						cleanupCompletedSegments(playlistID, streamID, stream.MD5)
 					}
 
 					// Clean up old segment files from disk
@@ -846,36 +788,8 @@ func handleTSStream(resp *http.Response, stream ThisStream, streamID int, playli
 
 				// If the file is full, create a new one
 				if fileSize >= tmpFileSize {
-					Lock.Lock()
-
-					bandwidth.Stop = time.Now()
-					bandwidth.Size += fileSize
-
-					bandwidth.TimeDiff = bandwidth.Stop.Sub(bandwidth.Start).Seconds()
-
-					stream.NetworkBandwidth = int(float64(bandwidth.Size) / bandwidth.TimeDiff * 1000)
-
-					debug = fmt.Sprintf("Buffer Status:Done (%s)", tmpFile)
-					showDebug(debug, 2)
-
 					bufferFile.Close()
-
-					// Add completed segment to the list
-					segmentName := fmt.Sprintf("%d.ts", *tmpSegment)
-					segmentInfo := SegmentInfo{Filename: segmentName, SentCount: 0}
-					stream.CompletedSegments = append(stream.CompletedSegments, segmentInfo)
-
-					stream.Status = true
-
-					if p, ok := BufferInformation.Load(playlistID); ok {
-						if playlist, ok := p.(Playlist); ok {
-							playlist.Streams[streamID] = stream
-							BufferInformation.Store(playlistID, playlist)
-						}
-					}
-
-					Lock.Unlock()
-
+					completeTSsegment(playlistID, streamID, &stream, bandwidth, fileSize, tmpFile, *tmpSegment)
 					*tmpSegment++
 
 					tmpFile = fmt.Sprintf("%s%d.ts", tmpFolder, *tmpSegment)
@@ -977,6 +891,124 @@ func switchBandwidth(stream *ThisStream) (err error) {
 	stream.Segment = append(stream.Segment, segment)
 
 	return
+}
+
+// getSegmentsAndStatus safely retrieves the list of completed segments and the stream's finished status.
+func getSegmentsAndStatus(playlistID string, streamID int) ([]SegmentInfo, bool, bool) {
+	Lock.Lock()
+	defer Lock.Unlock()
+
+	p, ok := BufferInformation.Load(playlistID)
+	if !ok {
+		return nil, false, true // Playlist was removed
+	}
+
+	pl, ok := p.(Playlist)
+	if !ok {
+		// This should not happen, indicates a type assertion error
+		return nil, false, true
+	}
+
+	s, ok := pl.Streams[streamID]
+	if !ok {
+		return nil, false, true // Stream was removed
+	}
+
+	segmentsToProcess := make([]SegmentInfo, len(s.CompletedSegments))
+	copy(segmentsToProcess, s.CompletedSegments)
+	isStreamFinished := s.StreamFinished
+
+	return segmentsToProcess, isStreamFinished, false
+}
+
+// updateSegmentSentCount safely increments the sent count of a segment.
+func updateSegmentSentCount(playlistID string, streamID int, segmentIndex int, filename string) {
+	Lock.Lock()
+	defer Lock.Unlock()
+
+	p, ok := BufferInformation.Load(playlistID)
+	if !ok {
+		return
+	}
+
+	pl, ok := p.(Playlist)
+	if !ok {
+		return
+	}
+
+	if s, ok := pl.Streams[streamID]; ok {
+		if segmentIndex < len(s.CompletedSegments) && s.CompletedSegments[segmentIndex].Filename == filename {
+			s.CompletedSegments[segmentIndex].SentCount++
+			pl.Streams[streamID] = s
+			BufferInformation.Store(playlistID, pl)
+		}
+	}
+}
+
+// cleanupCompletedSegments safely removes segments that have been sent to all clients.
+func cleanupCompletedSegments(playlistID string, streamID int, streamMD5 string) {
+	Lock.Lock()
+	defer Lock.Unlock()
+
+	p, ok := BufferInformation.Load(playlistID)
+	if !ok {
+		return
+	}
+
+	pl, ok := p.(Playlist)
+	if !ok {
+		return
+	}
+
+	if s, ok := pl.Streams[streamID]; ok {
+		var numClients = 1
+		if c, ok := BufferClients.Load(playlistID + streamMD5); ok {
+			if clients, ok := c.(*ClientConnection); ok {
+				numClients = clients.Connection
+			}
+		}
+
+		var removeCount int
+		for i, segInfo := range s.CompletedSegments {
+			if segInfo.SentCount >= numClients {
+				removeCount = i + 1
+			} else {
+				break
+			}
+		}
+
+		if removeCount > 0 {
+			s.CompletedSegments = s.CompletedSegments[removeCount:]
+			pl.Streams[streamID] = s
+			BufferInformation.Store(playlistID, pl)
+		}
+	}
+}
+
+func completeTSsegment(playlistID string, streamID int, stream *ThisStream, bandwidth *BandwidthCalculation, fileSize int, tmpFile string, tmpSegment int) {
+	Lock.Lock()
+	defer Lock.Unlock()
+
+	bandwidth.Stop = time.Now()
+	bandwidth.Size += fileSize
+	bandwidth.TimeDiff = bandwidth.Stop.Sub(bandwidth.Start).Seconds()
+	stream.NetworkBandwidth = int(float64(bandwidth.Size) / bandwidth.TimeDiff * 1000)
+
+	debug := fmt.Sprintf("Buffer Status:Done (%s)", tmpFile)
+	showDebug(debug, 2)
+
+	// Add completed segment to the list
+	segmentName := fmt.Sprintf("%d.ts", tmpSegment)
+	segmentInfo := SegmentInfo{Filename: segmentName, SentCount: 0}
+	stream.CompletedSegments = append(stream.CompletedSegments, segmentInfo)
+	stream.Status = true
+
+	if p, ok := BufferInformation.Load(playlistID); ok {
+		if playlist, ok := p.(Playlist); ok {
+			playlist.Streams[streamID] = *stream
+			BufferInformation.Store(playlistID, playlist)
+		}
+	}
 }
 
 func getTuner(id, playlistType string) (tuner int) {

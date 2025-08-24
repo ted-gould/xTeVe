@@ -1,5 +1,7 @@
 package src
 
+import "sync"
+
 // RequestStruct : Requests via the Websocket Interface
 type RequestStruct struct {
 	// Commands to xTeVe
@@ -153,7 +155,8 @@ type APIResponseStruct struct {
 
 // WebScreenLogStruct : Logs are saved in RAM and made available for the Web Interface
 type WebScreenLogStruct struct {
-	Errors   int      `json:"errors"`
-	Log      []string `json:"log"`
-	Warnings int      `json:"warnings"`
+	Mu       sync.RWMutex `json:"-"`
+	Errors   int          `json:"errors"`
+	Log      []string     `json:"log"`
+	Warnings int          `json:"warnings"`
 }
