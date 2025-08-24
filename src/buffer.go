@@ -51,6 +51,8 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 	w.Header().Set("Connection", "close")
 
 	// Check whether the Playlist is already in use
+	Lock.Lock()
+
 	if p, ok := BufferInformation.Load(playlistID); !ok {
 		var playlistType string
 		// Playlist is not yet used, create Default Values for the Playlist
@@ -63,6 +65,7 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 		if err != nil {
 			ShowError(err, 000)
 			httpStatusError(w, r, 404)
+			Lock.Unlock()
 			return
 		}
 
@@ -128,6 +131,7 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 			// Check whether the Playlist allows another Stream (Tuner)
 			if len(playlist.Streams) >= playlist.Tuner {
 				showInfo(fmt.Sprintf("Streaming Status:Playlist: %s - No new connections available. Tuner = %d", playlist.PlaylistName, playlist.Tuner))
+				Lock.Unlock() // Unlock before sending response
 
 				content, err := webUI.ReadFile("video/stream-limit.bin")
 				if err == nil {
@@ -166,6 +170,7 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 			BufferInformation.Store(playlistID, playlist)
 		}
 	}
+	Lock.Unlock()
 
 	// Check whether the Stream is already being played by another Client
 	if !playlist.Streams[streamID].Status && newStream {
