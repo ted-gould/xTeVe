@@ -1053,7 +1053,7 @@ func (rs *ResponseStruct) setDefaultResponseData(data bool) {
 	rs.IPAddressesV4Host = System.IPAddressesV4Host
 	rs.Settings.HostIP = Settings.HostIP
 	rs.Notification = System.Notification
-	rs.Log = WebScreenLog
+	rs.Log = &WebScreenLog
 	rs.ClientInfo.Version = fmt.Sprintf("%s (%s)", System.Version, System.Build)
 
 	if data {
