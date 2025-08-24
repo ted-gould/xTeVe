@@ -6,16 +6,17 @@ parts/
 prime/
 stage/
 xteve*.snap
-html/js/
-src/html/video/stream-limit.bin
 /.idea/*
 .xteve/
 __debug_bin
 xteve_test_binary*
-src/html/js/
+
+# Generated files
 bin/
 node_modules/
 test-results/
+src/html/js/
+src/html/video/
 
 # E2E test binaries
 streamer_binary
