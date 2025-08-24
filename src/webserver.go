@@ -364,7 +364,7 @@ func WS(w http.ResponseWriter, r *http.Request) {
 
 	for {
 		var request RequestStruct
-		var response ResponseStruct
+		var response = &ResponseStruct{}
 		response.Status = true
 
 		select {
@@ -419,7 +419,7 @@ func WS(w http.ResponseWriter, r *http.Request) {
 		case "getServerConfig":
 			// response.Config = Settings
 		case "updateLog":
-			response = setDefaultResponseData(response, false)
+			setDefaultResponseData(response, false)
 			if errWrite := conn.WriteJSON(response); errWrite != nil {
 				log.Printf("Error writing JSON response (updateLog): %v", errWrite)
 				break // Exit loop
@@ -523,9 +523,11 @@ func WS(w http.ResponseWriter, r *http.Request) {
 				response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "users"))
 			}
 		case "resetLogs":
+			WebScreenLog.Mu.Lock()
 			WebScreenLog.Log = make([]string, 0)
 			WebScreenLog.Errors = 0
 			WebScreenLog.Warnings = 0
+			WebScreenLog.Mu.Unlock()
 			response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "log"))
 		case "xteveBackup":
 			file, errNew := xteveBackup()
@@ -534,9 +536,11 @@ func WS(w http.ResponseWriter, r *http.Request) {
 				response.OpenLink = fmt.Sprintf("%s://%s/download/%s", System.ServerProtocol.WEB, System.Domain, file)
 			}
 		case "xteveRestore":
+			WebScreenLog.Mu.Lock()
 			WebScreenLog.Log = make([]string, 0)
 			WebScreenLog.Errors = 0
 			WebScreenLog.Warnings = 0
+			WebScreenLog.Mu.Unlock()
 
 			if len(request.Base64) > 0 {
 				newWebURL, err := xteveRestoreFromWeb(request.Base64)
@@ -599,7 +603,7 @@ func WS(w http.ResponseWriter, r *http.Request) {
 			response.Settings = Settings
 		}
 
-		response = setDefaultResponseData(response, true)
+		setDefaultResponseData(response, true)
 		if System.ConfigurationWizard {
 			response.ConfigurationWizard = System.ConfigurationWizard
 		}
@@ -1032,31 +1036,31 @@ func Download(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func setDefaultResponseData(response ResponseStruct, data bool) (defaults ResponseStruct) {
-	defaults = response
-
+func setDefaultResponseData(response *ResponseStruct, data bool) *ResponseStruct {
 	// Always transfer the following Data to the Client
-	defaults.ClientInfo.ARCH = System.ARCH
-	defaults.ClientInfo.EpgSource = Settings.EpgSource
-	defaults.ClientInfo.DVR = System.Addresses.DVR
-	defaults.ClientInfo.M3U = System.Addresses.M3U
-	defaults.ClientInfo.XML = System.Addresses.XML
-	defaults.ClientInfo.OS = System.OS
-	defaults.ClientInfo.Streams = fmt.Sprintf("%d / %d", len(Data.Streams.Active), len(Data.Streams.All))
-	defaults.ClientInfo.UUID = Settings.UUID
-	defaults.ClientInfo.Errors = WebScreenLog.Errors
-	defaults.ClientInfo.Warnings = WebScreenLog.Warnings
-	defaults.IPAddressesV4Host = System.IPAddressesV4Host
-	defaults.Settings.HostIP = Settings.HostIP
-	defaults.Notification = System.Notification
-	defaults.Log = WebScreenLog
-	defaults.ClientInfo.Version = fmt.Sprintf("%s (%s)", System.Version, System.Build)
+	response.ClientInfo.ARCH = System.ARCH
+	response.ClientInfo.EpgSource = Settings.EpgSource
+	response.ClientInfo.DVR = System.Addresses.DVR
+	response.ClientInfo.M3U = System.Addresses.M3U
+	response.ClientInfo.XML = System.Addresses.XML
+	response.ClientInfo.OS = System.OS
+	response.ClientInfo.Streams = fmt.Sprintf("%d / %d", len(Data.Streams.Active), len(Data.Streams.All))
+	response.ClientInfo.UUID = Settings.UUID
+	WebScreenLog.Mu.RLock()
+	response.ClientInfo.Errors = WebScreenLog.Errors
+	response.ClientInfo.Warnings = WebScreenLog.Warnings
+	WebScreenLog.Mu.RUnlock()
+	response.IPAddressesV4Host = System.IPAddressesV4Host
+	response.Settings.HostIP = Settings.HostIP
+	response.Notification = System.Notification
+	response.Log = &WebScreenLog
+	response.ClientInfo.Version = fmt.Sprintf("%s (%s)", System.Version, System.Build)
 
 	if data {
-		defaults.Users, _ = authentication.GetAllUserData()
-		//defaults.DVR = System.DVRAddress
+		response.Users, _ = authentication.GetAllUserData()
+		//response.DVR = System.DVRAddress
 		if Settings.EpgSource == "XEPG" {
-			defaults.ClientInfo.XEPGCount = Data.XEPG.XEPGCount
+			response.ClientInfo.XEPGCount = Data.XEPG.XEPGCount
 			var XEPG = make(map[string]any)
 			if len(Data.Streams.Active) > 0 {
 				XEPG["epgMapping"] = Data.XEPG.Channels
@@ -1065,15 +1069,15 @@ func setDefaultResponseData(response ResponseStruct, data bool) (defaults Respon
 				XEPG["epgMapping"] = make(map[string]any)
 				XEPG["xmltvMap"] = make(map[string]any)
 			}
-			defaults.XEPG = XEPG
+			response.XEPG = XEPG
 		}
-		defaults.Settings = Settings
-		defaults.Data.Playlist.M3U.Groups.Text = Data.Playlist.M3U.Groups.Text
-		defaults.Data.Playlist.M3U.Groups.Value = Data.Playlist.M3U.Groups.Value
-		defaults.Data.StreamPreviewUI.Active = Data.StreamPreviewUI.Active
-		defaults.Data.StreamPreviewUI.Inactive = Data.StreamPreviewUI.Inactive
+		response.Settings = Settings
+		response.Data.Playlist.M3U.Groups.Text = Data.Playlist.M3U.Groups.Text
+		response.Data.Playlist.M3U.Groups.Value = Data.Playlist.M3U.Groups.Value
+		response.Data.StreamPreviewUI.Active = Data.StreamPreviewUI.Active
+		response.Data.StreamPreviewUI.Inactive = Data.StreamPreviewUI.Inactive
 	}
-	return
+	return response
 }
 
 func httpStatusError(w http.ResponseWriter, _ *http.Request, httpStatusCode int) {
