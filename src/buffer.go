@@ -19,6 +19,8 @@ import (
 	"github.com/avfs/avfs/vfs/osfs"
 )
 
+var errTunerLimitReached = errors.New("tuner limit reached")
+
 func createStreamID(stream map[int]ThisStream) (streamID int) {
 	var debug string
 
@@ -36,21 +38,16 @@ func createStreamID(stream map[int]ThisStream) (streamID int) {
 	return
 }
 
-func bufferingStream(playlistID, streamingURL, channelName string, w http.ResponseWriter, r *http.Request) {
-	time.Sleep(time.Duration(Settings.BufferTimeout) * time.Millisecond)
+func reserveStreamSlot(playlistID, streamingURL, channelName string) (Playlist, ThisStream, ThisClient, int, bool, error) {
+	Lock.Lock()
+	defer Lock.Unlock()
 
 	var playlist Playlist
 	var client ThisClient
 	var stream ThisStream
-	var streaming = false
 	var streamID int
-	var debug string
-	var timeOut = 0
 	var newStream = true
 
-	w.Header().Set("Connection", "close")
-
-	// Check whether the Playlist is already in use
 	if p, ok := BufferInformation.Load(playlistID); !ok {
 		var playlistType string
 		// Playlist is not yet used, create Default Values for the Playlist
@@ -61,9 +58,7 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 
 		err := checkVFSFolder(playlist.Folder, bufferVFS)
 		if err != nil {
-			ShowError(err, 000)
-			httpStatusError(w, r, 404)
-			return
+			return playlist, stream, client, -1, false, err
 		}
 
 		switch playlist.PlaylistID[0:1] {
@@ -74,7 +69,6 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 		}
 
 		playlist.Tuner = getTuner(playlistID, playlistType)
-
 		playlist.PlaylistName = getProviderParameter(playlist.PlaylistID, playlistType, "name")
 
 		// Create Default Values for the Stream
@@ -91,7 +85,6 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 		BufferInformation.Store(playlistID, playlist)
 	} else {
 		// Playlist is already being used for streaming
-		// Check if the URL is already being streamed by another Client
 		if pl, ok := p.(Playlist); ok {
 			playlist = pl
 		}
@@ -106,12 +99,7 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 				client.Connection++
 
 				playlist.Clients[streamID] = client
-
 				BufferInformation.Store(playlistID, playlist)
-
-				debug = fmt.Sprintf("Restream Status:Playlist: %s - Channel: %s - Connections: %d", playlist.PlaylistName, stream.ChannelName, client.Connection)
-
-				showDebug(debug, 1)
 
 				if c, ok := BufferClients.Load(playlistID + stream.MD5); ok {
 					if clients, ok := c.(*ClientConnection); ok {
@@ -125,34 +113,14 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 
 		// New Stream for an already active Playlist
 		if newStream {
-			// Check whether the Playlist allows another Stream (Tuner)
 			if len(playlist.Streams) >= playlist.Tuner {
 				showInfo(fmt.Sprintf("Streaming Status:Playlist: %s - No new connections available. Tuner = %d", playlist.PlaylistName, playlist.Tuner))
-
-				content, err := webUI.ReadFile("video/stream-limit.bin")
-				if err == nil {
-					w.WriteHeader(200)
-					w.Header().Set("Content-type", "video/mpeg")
-					w.Header().Set("Content-Length:", "0")
-
-					for i := 1; i < 60; i++ {
-						_ = i
-						if _, errWrite := w.Write(content); errWrite != nil {
-							// Log error and break, client connection is likely gone
-							return
-						}
-						time.Sleep(time.Duration(500) * time.Millisecond)
-					}
-					return
-				}
-				return
+				return playlist, stream, client, -1, false, errTunerLimitReached
 			}
 
 			// Playlist allows another Stream (The Tuner limit has not yet been reached)
-			// Create Default Values for the Stream
 			stream = ThisStream{}
 			client = ThisClient{}
-
 			streamID = createStreamID(playlist.Streams)
 
 			client.Connection = 1
@@ -165,6 +133,48 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 
 			BufferInformation.Store(playlistID, playlist)
 		}
+	}
+
+	return playlist, stream, client, streamID, newStream, nil
+}
+
+func bufferingStream(playlistID, streamingURL, channelName string, w http.ResponseWriter, r *http.Request) {
+	time.Sleep(time.Duration(Settings.BufferTimeout) * time.Millisecond)
+
+	var playlist Playlist
+	var stream ThisStream
+	var streaming = false
+	var streamID int
+	var timeOut = 0
+	var newStream bool
+	var err error
+	var debug string
+
+	w.Header().Set("Connection", "close")
+
+	playlist, stream, _, streamID, newStream, err = reserveStreamSlot(playlistID, streamingURL, channelName)
+	if err != nil {
+		if err == errTunerLimitReached {
+			content, err := webUI.ReadFile("video/stream-limit.bin")
+			if err == nil {
+				w.WriteHeader(200)
+				w.Header().Set("Content-type", "video/mpeg")
+				w.Header().Set("Content-Length:", "0")
+
+				for i := 1; i < 60; i++ {
+					_ = i
+					if _, errWrite := w.Write(content); errWrite != nil {
+						// Log error and break, client connection is likely gone
+						return
+					}
+					time.Sleep(time.Duration(500) * time.Millisecond)
+				}
+			}
+		} else {
+			ShowError(err, 000)
+			httpStatusError(w, r, 404)
+		}
+		return
 	}
 
 	// Check whether the Stream is already being played by another Client
