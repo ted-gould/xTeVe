@@ -364,7 +364,7 @@ func WS(w http.ResponseWriter, r *http.Request) {
 
 	for {
 		var request RequestStruct
-		var response = &ResponseStruct{}
+		var response ResponseStruct
 		response.Status = true
 
 		select {
@@ -403,7 +403,7 @@ func WS(w http.ResponseWriter, r *http.Request) {
 					response.Error = err.Error()
 					request.Cmd = "-"
 
-					if errWrite := conn.WriteJSON(response); errWrite != nil {
+					if errWrite := conn.WriteJSON(&response); errWrite != nil {
 						log.Printf("Error writing JSON response (token auth failed): %v", errWrite)
 						break // Exit loop
 					}
@@ -419,8 +419,8 @@ func WS(w http.ResponseWriter, r *http.Request) {
 		case "getServerConfig":
 			// response.Config = Settings
 		case "updateLog":
-			setDefaultResponseData(response, false)
-			if errWrite := conn.WriteJSON(response); errWrite != nil {
+			(&response).setDefaultResponseData(false)
+			if errWrite := conn.WriteJSON(&response); errWrite != nil {
 				log.Printf("Error writing JSON response (updateLog): %v", errWrite)
 				break // Exit loop
 			}
@@ -564,7 +564,7 @@ func WS(w http.ResponseWriter, r *http.Request) {
 				response.LogoURL, err = uploadLogo(request.Base64, request.Filename)
 
 				if err == nil {
-					if errWrite := conn.WriteJSON(response); errWrite != nil {
+					if errWrite := conn.WriteJSON(&response); errWrite != nil {
 						log.Printf("Error writing JSON response (uploadLogo): %v", errWrite)
 						break
 					}
@@ -603,12 +603,12 @@ func WS(w http.ResponseWriter, r *http.Request) {
 			response.Settings = Settings
 		}
 
-		setDefaultResponseData(response, true)
+		(&response).setDefaultResponseData(true)
 		if System.ConfigurationWizard {
 			response.ConfigurationWizard = System.ConfigurationWizard
 		}
 
-		if errWrite := conn.WriteJSON(response); errWrite != nil {
+		if errWrite := conn.WriteJSON(&response); errWrite != nil {
 			log.Printf("Error writing main JSON response in WS handler: %v", errWrite)
 			break
 		}
@@ -1036,31 +1036,31 @@ func Download(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func setDefaultResponseData(response *ResponseStruct, data bool) *ResponseStruct {
+func (rs *ResponseStruct) setDefaultResponseData(data bool) {
 	// Always transfer the following Data to the Client
-	response.ClientInfo.ARCH = System.ARCH
-	response.ClientInfo.EpgSource = Settings.EpgSource
-	response.ClientInfo.DVR = System.Addresses.DVR
-	response.ClientInfo.M3U = System.Addresses.M3U
-	response.ClientInfo.XML = System.Addresses.XML
-	response.ClientInfo.OS = System.OS
-	response.ClientInfo.Streams = fmt.Sprintf("%d / %d", len(Data.Streams.Active), len(Data.Streams.All))
-	response.ClientInfo.UUID = Settings.UUID
+	rs.ClientInfo.ARCH = System.ARCH
+	rs.ClientInfo.EpgSource = Settings.EpgSource
+	rs.ClientInfo.DVR = System.Addresses.DVR
+	rs.ClientInfo.M3U = System.Addresses.M3U
+	rs.ClientInfo.XML = System.Addresses.XML
+	rs.ClientInfo.OS = System.OS
+	rs.ClientInfo.Streams = fmt.Sprintf("%d / %d", len(Data.Streams.Active), len(Data.Streams.All))
+	rs.ClientInfo.UUID = Settings.UUID
 	WebScreenLog.Mu.RLock()
-	response.ClientInfo.Errors = WebScreenLog.Errors
-	response.ClientInfo.Warnings = WebScreenLog.Warnings
+	rs.ClientInfo.Errors = WebScreenLog.Errors
+	rs.ClientInfo.Warnings = WebScreenLog.Warnings
 	WebScreenLog.Mu.RUnlock()
-	response.IPAddressesV4Host = System.IPAddressesV4Host
-	response.Settings.HostIP = Settings.HostIP
-	response.Notification = System.Notification
-	response.Log = &WebScreenLog
-	response.ClientInfo.Version = fmt.Sprintf("%s (%s)", System.Version, System.Build)
+	rs.IPAddressesV4Host = System.IPAddressesV4Host
+	rs.Settings.HostIP = Settings.HostIP
+	rs.Notification = System.Notification
+	rs.Log = WebScreenLog
+	rs.ClientInfo.Version = fmt.Sprintf("%s (%s)", System.Version, System.Build)
 
 	if data {
-		response.Users, _ = authentication.GetAllUserData()
-		//response.DVR = System.DVRAddress
+		rs.Users, _ = authentication.GetAllUserData()
+		//rs.DVR = System.DVRAddress
 		if Settings.EpgSource == "XEPG" {
-			response.ClientInfo.XEPGCount = Data.XEPG.XEPGCount
+			rs.ClientInfo.XEPGCount = Data.XEPG.XEPGCount
 			var XEPG = make(map[string]any)
 			if len(Data.Streams.Active) > 0 {
 				XEPG["epgMapping"] = Data.XEPG.Channels
@@ -1069,15 +1069,14 @@ func setDefaultResponseData(response *ResponseStruct, data bool) *ResponseStruct
 				XEPG["epgMapping"] = make(map[string]any)
 				XEPG["xmltvMap"] = make(map[string]any)
 			}
-			response.XEPG = XEPG
+			rs.XEPG = XEPG
 		}
-		response.Settings = Settings
-		response.Data.Playlist.M3U.Groups.Text = Data.Playlist.M3U.Groups.Text
-		response.Data.Playlist.M3U.Groups.Value = Data.Playlist.M3U.Groups.Value
-		response.Data.StreamPreviewUI.Active = Data.StreamPreviewUI.Active
-		response.Data.StreamPreviewUI.Inactive = Data.StreamPreviewUI.Inactive
+		rs.Settings = Settings
+		rs.Data.Playlist.M3U.Groups.Text = Data.Playlist.M3U.Groups.Text
+		rs.Data.Playlist.M3U.Groups.Value = Data.Playlist.M3U.Groups.Value
+		rs.Data.StreamPreviewUI.Active = Data.StreamPreviewUI.Active
+		rs.Data.StreamPreviewUI.Inactive = Data.StreamPreviewUI.Inactive
 	}
-	return response
 }
 
 func httpStatusError(w http.ResponseWriter, _ *http.Request, httpStatusCode int) {

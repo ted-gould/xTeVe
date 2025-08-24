@@ -1,7 +1,5 @@
 package src
 
-import "sync"
-
 // RequestStruct : Requests via the Websocket Interface
 type RequestStruct struct {
 	// Commands to xTeVe
@@ -110,11 +108,11 @@ type ResponseStruct struct {
 
 	Alert               string             `json:"alert,omitempty"`
 	ConfigurationWizard bool               `json:"configurationWizard"`
-	Error               string              `json:"err,omitempty"`
-	IPAddressesV4Host   []string            `json:"ipAddressesV4Host"` // Every IPv4 address to display in web client
-	Log                 *WebScreenLogStruct `json:"log"`
-	LogoURL             string              `json:"logoURL,omitempty"`
-	OpenLink            string              `json:"openLink,omitempty"`
+	Error               string             `json:"err,omitempty"`
+	IPAddressesV4Host   []string           `json:"ipAddressesV4Host"` // Every IPv4 address to display in web client
+	Log                 WebScreenLogStruct `json:"log"`
+	LogoURL             string             `json:"logoURL,omitempty"`
+	OpenLink            string             `json:"openLink,omitempty"`
 	OpenMenu            string             `json:"openMenu,omitempty"`
 	Reload              bool               `json:"reload,omitempty"`
 	Settings            SettingsStruct     `json:"settings"`
@@ -155,8 +153,7 @@ type APIResponseStruct struct {
 
 // WebScreenLogStruct : Logs are saved in RAM and made available for the Web Interface
 type WebScreenLogStruct struct {
-	Mu       sync.RWMutex `json:"-"`
-	Errors   int          `json:"errors"`
-	Log      []string     `json:"log"`
-	Warnings int          `json:"warnings"`
+	Errors   int      `json:"errors"`
+	Log      []string `json:"log"`
+	Warnings int      `json:"warnings"`
 }
