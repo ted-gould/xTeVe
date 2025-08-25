@@ -624,26 +624,6 @@ func connectToStreamingServer(streamID int, playlistID string) {
 
 			s++
 
-			// Persist the stream state safely after each segment is processed
-			Lock.Lock()
-			if p, ok := BufferInformation.Load(playlistID); ok {
-				if freshPlaylist, ok := p.(Playlist); ok {
-					if _, streamExists := freshPlaylist.Streams[streamID]; streamExists {
-						freshPlaylist.Streams[streamID] = stream
-						BufferInformation.Store(playlistID, freshPlaylist)
-					} else {
-						// The stream has been deleted by another process (e.g. killClientConnection)
-						Lock.Unlock()
-						return
-					}
-				}
-			} else {
-				// The entire playlist has been deleted
-				Lock.Unlock()
-				return
-			}
-			Lock.Unlock()
-
 			if stream.StreamFinished && !stream.HLS {
 				return
 			}
@@ -837,18 +817,30 @@ func handleTSStream(resp *http.Response, stream ThisStream, streamID int, playli
 				ShowError(err, 0)
 				addErrorToStream(err)
 			} else {
-				// EOF reached, add the final segment if it has data
+				// EOF reached
+				stream.StreamFinished = true // Mark stream as finished before storing state
+
+				// Add the final segment if it has data
 				if fileSize > 0 {
 					segmentName := fmt.Sprintf("%d.ts", *tmpSegment)
 					segmentInfo := SegmentInfo{Filename: segmentName, SentCount: 0}
 					stream.CompletedSegments = append(stream.CompletedSegments, segmentInfo)
 
-					// The playlist is now stored in the caller (connectToStreamingServer)
-					// to prevent race conditions.
+					// Lock to safely update the shared playlist state
+					Lock.Lock()
+					defer Lock.Unlock()
+					// Update the stream in BufferInformation, only if the stream still exists
+					if p, ok := BufferInformation.Load(playlistID); ok {
+						if playlist, ok := p.(Playlist); ok {
+							if _, streamExists := playlist.Streams[streamID]; streamExists {
+								playlist.Streams[streamID] = stream
+								BufferInformation.Store(playlistID, playlist)
+							}
+						}
+					}
 				}
 			}
 			stream.Status = true
-			stream.StreamFinished = true
 			bufferFile.Close()
 			break
 		}
@@ -994,9 +986,6 @@ func cleanupCompletedSegments(playlistID string, streamID int, streamMD5 string)
 }
 
 func completeTSsegment(playlistID string, streamID int, stream *ThisStream, bandwidth *BandwidthCalculation, fileSize int, tmpFile string, tmpSegment int) {
-	Lock.Lock()
-	defer Lock.Unlock()
-
 	bandwidth.Stop = time.Now()
 	bandwidth.Size += fileSize
 	bandwidth.TimeDiff = bandwidth.Stop.Sub(bandwidth.Start).Seconds()
@@ -1011,8 +1000,17 @@ func completeTSsegment(playlistID string, streamID int, stream *ThisStream, band
 	stream.CompletedSegments = append(stream.CompletedSegments, segmentInfo)
 	stream.Status = true
 
-	// The playlist is now stored in the caller (connectToStreamingServer)
-	// to prevent race conditions.
+	// Lock to safely update the shared playlist state
+	Lock.Lock()
+	defer Lock.Unlock()
+	if p, ok := BufferInformation.Load(playlistID); ok {
+		if playlist, ok := p.(Playlist); ok {
+			if _, streamExists := playlist.Streams[streamID]; streamExists {
+				playlist.Streams[streamID] = *stream
+				BufferInformation.Store(playlistID, playlist)
+			}
+		}
+	}
 }
 
 func getTuner(id, playlistType string) (tuner int) {
