@@ -362,13 +362,7 @@ func killClientConnection(streamID int, playlistID string, force bool) {
 
 		if force {
 			delete(playlist.Streams, streamID)
-			delete(playlist.Clients, streamID)
 			showInfo(fmt.Sprintf("Streaming Status:Playlist: %s - Tuner: %d / %d", playlist.PlaylistName, len(playlist.Streams), playlist.Tuner))
-			if len(playlist.Streams) == 0 {
-				BufferInformation.Delete(playlistID)
-			} else {
-				BufferInformation.Store(playlistID, playlist)
-			}
 			return
 		}
 
@@ -823,7 +817,10 @@ func handleTSStream(resp *http.Response, stream ThisStream, streamID int, playli
 				ShowError(err, 0)
 				addErrorToStream(err)
 			} else {
-				// EOF reached, add the final segment if it has data
+				// EOF reached
+				stream.StreamFinished = true // Mark stream as finished before storing state
+
+				// Add the final segment if it has data
 				if fileSize > 0 {
 					segmentName := fmt.Sprintf("%d.ts", *tmpSegment)
 					segmentInfo := SegmentInfo{Filename: segmentName, SentCount: 0}
@@ -832,14 +829,15 @@ func handleTSStream(resp *http.Response, stream ThisStream, streamID int, playli
 					// Update the stream in BufferInformation
 					if p, ok := BufferInformation.Load(playlistID); ok {
 						if playlist, ok := p.(Playlist); ok {
-							playlist.Streams[streamID] = stream
-							BufferInformation.Store(playlistID, playlist)
+							if _, streamExists := playlist.Streams[streamID]; streamExists {
+								playlist.Streams[streamID] = stream
+								BufferInformation.Store(playlistID, playlist)
+							}
 						}
 					}
 				}
 			}
 			stream.Status = true
-			stream.StreamFinished = true
 			bufferFile.Close()
 			break
 		}
