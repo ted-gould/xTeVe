@@ -149,7 +149,7 @@ func TestConnectToStreamingServer_Buffering(t *testing.T) {
 	}
 	playlist.Clients[streamID] = client
 
-	BufferInformation.Store(playlistID, playlist)
+	BufferInformation.Store(playlistID, &playlist)
 
 	var clients ClientConnection
 	clients.Connection = 1
@@ -278,9 +278,9 @@ func TestBufferingStream_NewStreamClientRegistration(t *testing.T) {
 		t.Fatalf("Playlist %s was not created in BufferInformation", playlistID)
 	}
 
-	playlist, ok := p.(Playlist)
+	playlist, ok := p.(*Playlist)
 	if !ok {
-		t.Fatal("Failed to cast to Playlist type")
+		t.Fatalf("Failed to cast to *Playlist type. Got %T", p)
 	}
 
 	if len(playlist.Streams) != 1 {
@@ -351,7 +351,7 @@ func TestRaceCondition_KillAndStreamEOF(t *testing.T) {
 		Folder:     "/tmp/" + md5 + "/",
 	}
 	playlist.Streams[streamID] = stream
-	BufferInformation.Store(playlistID, playlist)
+	BufferInformation.Store(playlistID, &playlist)
 
 	var clients ClientConnection
 	clients.Connection = 1
@@ -427,7 +427,7 @@ func TestTunerCountOnDisconnect(t *testing.T) {
 	}
 	playlist.Clients[streamID] = client
 
-	BufferInformation.Store(playlistID, playlist)
+	BufferInformation.Store(playlistID, &playlist)
 
 	var clients ClientConnection
 	clients.Connection = 1
@@ -435,12 +435,12 @@ func TestTunerCountOnDisconnect(t *testing.T) {
 
 	// Verify initial state
 	p, _ := BufferInformation.Load(playlistID)
-	if playlist, ok := p.(Playlist); ok {
+	if playlist, ok := p.(*Playlist); ok {
 		if len(playlist.Streams) != 1 {
 			t.Fatalf("Initial stream count should be 1, but was %d", len(playlist.Streams))
 		}
 	} else {
-		t.Fatalf("Failed to cast to Playlist")
+		t.Fatalf("Failed to cast to *Playlist")
 	}
 
 	// 2. Action: Simulate client disconnect
@@ -454,12 +454,12 @@ func TestTunerCountOnDisconnect(t *testing.T) {
 		return
 	}
 
-	if finalPlaylist, ok := p.(Playlist); ok {
+	if finalPlaylist, ok := p.(*Playlist); ok {
 		if len(finalPlaylist.Streams) != 0 {
 			t.Errorf("Expected stream count to be 0 after disconnect, but was %d", len(finalPlaylist.Streams))
 		}
 	} else {
-		t.Fatalf("Failed to cast to Playlist")
+		t.Fatalf("Failed to cast to *Playlist")
 	}
 
 	_, clientExists := BufferClients.Load(playlistID + md5)
@@ -518,7 +518,7 @@ func TestBufferingStream_ClosesOnStreamEnd(t *testing.T) {
 	}
 	playlist.Clients[streamID] = client
 
-	BufferInformation.Store(playlistID, playlist)
+	BufferInformation.Store(playlistID, &playlist)
 
 	var clients ClientConnection
 	clients.Connection = 1

@@ -150,7 +150,7 @@ func updateStreamWithMetadata(playlistID string, streamID int, streamingURL stri
 	if !ok {
 		return // Playlist was deleted.
 	}
-	playlist, ok := currentP.(Playlist)
+	playlist, ok := currentP.(*Playlist)
 	if !ok {
 		return // Should not happen.
 	}
@@ -463,9 +463,11 @@ func clientConnection(stream ThisStream) (status bool) {
 
 func connectToStreamingServer(streamID int, playlistID string) {
 	if p, ok := BufferInformation.Load(playlistID); ok {
-		var playlist Playlist
-		if pl, ok := p.(Playlist); ok {
+		var playlist *Playlist
+		if pl, ok := p.(*Playlist); ok {
 			playlist = pl
+		} else {
+			return
 		}
 
 		var timeOut = 0
@@ -477,6 +479,8 @@ func connectToStreamingServer(streamID int, playlistID string) {
 		// Size of the Buffer
 		var bufferSize = Settings.BufferSize
 		var buffer = make([]byte, 1024*bufferSize)
+		var stream ThisStream
+		var s int
 
 		var defaultSegment = func() {
 			var segment Segment
@@ -535,7 +539,7 @@ func connectToStreamingServer(streamID int, playlistID string) {
 			return
 		}
 
-		var stream ThisStream = playlist.Streams[streamID]
+		stream = playlist.Streams[streamID]
 
 		if !stream.Status {
 			if strings.Contains(stream.URL, ".m3u8") {
@@ -546,7 +550,7 @@ func connectToStreamingServer(streamID int, playlistID string) {
 			showInfo("Streaming URL:" + stream.URL)
 		}
 
-		var s = 0
+		s = 0
 
 		stream.TimeStart = time.Now()
 		bandwidth.Start = stream.TimeStart
@@ -653,7 +657,7 @@ func connectToStreamingServer(streamID int, playlistID string) {
 				// After handleTSStream returns, we need to get a fresh copy of the playlist
 				// to avoid overwriting changes made by other goroutines (e.g. killClientConnection).
 				if p, ok := BufferInformation.Load(playlistID); ok {
-					if freshPlaylist, ok := p.(Playlist); ok {
+					if freshPlaylist, ok := p.(*Playlist); ok {
 						// Only update the stream if it hasn't been removed from the playlist.
 						if _, streamExists := freshPlaylist.Streams[streamID]; streamExists {
 							freshPlaylist.Streams[streamID] = stream
@@ -876,7 +880,7 @@ func handleTSStream(resp *http.Response, stream ThisStream, streamID int, playli
 
 					// Update the stream in BufferInformation
 					if p, ok := BufferInformation.Load(playlistID); ok {
-						if playlist, ok := p.(Playlist); ok {
+						if playlist, ok := p.(*Playlist); ok {
 							playlist.Streams[streamID] = stream
 							BufferInformation.Store(playlistID, playlist)
 						}
@@ -947,7 +951,7 @@ func getSegmentsAndStatus(playlistID string, streamID int) ([]SegmentInfo, bool,
 		return nil, false, true // Playlist was removed
 	}
 
-	pl, ok := p.(Playlist)
+	pl, ok := p.(*Playlist)
 	if !ok {
 		// This should not happen, indicates a type assertion error
 		return nil, false, true
@@ -975,7 +979,7 @@ func updateSegmentSentCount(playlistID string, streamID int, segmentIndex int, f
 		return
 	}
 
-	pl, ok := p.(Playlist)
+	pl, ok := p.(*Playlist)
 	if !ok {
 		return
 	}
@@ -999,7 +1003,7 @@ func cleanupCompletedSegments(playlistID string, streamID int, streamMD5 string)
 		return
 	}
 
-	pl, ok := p.(Playlist)
+	pl, ok := p.(*Playlist)
 	if !ok {
 		return
 	}
@@ -1048,7 +1052,7 @@ func completeTSsegment(playlistID string, streamID int, stream *ThisStream, band
 	stream.Status = true
 
 	if p, ok := BufferInformation.Load(playlistID); ok {
-		if playlist, ok := p.(Playlist); ok {
+		if playlist, ok := p.(*Playlist); ok {
 			playlist.Streams[streamID] = *stream
 			BufferInformation.Store(playlistID, playlist)
 		}
