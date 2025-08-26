@@ -138,6 +138,39 @@ func reserveStreamSlot(playlistID, streamingURL, channelName string) (Playlist, 
 	return playlist, stream, client, streamID, newStream, nil
 }
 
+// updateStreamWithMetadata adds required metadata to a newly created stream entry.
+// It uses a lock to ensure the update is atomic and doesn't cause race conditions.
+func updateStreamWithMetadata(playlistID string, streamID int, streamingURL string) {
+	Lock.Lock()
+	defer Lock.Unlock()
+
+	// It's possible the playlist or stream was deleted between reserveStreamSlot and now.
+	// We need to load the fresh playlist state to be sure.
+	currentP, ok := BufferInformation.Load(playlistID)
+	if !ok {
+		return // Playlist was deleted.
+	}
+	playlist, ok := currentP.(Playlist)
+	if !ok {
+		return // Should not happen.
+	}
+
+	stream, streamExists := playlist.Streams[streamID]
+	if !streamExists {
+		return // Stream was deleted.
+	}
+
+	// Add metadata
+	stream.MD5 = getMD5(streamingURL)
+	stream.Folder = playlist.Folder + stream.MD5 + string(os.PathSeparator)
+	stream.PlaylistID = playlistID
+	stream.PlaylistName = playlist.PlaylistName // Note: playlist.PlaylistName comes from the fresh copy
+
+	// Put the updated stream back and store the playlist
+	playlist.Streams[streamID] = stream
+	BufferInformation.Store(playlistID, playlist)
+}
+
 func bufferingStream(playlistID, streamingURL, channelName string, w http.ResponseWriter, r *http.Request) {
 	time.Sleep(time.Duration(Settings.BufferTimeout) * time.Millisecond)
 
@@ -179,15 +212,10 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 
 	// Check whether the Stream is already being played by another Client
 	if !playlist.Streams[streamID].Status && newStream {
-		// New buffer is required
-		stream = playlist.Streams[streamID]
-		stream.MD5 = getMD5(streamingURL)
-		stream.Folder = playlist.Folder + stream.MD5 + string(os.PathSeparator)
-		stream.PlaylistID = playlistID
-		stream.PlaylistName = playlist.PlaylistName
-
-		playlist.Streams[streamID] = stream
-		BufferInformation.Store(playlistID, playlist)
+		// New buffer is required.
+		// The stream entry is created in reserveStreamSlot, but we need to add metadata to it.
+		// This must be done atomically to avoid race conditions.
+		updateStreamWithMetadata(playlistID, streamID, streamingURL)
 
 		switch Settings.Buffer {
 		case "xteve":
@@ -817,30 +845,23 @@ func handleTSStream(resp *http.Response, stream ThisStream, streamID int, playli
 				ShowError(err, 0)
 				addErrorToStream(err)
 			} else {
-				// EOF reached
-				stream.StreamFinished = true // Mark stream as finished before storing state
-
-				// Add the final segment if it has data
+				// EOF reached, add the final segment if it has data
 				if fileSize > 0 {
 					segmentName := fmt.Sprintf("%d.ts", *tmpSegment)
 					segmentInfo := SegmentInfo{Filename: segmentName, SentCount: 0}
 					stream.CompletedSegments = append(stream.CompletedSegments, segmentInfo)
 
-					// Lock to safely update the shared playlist state
-					Lock.Lock()
-					defer Lock.Unlock()
-					// Update the stream in BufferInformation, only if the stream still exists
+					// Update the stream in BufferInformation
 					if p, ok := BufferInformation.Load(playlistID); ok {
 						if playlist, ok := p.(Playlist); ok {
-							if _, streamExists := playlist.Streams[streamID]; streamExists {
-								playlist.Streams[streamID] = stream
-								BufferInformation.Store(playlistID, playlist)
-							}
+							playlist.Streams[streamID] = stream
+							BufferInformation.Store(playlistID, playlist)
 						}
 					}
 				}
 			}
 			stream.Status = true
+			stream.StreamFinished = true
 			bufferFile.Close()
 			break
 		}
@@ -986,6 +1007,9 @@ func cleanupCompletedSegments(playlistID string, streamID int, streamMD5 string)
 }
 
 func completeTSsegment(playlistID string, streamID int, stream *ThisStream, bandwidth *BandwidthCalculation, fileSize int, tmpFile string, tmpSegment int) {
+	Lock.Lock()
+	defer Lock.Unlock()
+
 	bandwidth.Stop = time.Now()
 	bandwidth.Size += fileSize
 	bandwidth.TimeDiff = bandwidth.Stop.Sub(bandwidth.Start).Seconds()
@@ -1000,15 +1024,10 @@ func completeTSsegment(playlistID string, streamID int, stream *ThisStream, band
 	stream.CompletedSegments = append(stream.CompletedSegments, segmentInfo)
 	stream.Status = true
 
-	// Lock to safely update the shared playlist state
-	Lock.Lock()
-	defer Lock.Unlock()
 	if p, ok := BufferInformation.Load(playlistID); ok {
 		if playlist, ok := p.(Playlist); ok {
-			if _, streamExists := playlist.Streams[streamID]; streamExists {
-				playlist.Streams[streamID] = *stream
-				BufferInformation.Store(playlistID, playlist)
-			}
+			playlist.Streams[streamID] = *stream
+			BufferInformation.Store(playlistID, playlist)
 		}
 	}
 }
