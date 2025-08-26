@@ -38,11 +38,11 @@ func createStreamID(stream map[int]ThisStream) (streamID int) {
 	return
 }
 
-func reserveStreamSlot(playlistID, streamingURL, channelName string) (Playlist, ThisStream, ThisClient, int, bool, error) {
+func reserveStreamSlot(playlistID, streamingURL, channelName string) (*Playlist, ThisStream, ThisClient, int, bool, error) {
 	Lock.Lock()
 	defer Lock.Unlock()
 
-	var playlist Playlist
+	var playlist *Playlist
 	var client ThisClient
 	var stream ThisStream
 	var streamID int
@@ -51,6 +51,7 @@ func reserveStreamSlot(playlistID, streamingURL, channelName string) (Playlist, 
 	if p, ok := BufferInformation.Load(playlistID); !ok {
 		var playlistType string
 		// Playlist is not yet used, create Default Values for the Playlist
+		playlist = &Playlist{}
 		playlist.Folder = System.Folder.Temp + playlistID + string(os.PathSeparator)
 		playlist.PlaylistID = playlistID
 		playlist.Streams = make(map[int]ThisStream)
@@ -85,8 +86,10 @@ func reserveStreamSlot(playlistID, streamingURL, channelName string) (Playlist, 
 		BufferInformation.Store(playlistID, playlist)
 	} else {
 		// Playlist is already being used for streaming
-		if pl, ok := p.(Playlist); ok {
+		if pl, ok := p.(*Playlist); ok {
 			playlist = pl
+		} else {
+			return nil, stream, client, -1, false, errors.New("invalid playlist type in map")
 		}
 
 		for id := range playlist.Streams {
@@ -99,7 +102,6 @@ func reserveStreamSlot(playlistID, streamingURL, channelName string) (Playlist, 
 				client.Connection++
 
 				playlist.Clients[streamID] = client
-				BufferInformation.Store(playlistID, playlist)
 
 				if c, ok := BufferClients.Load(playlistID + stream.MD5); ok {
 					if clients, ok := c.(*ClientConnection); ok {
@@ -130,8 +132,6 @@ func reserveStreamSlot(playlistID, streamingURL, channelName string) (Playlist, 
 
 			playlist.Streams[streamID] = stream
 			playlist.Clients[streamID] = client
-
-			BufferInformation.Store(playlistID, playlist)
 		}
 	}
 
@@ -174,7 +174,7 @@ func updateStreamWithMetadata(playlistID string, streamID int, streamingURL stri
 func bufferingStream(playlistID, streamingURL, channelName string, w http.ResponseWriter, r *http.Request) {
 	time.Sleep(time.Duration(Settings.BufferTimeout) * time.Millisecond)
 
-	var playlist Playlist
+	var playlist *Playlist
 	var stream ThisStream
 	var streaming = false
 	var streamID int
@@ -219,8 +219,10 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 
 		// Get the fresh playlist state to access the stream with the MD5 hash
 		if p, ok := BufferInformation.Load(playlistID); ok {
-			if pl, ok := p.(Playlist); ok {
+			if pl, ok := p.(*Playlist); ok {
 				playlist = pl
+			} else {
+				return
 			}
 		}
 		stream = playlist.Streams[streamID] // This stream now has the MD5
@@ -244,8 +246,10 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 
 	for { // Loop 1: Wait until the first Segment has been downloaded by the Buffer
 		if p, ok := BufferInformation.Load(playlistID); ok {
-			if pl, ok := p.(Playlist); ok {
-				playlist = pl
+			var ok bool
+			if playlist, ok = p.(*Playlist); !ok {
+				// Should not happen
+				return
 			}
 
 			if stream, ok := playlist.Streams[streamID]; ok {
@@ -392,9 +396,11 @@ func killClientConnection(streamID int, playlistID string, force bool) {
 	defer Lock.Unlock()
 
 	if p, ok := BufferInformation.Load(playlistID); ok {
-		var playlist Playlist
-		if pl, ok := p.(Playlist); ok {
+		var playlist *Playlist
+		if pl, ok := p.(*Playlist); ok {
 			playlist = pl
+		} else {
+			return
 		}
 
 		if force {
@@ -423,7 +429,6 @@ func killClientConnection(streamID int, playlistID string, force bool) {
 				BufferInformation.Delete(playlistID)
 				showInfo(fmt.Sprintf("Streaming Status:Playlist: %s - Tuner: 0 / %d", playlist.PlaylistName, playlist.Tuner))
 			} else {
-				BufferInformation.Store(playlistID, playlist)
 				showInfo(fmt.Sprintf("Streaming Status:Playlist: %s - Tuner: %d / %d", playlist.PlaylistName, len(playlist.Streams), playlist.Tuner))
 			}
 		}

@@ -8,12 +8,15 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
+	"time"
 )
 
 const (
-	defaultStreamSize = 10 * 1024 * 1024 // 10 MB
+	defaultStreamSize = 1 * 1024 * 1024 // 1 MB
 	defaultPort       = 8080
 	numStreams        = 4
+	chunkSize         = 1024 // 1 KB
+	delay             = 10 * time.Millisecond
 )
 
 var (
@@ -47,8 +50,26 @@ func streamHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "video/mpeg")
 	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(testData[streamIndex])))
-	if _, err := w.Write(testData[streamIndex]); err != nil {
-		log.Printf("Failed to write stream data for stream %d: %v", streamID, err)
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "Streaming unsupported!", http.StatusInternalServerError)
+		return
+	}
+
+	data := testData[streamIndex]
+	for i := 0; i < len(data); i += chunkSize {
+		end := i + chunkSize
+		if end > len(data) {
+			end = len(data)
+		}
+		_, err := w.Write(data[i:end])
+		if err != nil {
+			log.Printf("Failed to write stream data for stream %d: %v", streamID, err)
+			return
+		}
+		flusher.Flush()
+		time.Sleep(delay)
 	}
 }
 

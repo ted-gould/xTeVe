@@ -16,8 +16,8 @@ import (
 )
 
 const (
-	// 10 MB of data
-	streamSize = 10 * 1024 * 1024
+	// 1 MB of data
+	streamSize = 1 * 1024 * 1024
 	// Port for the streaming server
 	streamingPort = 8080
 	// Port for the xteve server
@@ -245,48 +245,50 @@ func runTests() error {
 	return nil
 }
 
-func verifyTunerCountIsZero() error {
-	// Give the server a moment to clean up resources
-	time.Sleep(2 * time.Second)
-
-	fmt.Println("Verifying tuner count is zero...")
+func getActiveTunerCount() (int, error) {
 	apiURL := fmt.Sprintf("http://localhost:%d/api/", xtevePort)
 	requestBody := strings.NewReader(`{"cmd":"status"}`)
 	resp, err := http.Post(apiURL, "application/json", requestBody)
 	if err != nil {
-		return fmt.Errorf("failed to make status API request: %w", err)
+		return 0, fmt.Errorf("failed to make status API request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("status API request failed with status code: %d, body: %s", resp.StatusCode, string(body))
+		return 0, fmt.Errorf("status API request failed with status code: %d, body: %s", resp.StatusCode, string(body))
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("failed to read status API response body: %w", err)
+		return 0, fmt.Errorf("failed to read status API response body: %w", err)
 	}
 
-	// The response is a map, so we need to decode it into a map first
 	var responseMap map[string]interface{}
 	if err := json.Unmarshal(body, &responseMap); err != nil {
-		return fmt.Errorf("failed to unmarshal status API response into map: %w, body: %s", err, string(body))
+		return 0, fmt.Errorf("failed to unmarshal status API response into map: %w, body: %s", err, string(body))
 	}
 
 	if tunerActive, ok := responseMap["tuners.active"]; ok {
 		if ta, ok := tunerActive.(float64); ok {
-			if ta != 0 {
-				return fmt.Errorf("expected active tuner count to be 0, but got %v", tunerActive)
-			}
-		} else {
-			return fmt.Errorf("invalid type for tuners.active: expected float64, got %T", tunerActive)
+			return int(ta), nil
 		}
-	} else {
-		// If the key doesn't exist, it means the count is 0 because of omitempty
-		fmt.Println("'tuners.active' field not found, assuming 0.")
+		return 0, fmt.Errorf("invalid type for tuners.active: expected float64, got %T", tunerActive)
 	}
 
+	return 0, nil // Not found, so 0
+}
+
+func verifyTunerCountIsZero() error {
+	time.Sleep(2 * time.Second) // Give server a moment to clean up resources
+	fmt.Println("Verifying tuner count is zero...")
+	count, err := getActiveTunerCount()
+	if err != nil {
+		return err
+	}
+	if count != 0 {
+		return fmt.Errorf("expected active tuner count to be 0, but got %d", count)
+	}
 	fmt.Println("Tuner count verified successfully.")
 	return nil
 }
@@ -411,6 +413,11 @@ func runMultiStreamTest(streamURLs []string, numStreams int, buffered bool) erro
 	errs := make(chan error, numStreams)
 
 	for i := 0; i < numStreams; i++ {
+		if i > 0 {
+			fmt.Println("Waiting 2 seconds before starting next client...")
+			time.Sleep(2 * time.Second)
+		}
+
 		wg.Add(1)
 		go func(streamID int, streamURL string) {
 			defer wg.Done()
@@ -423,15 +430,7 @@ func runMultiStreamTest(streamURLs []string, numStreams int, buffered bool) erro
 			}
 			defer streamResp.Body.Close()
 
-			if buffered {
-				// Check for inactivity only on the first stream to avoid race conditions
-				if streamID == 1 {
-					if err := runInactiveTest(true, true); err != nil {
-						errs <- fmt.Errorf("inactive test failed during stream %d: %w", streamID, err)
-						return
-					}
-				}
-			}
+			// No inactive test needed here anymore
 
 			receivedData, err := io.ReadAll(streamResp.Body)
 			if err != nil {
@@ -449,6 +448,19 @@ func runMultiStreamTest(streamURLs []string, numStreams int, buffered bool) erro
 
 	wg.Wait()
 	close(errs)
+
+	if buffered {
+		// Give the server a moment to update state
+		time.Sleep(2 * time.Second)
+		activeTuners, err := getActiveTunerCount()
+		if err != nil {
+			return fmt.Errorf("failed to get active tuner count: %w", err)
+		}
+		if activeTuners != numStreams {
+			return fmt.Errorf("expected %d active tuners, but got %d", numStreams, activeTuners)
+		}
+		fmt.Printf("Verified %d active tuners.\n", activeTuners)
+	}
 
 	var combinedErr error
 	for err := range errs {
