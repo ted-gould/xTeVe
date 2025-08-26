@@ -216,6 +216,102 @@ func TestConnectToStreamingServer_Buffering(t *testing.T) {
 	BufferClients.Delete(playlistID + stream.MD5)
 }
 
+func TestBufferingStream_NewStreamClientRegistration(t *testing.T) {
+	// This test verifies that for a completely new stream, the client is registered
+	// correctly before the connectToStreamingServer goroutine can terminate the stream.
+	// This specifically tests the fix for the "instant disconnect" race condition.
+
+	// 1. Setup mock server
+	requestReceived := make(chan bool, 1)
+	content := []byte("test stream data")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestReceived <- true // Signal that connectToStreamingServer has connected
+		w.Header().Set("Content-Type", "video/mp2t")
+		w.WriteHeader(http.StatusOK)
+		_, err := w.Write(content)
+		if err != nil {
+			t.Logf("Error writing content in mock server: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	// 2. Setup initial state
+	initBufferVFS(true)
+	Settings.BufferSize = 1024
+	Settings.UserAgent = "xTeVe-Test-Race"
+	Settings.BufferTimeout = 0 // Start immediately
+	Settings.Buffer = "xteve"  // This is required to trigger connectToStreamingServer
+
+	playlistID := "M-NewStreamTest"
+	streamURL := server.URL
+	channelName := "NewStreamChannel"
+	md5 := getMD5(streamURL)
+
+	// Cleanup function to be called at the end
+	defer func() {
+		BufferInformation.Delete(playlistID)
+		BufferClients.Delete(playlistID + md5)
+	}()
+
+	// 3. Start bufferingStream in a goroutine to simulate a client connecting
+	req := httptest.NewRequest("GET", "/stream", nil)
+	rr := httptest.NewRecorder()
+	done := make(chan bool)
+	go func() {
+		bufferingStream(playlistID, streamURL, channelName, rr, req)
+		done <- true
+	}()
+
+	// 4. Wait for the server to receive the request.
+	// This is the critical moment. By the time the download goroutine connects to the
+	// source, the client MUST have been registered.
+	select {
+	case <-requestReceived:
+		// This is expected.
+	case <-time.After(2 * time.Second):
+		t.Fatal("Test timed out: Mock server never received a request.")
+	}
+
+	// 5. Verification: Check the state immediately after the download started.
+	p, ok := BufferInformation.Load(playlistID)
+	if !ok {
+		t.Fatalf("Playlist %s was not created in BufferInformation", playlistID)
+	}
+
+	playlist, ok := p.(Playlist)
+	if !ok {
+		t.Fatal("Failed to cast to Playlist type")
+	}
+
+	if len(playlist.Streams) != 1 {
+		t.Fatalf("Expected 1 stream in the playlist, but found %d", len(playlist.Streams))
+	}
+
+	c, ok := BufferClients.Load(playlistID + md5)
+	if !ok {
+		t.Fatal("Client was not registered in BufferClients for the new stream.")
+	}
+
+	clients, ok := c.(*ClientConnection)
+	if !ok {
+		t.Fatal("Failed to cast to ClientConnection type")
+	}
+
+	if clients.Connection != 1 {
+		t.Fatalf("Expected client connection count to be 1, but got %d", clients.Connection)
+	}
+
+	t.Log("Successfully verified that client was registered before stream download started.")
+
+	// 6. Wait for the client goroutine to finish
+	select {
+	case <-done:
+		// Great, it finished.
+	case <-time.After(2 * time.Second):
+		t.Fatal("Test timed out: bufferingStream did not finish.")
+	}
+}
+
 func TestRaceCondition_KillAndStreamEOF(t *testing.T) {
 	// Channel to control the mock server's response
 	unblockRead := make(chan bool)
