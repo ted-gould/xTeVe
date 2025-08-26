@@ -479,6 +479,8 @@ func connectToStreamingServer(streamID int, playlistID string) {
 		// Size of the Buffer
 		var bufferSize = Settings.BufferSize
 		var buffer = make([]byte, 1024*bufferSize)
+		var stream ThisStream
+		var s int
 
 		var defaultSegment = func() {
 			var segment Segment
@@ -537,7 +539,7 @@ func connectToStreamingServer(streamID int, playlistID string) {
 			return
 		}
 
-		var stream ThisStream = playlist.Streams[streamID]
+		stream = playlist.Streams[streamID]
 
 		if !stream.Status {
 			if strings.Contains(stream.URL, ".m3u8") {
@@ -548,7 +550,7 @@ func connectToStreamingServer(streamID int, playlistID string) {
 			showInfo("Streaming URL:" + stream.URL)
 		}
 
-		var s = 0
+		s = 0
 
 		stream.TimeStart = time.Now()
 		bandwidth.Start = stream.TimeStart
@@ -878,7 +880,7 @@ func handleTSStream(resp *http.Response, stream ThisStream, streamID int, playli
 
 					// Update the stream in BufferInformation
 					if p, ok := BufferInformation.Load(playlistID); ok {
-						if playlist, ok := p.(Playlist); ok {
+						if playlist, ok := p.(*Playlist); ok {
 							playlist.Streams[streamID] = stream
 							BufferInformation.Store(playlistID, playlist)
 						}
@@ -949,7 +951,7 @@ func getSegmentsAndStatus(playlistID string, streamID int) ([]SegmentInfo, bool,
 		return nil, false, true // Playlist was removed
 	}
 
-	pl, ok := p.(Playlist)
+	pl, ok := p.(*Playlist)
 	if !ok {
 		// This should not happen, indicates a type assertion error
 		return nil, false, true
@@ -977,7 +979,7 @@ func updateSegmentSentCount(playlistID string, streamID int, segmentIndex int, f
 		return
 	}
 
-	pl, ok := p.(Playlist)
+	pl, ok := p.(*Playlist)
 	if !ok {
 		return
 	}
@@ -1001,7 +1003,7 @@ func cleanupCompletedSegments(playlistID string, streamID int, streamMD5 string)
 		return
 	}
 
-	pl, ok := p.(Playlist)
+	pl, ok := p.(*Playlist)
 	if !ok {
 		return
 	}
