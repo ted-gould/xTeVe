@@ -217,6 +217,18 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 		// This must be done atomically to avoid race conditions.
 		updateStreamWithMetadata(playlistID, streamID, streamingURL)
 
+		// Get the fresh playlist state to access the stream with the MD5 hash
+		if p, ok := BufferInformation.Load(playlistID); ok {
+			if pl, ok := p.(Playlist); ok {
+				playlist = pl
+			}
+		}
+		stream = playlist.Streams[streamID] // This stream now has the MD5
+
+		var clients ClientConnection
+		clients.Connection = 1
+		BufferClients.Store(playlistID+stream.MD5, &clients)
+
 		switch Settings.Buffer {
 		case "xteve":
 			go connectToStreamingServer(streamID, playlistID)
@@ -226,9 +238,6 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 
 		showInfo(fmt.Sprintf("Streaming Status:Playlist: %s - Tuner: %d / %d", playlist.PlaylistName, len(playlist.Streams), playlist.Tuner))
 
-		var clients ClientConnection
-		clients.Connection = 1
-		BufferClients.Store(playlistID+stream.MD5, &clients)
 	}
 
 	w.WriteHeader(200)
