@@ -278,9 +278,9 @@ func TestBufferingStream_NewStreamClientRegistration(t *testing.T) {
 		t.Fatalf("Playlist %s was not created in BufferInformation", playlistID)
 	}
 
-	playlist, ok := p.(Playlist)
+	playlist, ok := p.(*Playlist)
 	if !ok {
-		t.Fatal("Failed to cast to Playlist type")
+		t.Fatalf("Failed to cast to *Playlist type. Got %T", p)
 	}
 
 	if len(playlist.Streams) != 1 {
