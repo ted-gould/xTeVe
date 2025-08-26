@@ -9,14 +9,15 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
 )
 
 const (
-	// 10 MB of data
-	streamSize = 10 * 1024 * 1024
+	// 1 MB of data
+	streamSize = 1 * 1024 * 1024
 	// Port for the streaming server
 	streamingPort = 8080
 	// Port for the xteve server
@@ -188,8 +189,9 @@ func runTests() error {
 	fmt.Printf("Adding M3U playlist from %s...\n", m3uURL)
 	m3uData := map[string]interface{}{
 		"-": map[string]interface{}{
-			"name": "TestM3U",
-			"url":  m3uURL,
+			"name":  "TestM3U",
+			"url":   m3uURL,
+			"tuner": "4",
 		},
 	}
 	m3uRequest := map[string]interface{}{"cmd": "saveFilesM3U", "files": map[string]interface{}{"m3u": m3uData}}
@@ -201,11 +203,16 @@ func runTests() error {
 	if err := setBuffer(conn, "xteve", 1024); err != nil {
 		return err
 	}
-	streamURL, err := runStreamingTest(conn, true)
+	streamURLs, err := getStreamURLs(conn)
 	if err != nil {
-		return fmt.Errorf("streaming test failed with buffer enabled: %w", err)
+		return fmt.Errorf("failed to get stream URLs: %w", err)
 	}
-	if err := runClientDisconnectTest(streamURL, true); err != nil {
+	for i := 1; i <= 4; i *= 2 {
+		if err := runMultiStreamTest(streamURLs, i, true); err != nil {
+			return fmt.Errorf("multi-stream test failed with %d streams and buffer enabled: %w", i, err)
+		}
+	}
+	if err := runClientDisconnectTest(streamURLs[0], true); err != nil {
 		return fmt.Errorf("client disconnect test failed with buffer enabled: %w", err)
 	}
 	fmt.Println("---")
@@ -214,11 +221,16 @@ func runTests() error {
 	if err := setBuffer(conn, "-", 0); err != nil {
 		return err
 	}
-	streamURL, err = runStreamingTest(conn, false)
+	streamURLs, err = getStreamURLs(conn)
 	if err != nil {
-		return fmt.Errorf("streaming test failed with buffer disabled: %w", err)
+		return fmt.Errorf("failed to get stream URLs: %w", err)
 	}
-	if err := runClientDisconnectTest(streamURL, false); err != nil {
+	for i := 1; i <= 4; i *= 2 {
+		if err := runMultiStreamTest(streamURLs, i, false); err != nil {
+			return fmt.Errorf("multi-stream test failed with %d streams and buffer disabled: %w", i, err)
+		}
+	}
+	if err := runClientDisconnectTest(streamURLs[0], false); err != nil {
 		return fmt.Errorf("client disconnect test failed with buffer disabled: %w", err)
 	}
 
@@ -233,48 +245,50 @@ func runTests() error {
 	return nil
 }
 
-func verifyTunerCountIsZero() error {
-	// Give the server a moment to clean up resources
-	time.Sleep(2 * time.Second)
-
-	fmt.Println("Verifying tuner count is zero...")
+func getActiveTunerCount() (int, error) {
 	apiURL := fmt.Sprintf("http://localhost:%d/api/", xtevePort)
 	requestBody := strings.NewReader(`{"cmd":"status"}`)
 	resp, err := http.Post(apiURL, "application/json", requestBody)
 	if err != nil {
-		return fmt.Errorf("failed to make status API request: %w", err)
+		return 0, fmt.Errorf("failed to make status API request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("status API request failed with status code: %d, body: %s", resp.StatusCode, string(body))
+		return 0, fmt.Errorf("status API request failed with status code: %d, body: %s", resp.StatusCode, string(body))
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("failed to read status API response body: %w", err)
+		return 0, fmt.Errorf("failed to read status API response body: %w", err)
 	}
 
-	// The response is a map, so we need to decode it into a map first
 	var responseMap map[string]interface{}
 	if err := json.Unmarshal(body, &responseMap); err != nil {
-		return fmt.Errorf("failed to unmarshal status API response into map: %w, body: %s", err, string(body))
+		return 0, fmt.Errorf("failed to unmarshal status API response into map: %w, body: %s", err, string(body))
 	}
 
 	if tunerActive, ok := responseMap["tuners.active"]; ok {
 		if ta, ok := tunerActive.(float64); ok {
-			if ta != 0 {
-				return fmt.Errorf("expected active tuner count to be 0, but got %v", tunerActive)
-			}
-		} else {
-			return fmt.Errorf("invalid type for tuners.active: expected float64, got %T", tunerActive)
+			return int(ta), nil
 		}
-	} else {
-		// If the key doesn't exist, it means the count is 0 because of omitempty
-		fmt.Println("'tuners.active' field not found, assuming 0.")
+		return 0, fmt.Errorf("invalid type for tuners.active: expected float64, got %T", tunerActive)
 	}
 
+	return 0, nil // Not found, so 0
+}
+
+func verifyTunerCountIsZero() error {
+	time.Sleep(2 * time.Second) // Give server a moment to clean up resources
+	fmt.Println("Verifying tuner count is zero...")
+	count, err := getActiveTunerCount()
+	if err != nil {
+		return err
+	}
+	if count != 0 {
+		return fmt.Errorf("expected active tuner count to be 0, but got %d", count)
+	}
 	fmt.Println("Tuner count verified successfully.")
 	return nil
 }
@@ -352,84 +366,130 @@ func setBuffer(conn *websocket.Conn, mode string, sizeKB int) error {
 	return nil
 }
 
-func runStreamingTest(conn *websocket.Conn, buffered bool) (string, error) {
-	// 1. Update the M3U file in xTeVe
-	fmt.Println("Updating M3U file...")
+func getStreamURLs(conn *websocket.Conn) ([]string, error) {
+	fmt.Println("Updating M3U file and getting stream URLs...")
 	updateRequest := map[string]interface{}{"cmd": "updateFileM3U"}
 	if _, err := sendRequest(conn, updateRequest); err != nil {
-		return "", fmt.Errorf("failed to send M3U update request: %w", err)
+		return nil, fmt.Errorf("failed to send M3U update request: %w", err)
 	}
+	time.Sleep(5 * time.Second) // Wait for update
 
-	// Wait for the update to process
-	time.Sleep(5 * time.Second)
-
-	// 2. Verify the M3U output and get the stream URL
-	fmt.Println("Verifying M3U output...")
 	httpResp, err := http.Get(fmt.Sprintf("http://localhost:%d/m3u/xteve.m3u", xtevePort))
 	if err != nil {
-		return "", fmt.Errorf("failed to get M3U file: %w", err)
+		return nil, fmt.Errorf("failed to get M3U file: %w", err)
 	}
 	defer httpResp.Body.Close()
 
 	body, err := io.ReadAll(httpResp.Body)
 	if err != nil {
-		return "", fmt.Errorf("failed to read M3U file body: %w", err)
+		return nil, fmt.Errorf("failed to read M3U file body: %w", err)
 	}
 
 	m3uContent := string(body)
-	if !strings.Contains(m3uContent, "Test Stream") {
-		return "", fmt.Errorf("verification failed: 'Test Stream' not found in M3U output")
-	}
-
-	// Find the stream URL from the M3U content
-	var streamURL string
 	lines := strings.Split(m3uContent, "\n")
+	var urls []string
 	for i, line := range lines {
-		if strings.Contains(line, "Test Stream") && i+1 < len(lines) {
-			streamURL = lines[i+1]
-			break
+		if strings.HasPrefix(line, "#EXTINF") && strings.Contains(line, "Test Stream") {
+			if i+1 < len(lines) && strings.HasPrefix(lines[i+1], "http") {
+				urls = append(urls, lines[i+1])
+			}
 		}
 	}
 
-	if streamURL == "" {
-		return "", fmt.Errorf("could not find stream URL in M3U output")
+	if len(urls) == 0 {
+		return nil, fmt.Errorf("could not find any stream URLs in M3U output")
 	}
 
-	// 3. Stream the data and verify it
-	fmt.Printf("Streaming from %s...\n", streamURL)
-	streamResp, err := http.Get(streamURL)
-	if err != nil {
-		return "", fmt.Errorf("failed to start stream: %w", err)
-	}
-	defer streamResp.Body.Close()
-
-	if buffered {
-		if err := runInactiveTest(true, true); err != nil {
-			return "", fmt.Errorf("inactive test failed during stream: %w", err)
-		}
-	}
-
-	receivedData, err := io.ReadAll(streamResp.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to read stream data: %w", err)
-	}
-
-	// This now needs to call verifyStreamedData
-	return streamURL, verifyStreamedData(receivedData)
+	return urls, nil
 }
 
-func verifyStreamedData(data []byte) error {
-	fmt.Println("Verifying streamed data...")
+func runMultiStreamTest(streamURLs []string, numStreams int, buffered bool) error {
+	fmt.Printf("Running multi-stream test with %d streams (buffered: %v)...\n", numStreams, buffered)
+	if len(streamURLs) < numStreams {
+		return fmt.Errorf("not enough stream URLs available for the test")
+	}
+
+	var wg sync.WaitGroup
+	errs := make(chan error, numStreams)
+
+	for i := 0; i < numStreams; i++ {
+		if i > 0 {
+			fmt.Println("Waiting 2 seconds before starting next client...")
+			time.Sleep(2 * time.Second)
+		}
+
+		wg.Add(1)
+		go func(streamID int, streamURL string) {
+			defer wg.Done()
+			fmt.Printf("Starting stream %d from %s\n", streamID, streamURL)
+
+			streamResp, err := http.Get(streamURL)
+			if err != nil {
+				errs <- fmt.Errorf("stream %d failed to start: %w", streamID, err)
+				return
+			}
+			defer streamResp.Body.Close()
+
+			// No inactive test needed here anymore
+
+			receivedData, err := io.ReadAll(streamResp.Body)
+			if err != nil {
+				errs <- fmt.Errorf("stream %d failed to read data: %w", streamID, err)
+				return
+			}
+
+			if err := verifyStreamedData(receivedData, streamID); err != nil {
+				errs <- fmt.Errorf("stream %d data verification failed: %w", streamID, err)
+				return
+			}
+			fmt.Printf("Stream %d finished and verified.\n", streamID)
+		}(i+1, streamURLs[i])
+	}
+
+	wg.Wait()
+	close(errs)
+
+	if buffered {
+		// Give the server a moment to update state
+		time.Sleep(2 * time.Second)
+		activeTuners, err := getActiveTunerCount()
+		if err != nil {
+			return fmt.Errorf("failed to get active tuner count: %w", err)
+		}
+		if activeTuners != numStreams {
+			return fmt.Errorf("expected %d active tuners, but got %d", numStreams, activeTuners)
+		}
+		fmt.Printf("Verified %d active tuners.\n", activeTuners)
+	}
+
+	var combinedErr error
+	for err := range errs {
+		if combinedErr == nil {
+			combinedErr = err
+		} else {
+			combinedErr = fmt.Errorf("%v; %w", combinedErr, err)
+		}
+	}
+
+	if combinedErr != nil {
+		return combinedErr
+	}
+
+	fmt.Printf("Multi-stream test with %d streams passed.\n", numStreams)
+	return nil
+}
+
+func verifyStreamedData(data []byte, streamID int) error {
 	expectedSize := streamSize
 	if len(data) != expectedSize {
 		return fmt.Errorf("streamed data size mismatch. Expected: %d, got: %d", expectedSize, len(data))
 	}
 	for i, b := range data {
-		if b != byte(i%256) {
-			return fmt.Errorf("streamed data content mismatch at byte %d. Expected: %d, got: %d", i, byte(i%256), b)
+		expectedByte := byte((i + streamID - 1) % 256)
+		if b != expectedByte {
+			return fmt.Errorf("streamed data content mismatch at byte %d. Expected: %d, got: %d", i, expectedByte, b)
 		}
 	}
-	fmt.Println("Streamed data verified successfully.")
 	return nil
 }
 

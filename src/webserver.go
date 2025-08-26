@@ -970,12 +970,13 @@ func API(w http.ResponseWriter, r *http.Request) {
 		response.URLXepg = System.ServerProtocol.XML + "://" + System.Domain + "/xmltv/xteve.xml"
 
 		BufferInformation.Range(func(k, v any) bool {
-			if playlist, ok := v.(Playlist); ok {
+			if playlist, ok := v.(*Playlist); ok {
 				response.TunerActive += int64(len(playlist.Streams))
 				response.TunerAll += int64(playlist.Tuner)
 			}
 			return true
 		})
+		log.Printf("API Status: Found %d active tuners.", response.TunerActive)
 	case "update.m3u":
 		err = getProviderData("m3u", "")
 		if err != nil {
