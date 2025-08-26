@@ -636,8 +636,17 @@ func connectToStreamingServer(streamID int, playlistID string) {
 					addErrorToStream(err)
 					return
 				}
-				playlist.Streams[streamID] = stream
-				BufferInformation.Store(playlistID, playlist)
+				// After handleTSStream returns, we need to get a fresh copy of the playlist
+				// to avoid overwriting changes made by other goroutines (e.g. killClientConnection).
+				if p, ok := BufferInformation.Load(playlistID); ok {
+					if freshPlaylist, ok := p.(Playlist); ok {
+						// Only update the stream if it hasn't been removed from the playlist.
+						if _, streamExists := freshPlaylist.Streams[streamID]; streamExists {
+							freshPlaylist.Streams[streamID] = stream
+							BufferInformation.Store(playlistID, freshPlaylist)
+						}
+					}
+				}
 
 			// Unknown Format
 			default:
