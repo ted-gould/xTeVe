@@ -96,10 +96,17 @@ func TestConnectWithRetry(t *testing.T) {
 
 func TestConnectToStreamingServer_Buffering(t *testing.T) {
 	// 1. Setup mock server
-	// Create 10MB of random data
-	content := make([]byte, 10*1024*1024)
-	for i := range content {
-		content[i] = byte(i)
+	// Create 10MB of valid MPEG-TS data
+	packetSize := 188
+	numPackets := (10 * 1024 * 1024) / packetSize
+	content := make([]byte, numPackets*packetSize)
+	for i := 0; i < numPackets; i++ {
+		offset := i * packetSize
+		packet := content[offset : offset+packetSize]
+		packet[0] = 0x47 // Sync byte
+		for j := 1; j < packetSize; j++ {
+			packet[j] = byte((offset + j) % 256)
+		}
 	}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -470,7 +477,15 @@ func TestTunerCountOnDisconnect(t *testing.T) {
 
 func TestBufferingStream_ClosesOnStreamEnd(t *testing.T) {
 	// 1. Setup mock server that serves a small amount of data and then closes
-	content := []byte("some finite stream data")
+	packetSize := 188
+	numPackets := 10
+	content := make([]byte, numPackets*packetSize)
+	for i := 0; i < numPackets; i++ {
+		offset := i * packetSize
+		packet := content[offset : offset+packetSize]
+		packet[0] = 0x47 // Sync byte
+	}
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "video/mp2t")
 		w.WriteHeader(http.StatusOK)
