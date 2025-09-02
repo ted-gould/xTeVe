@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+	"xteve/src/mpegts"
 )
 
 const (
@@ -25,13 +26,22 @@ var (
 )
 
 func generateTestData(size, count int) {
-	fmt.Printf("Generating %d bytes of test data for %d streams...\n", size, count)
+	// Ensure the size is a multiple of the packet size
+	if size%mpegts.PacketSize != 0 {
+		size = (size / mpegts.PacketSize) * mpegts.PacketSize
+	}
+
+	fmt.Printf("Generating %d bytes of valid MPEG-TS test data for %d streams...\n", size, count)
 	testData = make([][]byte, count)
 	for i := 0; i < count; i++ {
 		testData[i] = make([]byte, size)
-		for j := 0; j < size; j++ {
-			// Differentiate stream content
-			testData[i][j] = byte((j + i) % 256)
+		for j := 0; j < size; j += mpegts.PacketSize {
+			packet := testData[i][j : j+mpegts.PacketSize]
+			packet[0] = mpegts.SyncByte
+			for k := 1; k < mpegts.PacketSize; k++ {
+				// Differentiate stream content
+				packet[k] = byte((j + k + i) % 256)
+			}
 		}
 	}
 }

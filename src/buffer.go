@@ -17,6 +17,7 @@ import (
 
 	"github.com/avfs/avfs/vfs/memfs"
 	"github.com/avfs/avfs/vfs/osfs"
+	"xteve/src/mpegts"
 )
 
 var errTunerLimitReached = errors.New("tuner limit reached")
@@ -746,7 +747,6 @@ func handleHLSStream(resp *http.Response, stream ThisStream, tmpFolder string, t
 
 func handleTSStream(resp *http.Response, stream ThisStream, streamID int, playlistID, tmpFolder string, tmpSegment *int, addErrorToStream func(err error), buffer []byte, bandwidth *BandwidthCalculation, retries int) (ThisStream, error) {
 	var fileSize int
-	var bytesWritten int
 	var bufferSize = Settings.BufferSize
 	var tmpFileSize = 1024 * bufferSize * 1
 	var debug string
@@ -772,6 +772,8 @@ func handleTSStream(resp *http.Response, stream ThisStream, streamID int, playli
 		return stream, err
 	}
 
+	parser := mpegts.NewParser()
+
 	defer resp.Body.Close()
 	for {
 		if fileSize == 0 {
@@ -781,24 +783,32 @@ func handleTSStream(resp *http.Response, stream ThisStream, streamID int, playli
 
 		n, err := resp.Body.Read(buffer)
 		if n > 0 {
-			bytesWritten = 0
-			for bytesWritten < n {
-				// Calculate how much to write in this chunk
-				writeSize := n - bytesWritten
-				if fileSize+writeSize > tmpFileSize {
-					writeSize = tmpFileSize - fileSize
+			if _, err := parser.Write(buffer[:n]); err != nil {
+				ShowError(err, 0)
+				addErrorToStream(err)
+				bufferFile.Close()
+				return stream, err
+			}
+			for {
+				packet, err := parser.Next()
+				if err == io.EOF {
+					break
 				}
-
-				if _, err := bufferFile.Write(buffer[bytesWritten : bytesWritten+writeSize]); err != nil {
+				if err != nil {
 					ShowError(err, 0)
 					addErrorToStream(err)
 					bufferFile.Close()
 					return stream, err
 				}
-				fileSize += writeSize
-				bytesWritten += writeSize
 
-				// If the file is full, create a new one
+				if _, err := bufferFile.Write(packet); err != nil {
+					ShowError(err, 0)
+					addErrorToStream(err)
+					bufferFile.Close()
+					return stream, err
+				}
+				fileSize += len(packet)
+
 				if fileSize >= tmpFileSize {
 					bufferFile.Close()
 					completeTSsegment(playlistID, streamID, &stream, bandwidth, fileSize, tmpFile, *tmpSegment)

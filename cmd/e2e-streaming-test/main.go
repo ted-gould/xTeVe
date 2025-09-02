@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"xteve/src/mpegts"
 )
 
 const (
@@ -446,20 +447,30 @@ func runMultiStreamTest(streamURLs []string, numStreams int, buffered bool) erro
 		}(i+1, streamURLs[i])
 	}
 
+	var tunerCheckWg sync.WaitGroup
+	if buffered {
+		tunerCheckWg.Add(1)
+		go func() {
+			defer tunerCheckWg.Done()
+			time.Sleep(5 * time.Second) // Wait for streams to be active
+			activeTuners, err := getActiveTunerCount()
+			if err != nil {
+				errs <- fmt.Errorf("failed to get active tuner count: %w", err)
+				return
+			}
+			if activeTuners != numStreams {
+				errs <- fmt.Errorf("expected %d active tuners, but got %d", numStreams, activeTuners)
+				return
+			}
+			fmt.Printf("Verified %d active tuners.\n", activeTuners)
+		}()
+	}
+
 	wg.Wait()
 	close(errs)
 
 	if buffered {
-		// Give the server a moment to update state
-		time.Sleep(2 * time.Second)
-		activeTuners, err := getActiveTunerCount()
-		if err != nil {
-			return fmt.Errorf("failed to get active tuner count: %w", err)
-		}
-		if activeTuners != numStreams {
-			return fmt.Errorf("expected %d active tuners, but got %d", numStreams, activeTuners)
-		}
-		fmt.Printf("Verified %d active tuners.\n", activeTuners)
+		tunerCheckWg.Wait()
 	}
 
 	var combinedErr error
@@ -480,16 +491,24 @@ func runMultiStreamTest(streamURLs []string, numStreams int, buffered bool) erro
 }
 
 func verifyStreamedData(data []byte, streamID int) error {
-	expectedSize := streamSize
+	expectedSize := (streamSize / mpegts.PacketSize) * mpegts.PacketSize
 	if len(data) != expectedSize {
 		return fmt.Errorf("streamed data size mismatch. Expected: %d, got: %d", expectedSize, len(data))
 	}
-	for i, b := range data {
-		expectedByte := byte((i + streamID - 1) % 256)
-		if b != expectedByte {
-			return fmt.Errorf("streamed data content mismatch at byte %d. Expected: %d, got: %d", i, expectedByte, b)
+
+	for i := 0; i < len(data); i += mpegts.PacketSize {
+		packet := data[i : i+mpegts.PacketSize]
+		if packet[0] != mpegts.SyncByte {
+			return fmt.Errorf("invalid sync byte at offset %d", i)
+		}
+		for j := 1; j < mpegts.PacketSize; j++ {
+			expectedByte := byte((i + j + streamID - 1) % 256)
+			if packet[j] != expectedByte {
+				return fmt.Errorf("streamed data content mismatch at byte %d. Expected: %d, got: %d", i+j, expectedByte, packet[j])
+			}
 		}
 	}
+
 	return nil
 }
 
