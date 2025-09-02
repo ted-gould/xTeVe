@@ -32,31 +32,29 @@ func (p *Parser) Write(data []byte) (int, error) {
 // Next returns the next valid MPEG-TS packet from the buffer.
 // If no packet is available, it returns io.EOF.
 func (p *Parser) Next() ([]byte, error) {
-	for {
-		// Find the sync byte.
-		idx := bytes.IndexByte(p.buf.Bytes(), SyncByte)
-		if idx == -1 {
-			// No sync byte found, so we can't find a packet.
-			// We can discard the entire buffer.
-			p.buf.Reset()
-			return nil, io.EOF
-		}
-
-		// Discard any data before the sync byte.
-		if idx > 0 {
-			p.buf.Next(idx)
-		}
-
-		// Check if we have a full packet.
-		if p.buf.Len() < PacketSize {
-			return nil, io.EOF
-		}
-
-		packet := make([]byte, PacketSize)
-		if _, err := p.buf.Read(packet); err != nil {
-			return nil, err
-		}
-
-		return packet, nil
+	// Find the sync byte.
+	idx := bytes.IndexByte(p.buf.Bytes(), SyncByte)
+	if idx == -1 {
+		// No sync byte found, so we can't find a packet.
+		// We can discard the entire buffer.
+		p.buf.Reset()
+		return nil, io.EOF
 	}
+
+	// Discard any data before the sync byte.
+	if idx > 0 {
+		p.buf.Next(idx)
+	}
+
+	// Check if we have a full packet.
+	if p.buf.Len() < PacketSize {
+		return nil, io.EOF
+	}
+
+	packet := make([]byte, PacketSize)
+	if _, err := p.buf.Read(packet); err != nil {
+		return nil, err
+	}
+
+	return packet, nil
 }

@@ -20,7 +20,9 @@ func TestParser_Next_ValidStream(t *testing.T) {
 	buf.Write(packet2)
 
 	parser := NewParser()
-	parser.Write(buf.Bytes())
+	if _, err := parser.Write(buf.Bytes()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	// First packet
 	p, err := parser.Next()
@@ -70,7 +72,9 @@ func TestParser_Next_CorruptedStream(t *testing.T) {
 	buf.Write(packet3)
 
 	parser := NewParser()
-	parser.Write(buf.Bytes())
+	if _, err := parser.Write(buf.Bytes()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	// First packet
 	p, err := parser.Next()

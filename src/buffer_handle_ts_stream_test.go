@@ -116,7 +116,7 @@ func TestHandleTSStream(t *testing.T) {
 	}
 
 	if !bytes.Equal(writtenContent, validTSStream.Bytes()) {
-		t.Errorf("Content of created file does not match expected content. Got %s, want %s", string(writtenContent), string(validTSStream.Bytes()))
+		t.Errorf("Content of created file does not match expected content. Got %s, want %s", string(writtenContent), validTSStream.String())
 	}
 }
 

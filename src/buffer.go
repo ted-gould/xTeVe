@@ -783,7 +783,12 @@ func handleTSStream(resp *http.Response, stream ThisStream, streamID int, playli
 
 		n, err := resp.Body.Read(buffer)
 		if n > 0 {
-			parser.Write(buffer[:n])
+			if _, err := parser.Write(buffer[:n]); err != nil {
+				ShowError(err, 0)
+				addErrorToStream(err)
+				bufferFile.Close()
+				return stream, err
+			}
 			for {
 				packet, err := parser.Next()
 				if err == io.EOF {
