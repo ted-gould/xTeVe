@@ -38,15 +38,7 @@ e2e-test: build
 	@echo "--- Running E2E tests ---"
 	$(GO) run cmd/ci-test/main.go
 
-build-no-video: ts-compile
-	@echo "--- Building Go commands (no video) ---"
-	@mkdir -p $(BINDIR)
-	$(GOCMD) -o ./$(BINDIR)/xteve .
-	$(GOCMD) -o ./$(BINDIR)/xteve-inactive ./cmd/xteve-inactive
-	$(GOCMD) -o ./$(BINDIR)/xteve-status ./cmd/xteve-status
-	@echo "--- Build complete ---"
-
-e2e-streaming-test: build-no-video build-streamer
+e2e-streaming-test: build build-streamer
 	@echo "--- Running E2E streaming tests ---"
 	$(GO) run cmd/e2e-streaming-test/main.go
 
