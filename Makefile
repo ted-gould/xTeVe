@@ -38,6 +38,10 @@ e2e-test: build
 	@echo "--- Running E2E tests ---"
 	$(GO) run cmd/ci-test/main.go
 
+e2e-streaming-test: build build-streamer
+	@echo "--- Running E2E streaming tests ---"
+	$(GO) run cmd/e2e-streaming-test/main.go
+
 build-streamer:
 	@echo "--- Building E2E streamer ---"
 	$(GO) build -o streamer_binary ./cmd/e2e-streaming-test/streamer
