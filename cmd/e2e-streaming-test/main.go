@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"xteve/src/mpegts"
 )
 
 const (
@@ -490,17 +491,17 @@ func runMultiStreamTest(streamURLs []string, numStreams int, buffered bool) erro
 }
 
 func verifyStreamedData(data []byte, streamID int) error {
-	expectedSize := (streamSize / 188) * 188
+	expectedSize := (streamSize / mpegts.PacketSize) * mpegts.PacketSize
 	if len(data) != expectedSize {
 		return fmt.Errorf("streamed data size mismatch. Expected: %d, got: %d", expectedSize, len(data))
 	}
 
-	for i := 0; i < len(data); i += 188 {
-		packet := data[i : i+188]
-		if packet[0] != 0x47 {
+	for i := 0; i < len(data); i += mpegts.PacketSize {
+		packet := data[i : i+mpegts.PacketSize]
+		if packet[0] != mpegts.SyncByte {
 			return fmt.Errorf("invalid sync byte at offset %d", i)
 		}
-		for j := 1; j < 188; j++ {
+		for j := 1; j < mpegts.PacketSize; j++ {
 			expectedByte := byte((i + j + streamID - 1) % 256)
 			if packet[j] != expectedByte {
 				return fmt.Errorf("streamed data content mismatch at byte %d. Expected: %d, got: %d", i+j, expectedByte, packet[j])

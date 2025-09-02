@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"testing"
 	"time"
+	"xteve/src/mpegts"
 )
 
 func TestConnectWithRetry(t *testing.T) {
@@ -97,14 +98,13 @@ func TestConnectWithRetry(t *testing.T) {
 func TestConnectToStreamingServer_Buffering(t *testing.T) {
 	// 1. Setup mock server
 	// Create 10MB of valid MPEG-TS data
-	packetSize := 188
-	numPackets := (10 * 1024 * 1024) / packetSize
-	content := make([]byte, numPackets*packetSize)
+	numPackets := (10 * 1024 * 1024) / mpegts.PacketSize
+	content := make([]byte, numPackets*mpegts.PacketSize)
 	for i := 0; i < numPackets; i++ {
-		offset := i * packetSize
-		packet := content[offset : offset+packetSize]
-		packet[0] = 0x47 // Sync byte
-		for j := 1; j < packetSize; j++ {
+		offset := i * mpegts.PacketSize
+		packet := content[offset : offset+mpegts.PacketSize]
+		packet[0] = mpegts.SyncByte
+		for j := 1; j < mpegts.PacketSize; j++ {
 			packet[j] = byte((offset + j) % 256)
 		}
 	}
@@ -477,13 +477,12 @@ func TestTunerCountOnDisconnect(t *testing.T) {
 
 func TestBufferingStream_ClosesOnStreamEnd(t *testing.T) {
 	// 1. Setup mock server that serves a small amount of data and then closes
-	packetSize := 188
 	numPackets := 10
-	content := make([]byte, numPackets*packetSize)
+	content := make([]byte, numPackets*mpegts.PacketSize)
 	for i := 0; i < numPackets; i++ {
-		offset := i * packetSize
-		packet := content[offset : offset+packetSize]
-		packet[0] = 0x47 // Sync byte
+		offset := i * mpegts.PacketSize
+		packet := content[offset : offset+mpegts.PacketSize]
+		packet[0] = mpegts.SyncByte
 	}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
