@@ -216,6 +216,9 @@ func runTests() error {
 	if err := runClientDisconnectTest(streamURLs[0], true); err != nil {
 		return fmt.Errorf("client disconnect test failed with buffer enabled: %w", err)
 	}
+	if err := runRepeatedDisconnectTest(streamURLs[0], true); err != nil {
+		return fmt.Errorf("repeated disconnect test failed with buffer enabled: %w", err)
+	}
 	fmt.Println("---")
 
 	// Run with buffer disabled
@@ -233,6 +236,9 @@ func runTests() error {
 	}
 	if err := runClientDisconnectTest(streamURLs[0], false); err != nil {
 		return fmt.Errorf("client disconnect test failed with buffer disabled: %w", err)
+	}
+	if err := runRepeatedDisconnectTest(streamURLs[0], false); err != nil {
+		return fmt.Errorf("repeated disconnect test failed with buffer disabled: %w", err)
 	}
 
 	if err := verifyTunerCountIsZero(); err != nil {
@@ -352,6 +358,42 @@ func runClientDisconnectTest(streamURL string, buffered bool) error {
 	}
 
 	return fmt.Errorf("streamer connection did not close after client disconnect")
+}
+
+func runRepeatedDisconnectTest(streamURL string, buffered bool) error {
+	fmt.Printf("Running repeated disconnect test (buffered: %v)...\n", buffered)
+
+	for i := 0; i < 100; i++ {
+		if (i+1)%10 == 0 {
+			fmt.Printf("Connection attempt %d/100\n", i+1)
+		}
+
+		streamResp, err := http.Get(streamURL)
+		if err != nil {
+			return fmt.Errorf("failed to start stream on attempt %d: %w", i+1, err)
+		}
+
+		// Read a small part of the body to ensure connection is established
+		buffer := make([]byte, 1024)
+		_, err = streamResp.Body.Read(buffer)
+		// We expect an error when the stream is closed, so we only check for non-EOF errors
+		if err != nil && err != io.EOF && !strings.Contains(err.Error(), "closed") {
+			streamResp.Body.Close()
+			return fmt.Errorf("failed to read from stream on attempt %d: %w", i+1, err)
+		}
+
+		streamResp.Body.Close()
+	}
+
+	fmt.Println("Finished 100 connect/disconnect cycles.")
+
+	// Verify that tuners are zero.
+	if err := verifyTunerCountIsZero(); err != nil {
+		return fmt.Errorf("tuner count not zero after repeated disconnects: %w", err)
+	}
+
+	fmt.Println("Repeated disconnect test passed.")
+	return nil
 }
 
 func setBuffer(conn *websocket.Conn, mode string, sizeKB int) error {
