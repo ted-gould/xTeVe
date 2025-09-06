@@ -7,8 +7,16 @@ BINDIR = bin
 # Default target
 all: build
 
+# TypeScript variables
+TS_SRC = $(wildcard ts/*.ts)
+JS_DIR = src/html/js
+
+# Video variables
+VIDEO_SRC = src/html/img/stream-limit.jpg
+VIDEO_TARGET = src/html/video/stream-limit.bin
+
 # Build targets
-build: ts-compile generate-video
+build: $(JS_DIR) $(VIDEO_TARGET)
 	@echo "--- Building Go commands ---"
 	@mkdir -p $(BINDIR)
 	$(GOCMD) -o ./$(BINDIR)/xteve .
@@ -16,16 +24,19 @@ build: ts-compile generate-video
 	$(GOCMD) -o ./$(BINDIR)/xteve-status ./cmd/xteve-status
 	@echo "--- Build complete ---"
 
-ts-compile:
+$(JS_DIR): $(TS_SRC)
 	@echo "--- Compiling TypeScript ---"
+	@mkdir -p $(JS_DIR)
 	(npm install && cd ts && npx tsc)
+	@touch $(JS_DIR)
 
-generate-video:
+$(VIDEO_TARGET): $(VIDEO_SRC)
 	@echo "--- Generating video asset ---"
+	@mkdir -p src/html/video
 	@bash build/generate_video.sh
 
 # Test and lint targets
-test: ts-compile generate-video
+test: $(JS_DIR) $(VIDEO_TARGET)
 	@echo "--- Running Go tests ---"
 	$(GO) test ./...
 
@@ -59,7 +70,7 @@ snap: build
 clean:
 	@echo "--- Cleaning up ---"
 	@rm -rf $(BINDIR)
-	@rm -f src/html/video/stream-limit.bin
-	# Add other clean up commands if needed for TypeScript files
+	@rm -f $(VIDEO_TARGET)
+	@rm -rf $(JS_DIR)
 
-.PHONY: all build ts-compile generate-video test lint e2e-test format-check snap clean
+.PHONY: all build test lint e2e-test format-check snap clean
