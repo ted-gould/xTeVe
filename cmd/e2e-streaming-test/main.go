@@ -216,7 +216,7 @@ func runTests() error {
 	if err := runClientDisconnectTest(streamURLs[0], true); err != nil {
 		return fmt.Errorf("client disconnect test failed with buffer enabled: %w", err)
 	}
-	if err := runRepeatedDisconnectTest(streamURLs[0], true); err != nil {
+	if err := runRepeatedDisconnectTest(streamURLs, len(streamURLs), true); err != nil {
 		return fmt.Errorf("repeated disconnect test failed with buffer enabled: %w", err)
 	}
 	fmt.Println("---")
@@ -237,7 +237,7 @@ func runTests() error {
 	if err := runClientDisconnectTest(streamURLs[0], false); err != nil {
 		return fmt.Errorf("client disconnect test failed with buffer disabled: %w", err)
 	}
-	if err := runRepeatedDisconnectTest(streamURLs[0], false); err != nil {
+	if err := runRepeatedDisconnectTest(streamURLs, len(streamURLs), false); err != nil {
 		return fmt.Errorf("repeated disconnect test failed with buffer disabled: %w", err)
 	}
 
@@ -360,32 +360,69 @@ func runClientDisconnectTest(streamURL string, buffered bool) error {
 	return fmt.Errorf("streamer connection did not close after client disconnect")
 }
 
-func runRepeatedDisconnectTest(streamURL string, buffered bool) error {
-	fmt.Printf("Running repeated disconnect test (buffered: %v)...\n", buffered)
+func runRepeatedDisconnectTest(streamURLs []string, numTuners int, buffered bool) error {
+	fmt.Printf("Running repeated disconnect test with %d threads (buffered: %v)...\n", numTuners, buffered)
 
-	for i := 0; i < 100; i++ {
-		if (i+1)%10 == 0 {
-			fmt.Printf("Connection attempt %d/100\n", i+1)
-		}
-
-		streamResp, err := http.Get(streamURL)
-		if err != nil {
-			return fmt.Errorf("failed to start stream on attempt %d: %w", i+1, err)
-		}
-
-		// Read a small part of the body to ensure connection is established
-		buffer := make([]byte, 1024)
-		_, err = streamResp.Body.Read(buffer)
-		// We expect an error when the stream is closed, so we only check for non-EOF errors
-		if err != nil && err != io.EOF && !strings.Contains(err.Error(), "closed") {
-			streamResp.Body.Close()
-			return fmt.Errorf("failed to read from stream on attempt %d: %w", i+1, err)
-		}
-
-		streamResp.Body.Close()
+	if len(streamURLs) < numTuners {
+		return fmt.Errorf("not enough stream URLs for repeated disconnect test, got %d, want %d", len(streamURLs), numTuners)
 	}
 
-	fmt.Println("Finished 100 connect/disconnect cycles.")
+	var wg sync.WaitGroup
+	errs := make(chan error, numTuners)
+	totalConnections := 100
+	iterationsPerThread := totalConnections / numTuners
+	extraIterations := totalConnections % numTuners
+
+	for i := 0; i < numTuners; i++ {
+		wg.Add(1)
+		iterations := iterationsPerThread
+		if i < extraIterations {
+			iterations++
+		}
+
+		go func(threadID int, streamURL string, numIterations int) {
+			defer wg.Done()
+			for j := 0; j < numIterations; j++ {
+				if (j+1)%10 == 0 {
+					fmt.Printf("[Thread %d] Connection attempt %d/%d\n", threadID, j+1, numIterations)
+				}
+
+				streamResp, err := http.Get(streamURL)
+				if err != nil {
+					errs <- fmt.Errorf("[Thread %d] failed to start stream on attempt %d: %w", threadID, j+1, err)
+					return
+				}
+
+				// Read a small part of the body to ensure connection is established
+				buffer := make([]byte, 1024)
+				_, err = streamResp.Body.Read(buffer)
+				// We expect an error when the stream is closed, so we only check for non-EOF errors
+				if err != nil && err != io.EOF && !strings.Contains(err.Error(), "closed") {
+					streamResp.Body.Close()
+					errs <- fmt.Errorf("[Thread %d] failed to read from stream on attempt %d: %w", threadID, j+1, err)
+					return
+				}
+				streamResp.Body.Close()
+			}
+		}(i+1, streamURLs[i], iterations)
+	}
+
+	wg.Wait()
+	close(errs)
+
+	var combinedErr error
+	for err := range errs {
+		if combinedErr == nil {
+			combinedErr = err
+		} else {
+			combinedErr = fmt.Errorf("%v; %w", combinedErr, err)
+		}
+	}
+	if combinedErr != nil {
+		return combinedErr
+	}
+
+	fmt.Printf("Finished %d connect/disconnect cycles across %d threads.\n", totalConnections, numTuners)
 
 	// Verify that tuners are zero.
 	if err := verifyTunerCountIsZero(); err != nil {
