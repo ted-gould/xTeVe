@@ -314,10 +314,8 @@ func readStringFromFile(file string) (str string, err error) {
 }
 
 // Network
-var netInterfaceAddrs = net.InterfaceAddrs
-
 func resolveHostIP() (err error) {
-	netInterfaceAddresses, err := netInterfaceAddrs()
+	netInterfaceAddresses, err := net.InterfaceAddrs()
 	if err != nil {
 		return
 	}
