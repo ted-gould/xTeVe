@@ -314,8 +314,10 @@ func readStringFromFile(file string) (str string, err error) {
 }
 
 // Network
+var netInterfaceAddrs = net.InterfaceAddrs
+
 func resolveHostIP() (err error) {
-	netInterfaceAddresses, err := net.InterfaceAddrs()
+	netInterfaceAddresses, err := netInterfaceAddrs()
 	if err != nil {
 		return
 	}
@@ -342,7 +344,11 @@ func resolveHostIP() (err error) {
 
 	// If IP previously set in settings (including the default, empty) is not available anymore
 	if !lo.Contains(System.IPAddressesV4Host, Settings.HostIP) {
-		Settings.HostIP = System.IPAddressesV4Host[0]
+		if len(System.IPAddressesV4Host) > 0 {
+			Settings.HostIP = System.IPAddressesV4Host[0]
+		} else {
+			Settings.HostIP = ""
+		}
 	}
 
 	if len(Settings.HostIP) == 0 {
@@ -354,6 +360,11 @@ func resolveHostIP() (err error) {
 		default:
 			Settings.HostIP = System.IPAddressesV4[0]
 		}
+	}
+
+	if len(Settings.HostIP) == 0 {
+		log.Println("[WARNING] No IP address found, defaulting to 127.0.0.1")
+		Settings.HostIP = "127.0.0.1"
 	}
 
 	System.Hostname, err = os.Hostname()
