@@ -107,10 +107,12 @@ func Init() (err error) {
 	fmt.Println("For help run: " + getPlatformFile(os.Args[0]) + " -h")
 	fmt.Println()
 
+	/*
 	// Check whether xTeVe is running as root
 	if os.Geteuid() == 0 {
 		showWarning(2110)
 	}
+	*/
 
 	if System.Flag.Debug > 0 {
 		debug = fmt.Sprintf("Debug Level:%d", System.Flag.Debug)
