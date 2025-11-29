@@ -80,3 +80,29 @@ The following steps will create the `xteve`, `xteve-inactive`, and `xteve-status
    ```
 
 To enable this feature, go to `Settings -> Streaming` and check the `Enable Stream Retry` box. You can also configure the maximum number of retries and the delay between retries.
+
+---
+
+## OpenTelemetry Tracing
+
+xTeVe supports OpenTelemetry tracing, which allows you to send traces to an observability platform of your choice.
+
+### Configuration
+
+The OpenTelemetry exporter can be configured using `snap set`:
+
+| Key | Description | Default |
+| --- | --- | --- |
+| `otel-exporter-type` | The type of exporter to use. Supported values are `stdout` and `otlp`. | `stdout` |
+| `otel-exporter-otlp-endpoint` | The endpoint to send traces to when using the `otlp` exporter. | |
+| `otel-exporter-otlp-headers` | Headers to send with each trace when using the `otlp` exporter. | |
+
+### Example: Exporting to Axiom
+
+To export traces to [Axiom](https://axiom.co), you can use the following configuration:
+
+```sh
+sudo snap set xteve otel-exporter-type="otlp"
+sudo snap set xteve otel-exporter-otlp-endpoint="https://api.axiom.co"
+sudo snap set xteve otel-exporter-otlp-headers="Authorization=Bearer <YOUR_AXIOM_API_TOKEN>"
+```

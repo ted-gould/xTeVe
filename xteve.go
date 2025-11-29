@@ -7,14 +7,20 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"flag"
 	"fmt"
+	"log"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strings"
 
 	"xteve/src"
+	"xteve/src/snap"
+	"xteve/src/tracing"
 )
 
 // Name : Program Name
@@ -43,6 +49,29 @@ var h = flag.Bool("h", false, ": Show help")
 var dev = flag.Bool("dev", false, ": Activates the developer mode, the source code must be available. The local files for the web interface are used.")
 
 func main() {
+	if err := run(); err != nil {
+		log.Fatalln(err)
+	}
+}
+
+func run() (err error) {
+	// Handle SIGINT (CTRL+C) gracefully.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+
+	// Set up OpenTelemetry.
+	otelExporterType, err := snap.Get("otel-exporter-type")
+	if err != nil {
+		log.Printf("could not get otel-exporter-type from snap: %v", err)
+	}
+	otelShutdown, err := tracing.SetupOTelSDK(ctx, tracing.ExporterType(otelExporterType))
+	if err != nil {
+		return
+	}
+	// Handle shutdown properly so nothing leaks.
+	defer func() {
+		err = errors.Join(err, otelShutdown(context.Background()))
+	}()
 
 	// Separate Build Number from Version Number
 	var build = strings.Split(src.Version, ".")
@@ -97,16 +126,17 @@ func main() {
 
 	if *h {
 		flag.Usage()
-		return
+		return nil
 	}
 
 	system.Dev = *dev
 
 	if *version {
 		src.ShowSystemVersion()
-		return
+		return nil
 	}
 
+	// Display System Information
 	// Display System Information
 	if *info {
 		system.Flag.Info = true
@@ -118,7 +148,7 @@ func main() {
 		}
 
 		src.ShowSystemInfo()
-		return
+		return nil
 
 	}
 
@@ -131,7 +161,7 @@ func main() {
 	system.Flag.Debug = *debug
 	if system.Flag.Debug > 3 {
 		flag.Usage()
-		return
+		return nil
 	}
 
 	// Storage location for the Configuration Files
@@ -158,7 +188,7 @@ func main() {
 		os.Exit(0)
 	}
 
-	err := src.Init()
+	err = src.Init()
 	if err != nil {
 		src.ShowError(err, 0)
 		os.Exit(0)
@@ -176,10 +206,18 @@ func main() {
 		os.Exit(0)
 	}
 
-	err = src.StartWebserver()
-	if err != nil {
-		src.ShowError(err, 0)
-		os.Exit(0)
-	}
+	go func() {
+		if err := src.StartWebserver(); err != nil {
+			src.ShowError(err, 0)
+			os.Exit(0)
+		}
+	}()
 
+	// Wait for interruption.
+	<-ctx.Done()
+
+	// Stop receiving signal notifications as soon as possible.
+	stop()
+
+	return nil
 }

@@ -1,0 +1,15 @@
+#!/bin/sh
+
+set -e
+
+# Get the values from the snap configuration
+otel_exporter_type=$(snapctl get otel-exporter-type)
+otel_exporter_otlp_endpoint=$(snapctl get otel-exporter-otlp-endpoint)
+otel_exporter_otlp_headers=$(snapctl get otel-exporter-otlp-headers)
+
+# Write the values to a file that the Go application can read
+cat > "$SNAP_COMMON/otel.env" <<EOF
+OTEL_EXPORTER_TYPE=${otel_exporter_type}
+OTEL_EXPORTER_OTLP_ENDPOINT=${otel_exporter_otlp_endpoint}
+OTEL_EXPORTER_OTLP_HEADERS=${otel_exporter_otlp_headers}
+EOF

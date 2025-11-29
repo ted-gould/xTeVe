@@ -20,6 +20,9 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/samber/lo"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // webAlerts channel to send to client
@@ -33,18 +36,6 @@ func init() {
 
 // StartWebserver : Start the Webserver
 func StartWebserver() (err error) {
-	http.HandleFunc("/", Index)
-	http.HandleFunc("/stream/", Stream)
-	http.HandleFunc("/xmltv/", xTeVe)
-	http.HandleFunc("/m3u/", xTeVe)
-	http.HandleFunc("/data/", WS)
-	http.HandleFunc("/web/", Web)
-	http.HandleFunc("/download/", Download)
-	http.HandleFunc("/api/", API)
-	http.HandleFunc("/images/", Images)
-	http.HandleFunc("/data_images/", DataImages)
-	// http.HandleFunc("/auto/", Auto)
-
 	for {
 		showInfo("Web server:" + "Starting")
 
@@ -61,7 +52,7 @@ func StartWebserver() (err error) {
 		}
 
 		var port = Settings.Port
-		server := http.Server{Addr: ":" + port}
+		server := http.Server{Addr: ":" + port, Handler: newHTTPHandler()}
 
 		go func() {
 			var err error
@@ -117,8 +108,11 @@ func Index(w http.ResponseWriter, r *http.Request) {
 
 	switch path {
 	case "/favicon.ico":
+		_, childSpan := otel.Tracer("webserver").Start(r.Context(), "favicon")
+		defer childSpan.End()
 		response, err = webUI.ReadFile("favicon.ico")
 		if err != nil {
+			childSpan.RecordError(err)
 			httpStatusError(w, r, 404)
 			return
 		}
@@ -129,27 +123,53 @@ func Index(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	case "/discover.json":
+		_, childSpan := otel.Tracer("webserver").Start(r.Context(), "discover")
+		defer childSpan.End()
 		response, err = getDiscover()
+		if err != nil {
+			childSpan.RecordError(err)
+		}
 		w.Header().Set("Content-Type", "application/json")
 	case "/lineup_status.json":
+		_, childSpan := otel.Tracer("webserver").Start(r.Context(), "lineup_status")
+		defer childSpan.End()
 		response, err = getLineupStatus()
+		if err != nil {
+			childSpan.RecordError(err)
+		}
 		w.Header().Set("Content-Type", "application/json")
 	case "/lineup.json":
+		_, childSpan := otel.Tracer("webserver").Start(r.Context(), "lineup")
+		defer childSpan.End()
 		if Settings.AuthenticationPMS {
 			_, err := basicAuth(r, "authentication.pms")
 			if err != nil {
+				childSpan.RecordError(err)
 				ShowError(err, 000)
 				httpStatusError(w, r, 403)
 				return
 			}
 		}
 		response, err = getLineup()
+		if err != nil {
+			childSpan.RecordError(err)
+		}
 		w.Header().Set("Content-Type", "application/json")
 	case "/device.xml", "/capability":
+		_, childSpan := otel.Tracer("webserver").Start(r.Context(), "capability")
+		defer childSpan.End()
 		response, err = getCapability()
+		if err != nil {
+			childSpan.RecordError(err)
+		}
 		w.Header().Set("Content-Type", "application/xml")
 	default:
+		_, childSpan := otel.Tracer("webserver").Start(r.Context(), "default")
+		defer childSpan.End()
 		response, err = getCapability()
+		if err != nil {
+			childSpan.RecordError(err)
+		}
 		w.Header().Set("Content-Type", "application/xml")
 	}
 
@@ -171,6 +191,7 @@ func Stream(w http.ResponseWriter, r *http.Request) {
 
 	streamInfo, err := getStreamInfo(path)
 	if err != nil {
+		trace.SpanFromContext(r.Context()).RecordError(err)
 		ShowError(err, 1203)
 		httpStatusError(w, r, 404)
 		return
@@ -254,10 +275,14 @@ func xTeVe(w http.ResponseWriter, r *http.Request) {
 
 	// XMLTV File
 	if strings.Contains(path, "xmltv/") {
+		_, childSpan := otel.Tracer("webserver").Start(r.Context(), "xmltv")
+		defer childSpan.End()
+
 		requestType = "xml"
 		file = System.Folder.Data + getFilenameFromPath(path)
 		content, err = readStringFromFile(file)
 		if err != nil {
+			childSpan.RecordError(err)
 			httpStatusError(w, r, 404)
 			return
 		}
@@ -265,6 +290,9 @@ func xTeVe(w http.ResponseWriter, r *http.Request) {
 
 	// M3U File
 	if strings.Contains(path, "m3u/") {
+		_, childSpan := otel.Tracer("webserver").Start(r.Context(), "m3u")
+		defer childSpan.End()
+
 		requestType = "m3u"
 		groupTitle = r.URL.Query().Get("group-title")
 
@@ -280,6 +308,7 @@ func xTeVe(w http.ResponseWriter, r *http.Request) {
 
 		content, err = buildM3U(groups)
 		if err != nil {
+			childSpan.RecordError(err)
 			ShowError(err, 000)
 		}
 	}
@@ -310,6 +339,7 @@ func Images(w http.ResponseWriter, r *http.Request) {
 
 	content, err := readByteFromFile(filePath)
 	if err != nil {
+		trace.SpanFromContext(r.Context()).RecordError(err)
 		httpStatusError(w, r, 404)
 		return
 	}
@@ -329,6 +359,7 @@ func DataImages(w http.ResponseWriter, r *http.Request) {
 
 	content, err := readByteFromFile(filePath)
 	if err != nil {
+		trace.SpanFromContext(r.Context()).RecordError(err)
 		httpStatusError(w, r, 404)
 		return
 	}
@@ -820,6 +851,7 @@ func Web(w http.ResponseWriter, r *http.Request) {
 func API(w http.ResponseWriter, r *http.Request) {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
+		trace.SpanFromContext(r.Context()).RecordError(err)
 		// Log the error for debugging, but still deny access.
 		ShowError(fmt.Errorf("API: error parsing RemoteAddr '%s': %w", r.RemoteAddr, err), 0)
 		http.Error(w, "Forbidden", http.StatusForbidden)
@@ -1078,6 +1110,29 @@ func (rs *ResponseStruct) setDefaultResponseData(data bool) {
 		rs.Data.StreamPreviewUI.Active = Data.StreamPreviewUI.Active
 		rs.Data.StreamPreviewUI.Inactive = Data.StreamPreviewUI.Inactive
 	}
+}
+
+func newHTTPHandler() http.Handler {
+	mux := http.NewServeMux()
+
+	handleFunc := func(pattern string, handlerFunc func(http.ResponseWriter, *http.Request)) {
+		handler := otelhttp.WithRouteTag(pattern, http.HandlerFunc(handlerFunc))
+		mux.Handle(pattern, handler)
+	}
+
+	handleFunc("/", Index)
+	handleFunc("/stream/", Stream)
+	handleFunc("/xmltv/", xTeVe)
+	handleFunc("/m3u/", xTeVe)
+	handleFunc("/data/", WS)
+	handleFunc("/web/", Web)
+	handleFunc("/download/", Download)
+	handleFunc("/api/", API)
+	handleFunc("/images/", Images)
+	handleFunc("/data_images/", DataImages)
+
+	handler := otelhttp.NewHandler(mux, "/")
+	return handler
 }
 
 func httpStatusError(w http.ResponseWriter, _ *http.Request, httpStatusCode int) {

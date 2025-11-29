@@ -59,6 +59,9 @@ apps:
       - network
 
 hooks:
+  configure:
+    plugs:
+      - network
   pre-refresh: 
     plugs:
       - network
