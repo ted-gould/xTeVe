@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -19,7 +18,7 @@ import (
 func TestExporterSelection(t *testing.T) {
 	// Test case 1: OTEL_EXPORTER_TYPE is "otlp"
 	t.Run("otlp", func(t *testing.T) {
-		exporter, err := newSpanExporter(context.Background(), "otlp")
+		exporter, err := newSpanExporter(context.Background(), ExporterTypeOTLP)
 		assert.NoError(t, err)
 		assert.NotNil(t, exporter)
 		assert.IsType(t, &otlptrace.Exporter{}, exporter)
@@ -27,7 +26,7 @@ func TestExporterSelection(t *testing.T) {
 
 	// Test case 2: OTEL_EXPORTER_TYPE is not set (defaults to stdout)
 	t.Run("stdout", func(t *testing.T) {
-		exporter, err := newSpanExporter(context.Background(), "stdout")
+		exporter, err := newSpanExporter(context.Background(), ExporterTypeStdout)
 		assert.NoError(t, err)
 		assert.NotNil(t, exporter)
 		assert.IsType(t, &stdouttrace.Exporter{}, exporter)

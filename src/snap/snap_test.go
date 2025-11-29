@@ -11,6 +11,7 @@ import (
 )
 
 func TestSnapGet(t *testing.T) {
+	t.Setenv("SNAP_NAME", "xteve")
 	// Set a mock value using snapctl
 	err := exec.Command("snapctl", "set", "test-key=test-value").Run()
 	assert.NoError(t, err)

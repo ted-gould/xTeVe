@@ -64,7 +64,7 @@ func run() (err error) {
 	if err != nil {
 		log.Printf("could not get otel-exporter-type from snap: %v", err)
 	}
-	otelShutdown, err := tracing.SetupOTelSDK(ctx, otelExporterType)
+	otelShutdown, err := tracing.SetupOTelSDK(ctx, tracing.ExporterType(otelExporterType))
 	if err != nil {
 		return
 	}

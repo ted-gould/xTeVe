@@ -17,9 +17,16 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace"
 )
 
+type ExporterType string
+
+const (
+	ExporterTypeStdout ExporterType = "stdout"
+	ExporterTypeOTLP   ExporterType = "otlp"
+)
+
 // SetupOTelSDK bootstraps the OpenTelemetry pipeline.
 // If it does not return an error, make sure to call shutdown for proper cleanup.
-func SetupOTelSDK(ctx context.Context, exporterType string) (func(context.Context) error, error) {
+func SetupOTelSDK(ctx context.Context, exporterType ExporterType) (func(context.Context) error, error) {
 	var shutdownFuncs []func(context.Context) error
 	var err error
 
@@ -81,7 +88,7 @@ func newPropagator() propagation.TextMapPropagator {
 	)
 }
 
-func newTracerProvider(ctx context.Context, exporterType string) (*trace.TracerProvider, error) {
+func newTracerProvider(ctx context.Context, exporterType ExporterType) (*trace.TracerProvider, error) {
 	traceExporter, err := newSpanExporter(ctx, exporterType)
 	if err != nil {
 		return nil, err
@@ -95,9 +102,9 @@ func newTracerProvider(ctx context.Context, exporterType string) (*trace.TracerP
 	return tracerProvider, nil
 }
 
-func newSpanExporter(ctx context.Context, exporterType string) (trace.SpanExporter, error) {
+func newSpanExporter(ctx context.Context, exporterType ExporterType) (trace.SpanExporter, error) {
 	switch exporterType {
-	case "otlp":
+	case ExporterTypeOTLP:
 		return otlptracegrpc.New(ctx)
 	default:
 		return stdouttrace.New(
