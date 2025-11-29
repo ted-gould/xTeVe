@@ -49,7 +49,7 @@ Documentation for setup and configuration is [here](https://github.com/ted-gould
 
 ### Requirements
 
-* [Go](https://go.dev/dl/) (1.23 or newer)
+* [Go](https://go.dev/dl/) (1.24 or newer)
 * [Node.js](https://nodejs.org/en/download/) (which includes `npm`)
 
 ### Dependencies
