@@ -3,9 +3,11 @@ package tracing
 import (
 	"context"
 	"errors"
+	"os"
 	"time"
 
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/stdout/stdoutlog"
 	"go.opentelemetry.io/otel/exporters/stdout/stdoutmetric"
 	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
@@ -44,7 +46,7 @@ func SetupOTelSDK(ctx context.Context) (func(context.Context) error, error) {
 	otel.SetTextMapPropagator(prop)
 
 	// Set up trace provider.
-	tracerProvider, err := newTracerProvider()
+	tracerProvider, err := newTracerProvider(ctx)
 	if err != nil {
 		handleErr(err)
 		return shutdown, err
@@ -80,9 +82,8 @@ func newPropagator() propagation.TextMapPropagator {
 	)
 }
 
-func newTracerProvider() (*trace.TracerProvider, error) {
-	traceExporter, err := stdouttrace.New(
-		stdouttrace.WithPrettyPrint())
+func newTracerProvider(ctx context.Context) (*trace.TracerProvider, error) {
+	traceExporter, err := newSpanExporter(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -93,6 +94,16 @@ func newTracerProvider() (*trace.TracerProvider, error) {
 			trace.WithBatchTimeout(time.Second)),
 	)
 	return tracerProvider, nil
+}
+
+func newSpanExporter(ctx context.Context) (trace.SpanExporter, error) {
+	switch os.Getenv("OTEL_EXPORTER_TYPE") {
+	case "otlp":
+		return otlptracegrpc.New(ctx)
+	default:
+		return stdouttrace.New(
+			stdouttrace.WithPrettyPrint())
+	}
 }
 
 func newMeterProvider() (*metric.MeterProvider, error) {

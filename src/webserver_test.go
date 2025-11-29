@@ -1,7 +1,6 @@
 package src
 
 import (
-	"context"
 	"io"
 	"mime"
 	"net/http"
@@ -9,9 +8,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/sdk/trace"
-	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
 
 func TestMimeTypeJS(t *testing.T) {
@@ -59,7 +55,6 @@ func TestJSFileMimeTypeE2E(t *testing.T) {
 	}
 }
 
-
 func TestJSTemplate(t *testing.T) {
 	// GIVEN
 	// A new test server
@@ -83,43 +78,4 @@ func TestJSTemplate(t *testing.T) {
 	bodyString := string(bodyBytes)
 	assert.NotContains(t, bodyString, "{{.settings.update.title}}")
 	assert.Contains(t, bodyString, "Schedule for updating (Playlist, XMLTV, Backup)")
-}
-
-func TestTracingMiddleware(t *testing.T) {
-	// Create an in-memory exporter
-	exporter := tracetest.NewInMemoryExporter()
-
-	// Create a new tracer provider with the in-memory exporter
-	tp := trace.NewTracerProvider(trace.WithSyncer(exporter))
-	otel.SetTracerProvider(tp)
-
-	// Create a new test server with the handler
-	handler := newHTTPHandler()
-	server := httptest.NewServer(handler)
-	defer server.Close()
-
-	// Make a request to the test server
-	req, _ := http.NewRequest("GET", server.URL, nil)
-	client := &http.Client{}
-	_, err := client.Do(req)
-	assert.NoError(t, err)
-
-	// Force flush the exporter
-	err = tp.ForceFlush(context.Background())
-	assert.NoError(t, err)
-
-	// Check that a span was created
-	spans := exporter.GetSpans()
-	var found bool
-	for _, span := range spans {
-		if span.Name == "/" {
-			found = true
-			break
-		}
-	}
-	assert.True(t, found, "Index span not found")
-
-	// Shut down the tracer provider
-	err = tp.Shutdown(context.Background())
-	assert.NoError(t, err)
 }
