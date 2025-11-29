@@ -43,6 +43,7 @@ func StartWebserver() (err error) {
 	http.HandleFunc("/api/", API)
 	http.HandleFunc("/images/", Images)
 	http.HandleFunc("/data_images/", DataImages)
+	http.Handle("/dav/", WebDAVHandler())
 	// http.HandleFunc("/auto/", Auto)
 
 	for {
