@@ -16,22 +16,6 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
 
-type testTracerProvider struct {
-	*sdktrace.TracerProvider
-	exporter sdktrace.SpanExporter
-}
-
-func (tp *testTracerProvider) GetSpanExporter() sdktrace.SpanExporter {
-	return tp.exporter
-}
-
-func newTestTracerProvider(exporter sdktrace.SpanExporter) *testTracerProvider {
-	return &testTracerProvider{
-		TracerProvider: sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter)),
-		exporter:       exporter,
-	}
-}
-
 func TestExporterSelection(t *testing.T) {
 	// Test case 1: OTEL_EXPORTER_TYPE is "otlp"
 	t.Run("otlp", func(t *testing.T) {
