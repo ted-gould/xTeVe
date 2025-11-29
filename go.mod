@@ -17,6 +17,7 @@ require (
 )
 
 require (
+	github.com/canonical/go-snapctl v1.0.0-beta.3 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect

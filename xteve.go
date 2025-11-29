@@ -19,6 +19,7 @@ import (
 	"strings"
 
 	"xteve/src"
+	"xteve/src/snap"
 	"xteve/src/tracing"
 )
 
@@ -59,7 +60,11 @@ func run() (err error) {
 	defer stop()
 
 	// Set up OpenTelemetry.
-	otelShutdown, err := tracing.SetupOTelSDK(ctx)
+	otelExporterType, err := snap.Get("otel-exporter-type")
+	if err != nil {
+		log.Printf("could not get otel-exporter-type from snap: %v", err)
+	}
+	otelShutdown, err := tracing.SetupOTelSDK(ctx, otelExporterType)
 	if err != nil {
 		return
 	}

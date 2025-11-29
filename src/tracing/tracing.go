@@ -3,7 +3,6 @@ package tracing
 import (
 	"context"
 	"errors"
-	"os"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -20,7 +19,7 @@ import (
 
 // SetupOTelSDK bootstraps the OpenTelemetry pipeline.
 // If it does not return an error, make sure to call shutdown for proper cleanup.
-func SetupOTelSDK(ctx context.Context) (func(context.Context) error, error) {
+func SetupOTelSDK(ctx context.Context, exporterType string) (func(context.Context) error, error) {
 	var shutdownFuncs []func(context.Context) error
 	var err error
 
@@ -46,7 +45,7 @@ func SetupOTelSDK(ctx context.Context) (func(context.Context) error, error) {
 	otel.SetTextMapPropagator(prop)
 
 	// Set up trace provider.
-	tracerProvider, err := newTracerProvider(ctx)
+	tracerProvider, err := newTracerProvider(ctx, exporterType)
 	if err != nil {
 		handleErr(err)
 		return shutdown, err
@@ -82,8 +81,8 @@ func newPropagator() propagation.TextMapPropagator {
 	)
 }
 
-func newTracerProvider(ctx context.Context) (*trace.TracerProvider, error) {
-	traceExporter, err := newSpanExporter(ctx)
+func newTracerProvider(ctx context.Context, exporterType string) (*trace.TracerProvider, error) {
+	traceExporter, err := newSpanExporter(ctx, exporterType)
 	if err != nil {
 		return nil, err
 	}
@@ -96,8 +95,8 @@ func newTracerProvider(ctx context.Context) (*trace.TracerProvider, error) {
 	return tracerProvider, nil
 }
 
-func newSpanExporter(ctx context.Context) (trace.SpanExporter, error) {
-	switch os.Getenv("OTEL_EXPORTER_TYPE") {
+func newSpanExporter(ctx context.Context, exporterType string) (trace.SpanExporter, error) {
+	switch exporterType {
 	case "otlp":
 		return otlptracegrpc.New(ctx)
 	default:

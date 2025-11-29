@@ -19,8 +19,7 @@ import (
 func TestExporterSelection(t *testing.T) {
 	// Test case 1: OTEL_EXPORTER_TYPE is "otlp"
 	t.Run("otlp", func(t *testing.T) {
-		os.Setenv("OTEL_EXPORTER_TYPE", "otlp")
-		exporter, err := newSpanExporter(context.Background())
+		exporter, err := newSpanExporter(context.Background(), "otlp")
 		assert.NoError(t, err)
 		assert.NotNil(t, exporter)
 		assert.IsType(t, &otlptrace.Exporter{}, exporter)
@@ -28,8 +27,7 @@ func TestExporterSelection(t *testing.T) {
 
 	// Test case 2: OTEL_EXPORTER_TYPE is not set (defaults to stdout)
 	t.Run("stdout", func(t *testing.T) {
-		os.Unsetenv("OTEL_EXPORTER_TYPE")
-		exporter, err := newSpanExporter(context.Background())
+		exporter, err := newSpanExporter(context.Background(), "stdout")
 		assert.NoError(t, err)
 		assert.NotNil(t, exporter)
 		assert.IsType(t, &stdouttrace.Exporter{}, exporter)

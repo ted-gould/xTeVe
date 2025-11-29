@@ -89,20 +89,20 @@ xTeVe supports OpenTelemetry tracing, which allows you to send traces to an obse
 
 ### Configuration
 
-The OpenTelemetry exporter can be configured using the following environment variables:
+The OpenTelemetry exporter can be configured using `snap set`:
 
-| Variable | Description | Default |
+| Key | Description | Default |
 | --- | --- | --- |
-| `OTEL_EXPORTER_TYPE` | The type of exporter to use. Supported values are `stdout` and `otlp`. | `stdout` |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | The endpoint to send traces to when using the `otlp` exporter. | |
-| `OTEL_EXPORTER_OTLP_HEADERS` | Headers to send with each trace when using the `otlp` exporter. | |
+| `otel-exporter-type` | The type of exporter to use. Supported values are `stdout` and `otlp`. | `stdout` |
+| `otel-exporter-otlp-endpoint` | The endpoint to send traces to when using the `otlp` exporter. | |
+| `otel-exporter-otlp-headers` | Headers to send with each trace when using the `otlp` exporter. | |
 
 ### Example: Exporting to Axiom
 
 To export traces to [Axiom](https://axiom.co), you can use the following configuration:
 
 ```sh
-export OTEL_EXPORTER_TYPE="otlp"
-export OTEL_EXPORTER_OTLP_ENDPOINT="https://api.axiom.co"
-export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Bearer <YOUR_AXIOM_API_TOKEN>"
+sudo snap set xteve otel-exporter-type="otlp"
+sudo snap set xteve otel-exporter-otlp-endpoint="https://api.axiom.co"
+sudo snap set xteve otel-exporter-otlp-headers="Authorization=Bearer <YOUR_AXIOM_API_TOKEN>"
 ```
