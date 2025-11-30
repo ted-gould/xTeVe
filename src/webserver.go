@@ -23,6 +23,7 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
+	"golang.org/x/net/webdav"
 )
 
 // webAlerts channel to send to client
@@ -1130,6 +1131,18 @@ func newHTTPHandler() http.Handler {
 	handleFunc("/api/", API)
 	handleFunc("/images/", Images)
 	handleFunc("/data_images/", DataImages)
+
+	davHandler := &webdav.Handler{
+		Prefix:     "/dav/",
+		FileSystem: &WebDAVFS{},
+		LockSystem: webdav.NewMemLS(),
+		Logger: func(r *http.Request, err error) {
+			if err != nil {
+				log.Printf("WEBDAV ERROR: %s", err)
+			}
+		},
+	}
+	mux.Handle("/dav/", otelhttp.WithRouteTag("/dav/", davHandler))
 
 	handler := otelhttp.NewHandler(mux, "/")
 	return handler
