@@ -24,7 +24,7 @@
   "homepage": "https://github.com/ted-gould/xTeVe#readme",
   "devDependencies": {
     "@playwright/test": "^1.57.0",
-    "prettier": "^3.7.3",
+    "prettier": "^3.7.4",
     "typescript": "^5.9.3"
   }
 }
