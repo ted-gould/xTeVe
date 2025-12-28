@@ -161,6 +161,8 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 	var err error
 	var debug string
 
+	rc := http.NewResponseController(w)
+
 	w.Header().Set("Connection", "close")
 
 	playlist, stream, _, streamID, newStream, err = reserveStreamSlot(playlistID, streamingURL, channelName)
@@ -307,6 +309,9 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 									w.Header().Set("Content-Length", "0")
 									w.Header().Set("Connection", "close")
 									streaming = true
+								}
+								if Settings.BufferClientTimeout > 0 {
+									_ = rc.SetWriteDeadline(time.Now().Add(time.Duration(Settings.BufferClientTimeout) * time.Millisecond))
 								}
 								if _, errWrite := w.Write(buffer); errWrite != nil {
 									file.Close()

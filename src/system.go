@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -96,6 +98,7 @@ func loadSettings() (settings SettingsStruct, err error) {
 	defaults["backup.path"] = System.Folder.Backup
 	defaults["buffer.size.kb"] = 1024
 	defaults["buffer.timeout"] = 500
+	defaults["buffer.client.timeout"] = 60000
 	defaults["buffer"] = "-"
 	defaults["cache.images"] = false
 	defaults["clearXMLTVCache"] = false
@@ -144,6 +147,13 @@ func loadSettings() (settings SettingsStruct, err error) {
 	// Adopt the settings from the Flags
 	if len(System.Flag.Port) > 0 {
 		settings.Port = System.Flag.Port
+	}
+
+	// Override BufferClientTimeout from environment variable if set
+	if envVal := os.Getenv("XTEVE_BUFFER_CLIENT_TIMEOUT"); envVal != "" {
+		if val, err := strconv.ParseFloat(envVal, 64); err == nil {
+			settings.BufferClientTimeout = val
+		}
 	}
 
 	// Initialze virutal filesystem for the Buffer
