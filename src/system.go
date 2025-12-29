@@ -121,7 +121,12 @@ func loadSettings() (settings SettingsStruct, err error) {
 	defaults["udpxy"] = ""
 	defaults["update"] = []string{"0000"}
 	defaults["user.agent"] = System.Name
-	defaults["uuid"] = createUUID()
+	var uuid string
+	uuid, err = createUUID()
+	if err != nil {
+		return
+	}
+	defaults["uuid"] = uuid
 	defaults["version"] = System.DBVersion
 	defaults["xepg.replace.missing.images"] = true
 	defaults["xteveAutoUpdate"] = true
@@ -226,8 +231,17 @@ func setGlobalDomain(domain string) {
 }
 
 // Generate UUID
-func createUUID() (uuid string) {
-	uuid = time.Now().Format("2006-01") + "-" + randomString(4) + "-" + randomString(6)
+func createUUID() (uuid string, err error) {
+	var part1, part2 string
+	part1, err = randomString(4)
+	if err != nil {
+		return
+	}
+	part2, err = randomString(6)
+	if err != nil {
+		return
+	}
+	uuid = time.Now().Format("2006-01") + "-" + part1 + "-" + part2
 	return
 }
 

@@ -23,3 +23,15 @@ func TestResolveHostIPNoPanic(t *testing.T) {
 		t.Fatalf("resolveHostIP() returned an error: %v", err)
 	}
 }
+
+func TestRandomString(t *testing.T) {
+	n := 10
+	s, err := randomString(n)
+	if err != nil {
+		t.Fatalf("randomString returned an error: %v", err)
+	}
+
+	if len(s) != n {
+		t.Errorf("Expected length %d, got %d", n, len(s))
+	}
+}

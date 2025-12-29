@@ -240,7 +240,12 @@ func saveFiles(request RequestStruct, fileType string) (err error) {
 	for dataID, data := range newData {
 		if dataID == "-" {
 			// New Provider File
-			dataID = indicator + randomString(19)
+			var rStr string
+			rStr, err = randomString(19)
+			if err != nil {
+				return
+			}
+			dataID = indicator + rStr
 			if dMap, ok := data.(map[string]any); ok {
 				dMap["new"] = true
 				if url, ok := dMap["url"]; ok {
@@ -643,7 +648,12 @@ func saveWizard(request RequestStruct) (nextStep int, err error) {
 				indicator = "X"
 			}
 
-			dataID = indicator + randomString(19)
+			var rStr string
+			rStr, err = randomString(19)
+			if err != nil {
+				return
+			}
+			dataID = indicator + rStr
 			if s, ok := value.(string); ok {
 				data["file.source"] = s
 			} else {

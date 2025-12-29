@@ -373,23 +373,20 @@ func resolveHostIP() (err error) {
 }
 
 // Miscellaneous
-func randomString(n int) string {
+func randomString(n int) (string, error) {
 	const alphanum = "AB1CD2EF3GH4IJ5KL6MN7OP8QR9ST0UVWXYZ"
 
 	var bytes = make([]byte, n)
 
 	if _, err := rand.Read(bytes); err != nil {
 		log.Printf("Error reading random bytes for randomString: %v", err)
-		// Fallback to a less random or empty string, or panic if this is critical
-		// For now, returning a fixed string or empty to avoid panic,
-		// but this might have security implications depending on usage.
-		return "error_generating_random_string"
+		return "", err
 	}
 
 	for i, b := range bytes {
 		bytes[i] = alphanum[b%byte(len(alphanum))]
 	}
-	return string(bytes)
+	return string(bytes), nil
 }
 
 func parseTemplate(content string, tmpMap map[string]any) (result string) {
