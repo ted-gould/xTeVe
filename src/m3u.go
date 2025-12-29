@@ -109,7 +109,6 @@ func FilterThisStream(s any) (status bool) {
 				match = true
 				stream["_preserve-mapping"] = strconv.FormatBool(filter.PreserveMapping)
 				stream["_starting-channel"] = filter.StartingChannel
-				searchTarget = effectiveStreamValues
 			}
 		case "custom-filter":
 			searchTarget = effectiveStreamValues // For custom-filter, conditions check against stream values

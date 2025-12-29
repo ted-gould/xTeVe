@@ -125,7 +125,7 @@ func TestFilterThisStream_ExcludeExactPhrase(t *testing.T) {
 	}
 	streamToExclude := map[string]string{
 		"name":        "CSPAN 2",
-		"group-title": "News",
+		"group-title": "News CSPAN 2", // Move "CSPAN 2" to group-title to test group filtering
 		"_values":     "CSPAN 2 News",
 	}
 
