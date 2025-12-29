@@ -81,7 +81,10 @@ func reserveStreamSlot(playlistID, streamingURL, channelName string) (*Playlist,
 		stream.ChannelName = channelName
 		stream.Status = false
 		// Populated from updateStreamWithMetadata
-		stream.MD5 = getMD5(streamingURL)
+		stream.MD5, err = getMD5(streamingURL)
+		if err != nil {
+			return playlist, stream, client, -1, false, err
+		}
 		stream.Folder = playlist.Folder + stream.MD5 + string(os.PathSeparator)
 		stream.PlaylistID = playlistID
 		stream.PlaylistName = playlist.PlaylistName
@@ -136,7 +139,11 @@ func reserveStreamSlot(playlistID, streamingURL, channelName string) (*Playlist,
 			stream.ChannelName = channelName
 			stream.Status = false
 			// Populated from updateStreamWithMetadata
-			stream.MD5 = getMD5(streamingURL)
+			var err error
+			stream.MD5, err = getMD5(streamingURL)
+			if err != nil {
+				return playlist, stream, client, -1, false, err
+			}
 			stream.Folder = playlist.Folder + stream.MD5 + string(os.PathSeparator)
 			stream.PlaylistID = playlistID
 			stream.PlaylistName = playlist.PlaylistName

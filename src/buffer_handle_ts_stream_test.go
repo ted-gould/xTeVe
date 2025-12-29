@@ -48,7 +48,10 @@ func TestHandleTSStream(t *testing.T) {
 		}
 	}()
 
-	md5 := getMD5(server.URL)
+	md5, err := getMD5(server.URL)
+	if err != nil {
+		t.Fatalf("getMD5 failed: %v", err)
+	}
 	stream := ThisStream{
 		URL:        server.URL,
 		Folder:     tmpFolder,
@@ -160,7 +163,10 @@ func TestHandleTSStream_Corrupted(t *testing.T) {
 		}
 	}()
 
-	md5 := getMD5(server.URL)
+	md5, err := getMD5(server.URL)
+	if err != nil {
+		t.Fatalf("getMD5 failed: %v", err)
+	}
 	stream := ThisStream{
 		URL:        server.URL,
 		Folder:     tmpFolder,
