@@ -50,6 +50,7 @@ func (fs *WebDAVFS) Mkdir(ctx context.Context, name string, perm os.FileMode) er
 // OpenFile opens a file or directory
 func (fs *WebDAVFS) OpenFile(ctx context.Context, name string, flag int, perm os.FileMode) (webdav.File, error) {
 	name = strings.TrimPrefix(name, "/")
+	name = strings.TrimSuffix(name, "/")
 
 	// Root directory
 	if name == "" {
@@ -100,6 +101,7 @@ func (fs *WebDAVFS) Rename(ctx context.Context, oldName, newName string) error {
 // Stat returns file info
 func (fs *WebDAVFS) Stat(ctx context.Context, name string) (os.FileInfo, error) {
 	name = strings.TrimPrefix(name, "/")
+	name = strings.TrimSuffix(name, "/")
 
 	// Root directory
 	if name == "" {
