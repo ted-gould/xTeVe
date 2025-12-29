@@ -276,7 +276,10 @@ func createStreamingURL(streamingType, playlistID, channelNumber, channelName, u
 		Data.Cache.StreamingURLS = make(map[string]StreamInfo)
 	}
 
-	var urlID = getMD5(fmt.Sprintf("%s-%s", playlistID, url))
+	urlID, err := getMD5(fmt.Sprintf("%s-%s", playlistID, url))
+	if err != nil {
+		return "", err
+	}
 
 	if s, ok := Data.Cache.StreamingURLS[urlID]; ok {
 		streamInfo = s

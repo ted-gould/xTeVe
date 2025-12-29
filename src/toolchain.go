@@ -401,13 +401,11 @@ func parseTemplate(content string, tmpMap map[string]any) (result string) {
 	return
 }
 
-func getMD5(str string) string {
+func getMD5(str string) (string, error) {
 	md5Hasher := md5.New()
 	if _, err := md5Hasher.Write([]byte(str)); err != nil {
 		log.Printf("Error writing to md5 hasher: %v", err)
-		// Return an empty string or a fixed error indicator.
-		// This depends on how callers handle an MD5 generation failure.
-		return "" // Or a specific error string like "md5_error"
+		return "", err
 	}
-	return hex.EncodeToString(md5Hasher.Sum(nil))
+	return hex.EncodeToString(md5Hasher.Sum(nil)), nil
 }

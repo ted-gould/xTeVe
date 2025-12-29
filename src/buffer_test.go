@@ -129,7 +129,10 @@ func TestConnectToStreamingServer_Buffering(t *testing.T) {
 	streamURL := server.URL
 	channelName := "TestChannel"
 	tempFolder := "/tmp/xteve_test/"
-	md5 := getMD5(streamURL)
+	md5, err := getMD5(streamURL)
+	if err != nil {
+		t.Fatalf("getMD5 failed: %v", err)
+	}
 	streamFolder := tempFolder + md5 + string(os.PathSeparator)
 
 	playlist := Playlist{
@@ -252,7 +255,10 @@ func TestBufferingStream_NewStreamClientRegistration(t *testing.T) {
 	playlistID := "M-NewStreamTest"
 	streamURL := server.URL
 	channelName := "NewStreamChannel"
-	md5 := getMD5(streamURL)
+	md5, err := getMD5(streamURL)
+	if err != nil {
+		t.Fatalf("getMD5 failed: %v", err)
+	}
 
 	// Cleanup function to be called at the end
 	defer func() {
@@ -342,7 +348,10 @@ func TestRaceCondition_KillAndStreamEOF(t *testing.T) {
 	playlistID := "M-race-test"
 	streamID := 0
 	streamURL := server.URL
-	md5 := getMD5(streamURL)
+	md5, err := getMD5(streamURL)
+	if err != nil {
+		t.Fatalf("getMD5 failed: %v", err)
+	}
 
 	playlist := Playlist{
 		PlaylistID: playlistID,
@@ -406,7 +415,10 @@ func TestTunerCountOnDisconnect(t *testing.T) {
 	streamURL := "http://localhost/stream"
 	channelName := "TestChannel"
 	tempFolder := "/tmp/xteve_test_disconnect/"
-	md5 := getMD5(streamURL)
+	md5, err := getMD5(streamURL)
+	if err != nil {
+		t.Fatalf("getMD5 failed: %v", err)
+	}
 	streamFolder := tempFolder + md5 + string(os.PathSeparator)
 
 	// Create a dummy playlist and stream info
@@ -505,7 +517,10 @@ func TestBufferingStream_ClosesOnStreamEnd(t *testing.T) {
 	streamURL := server.URL
 	channelName := "TestChannel"
 	tempFolder := "/tmp/xteve_test_closes/"
-	md5 := getMD5(streamURL)
+	md5, err := getMD5(streamURL)
+	if err != nil {
+		t.Fatalf("getMD5 failed: %v", err)
+	}
 	streamFolder := tempFolder + md5 + string(os.PathSeparator)
 
 	playlist := Playlist{
