@@ -35,7 +35,7 @@ func TestExporterSelection(t *testing.T) {
 
 	// Test case 3: OTEL_EXPORTER_OTLP_HEADERS is set
 	t.Run("otlp_headers", func(t *testing.T) {
-		os.Setenv("OTEL_EXPORTER_OTLP_HEADERS", "x-axiom-dataset=test-dataset")
+		os.Setenv("OTEL_EXPORTER_OTLP_HEADERS", "x-axiom-dataset=test-dataset,Authorization=Bearer token")
 		defer os.Unsetenv("OTEL_EXPORTER_OTLP_HEADERS")
 
 		exporter, err := newSpanExporter(context.Background(), ExporterTypeOTLP)
