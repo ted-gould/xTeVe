@@ -20,8 +20,10 @@ import (
 )
 
 const (
-	dirOnDemand = "On Demand"
-	fileListing = "listing.m3u"
+	dirOnDemand   = "On Demand"
+	fileListing   = "listing.m3u"
+	dirSeries     = "Series"
+	dirIndividual = "Individual"
 )
 
 // WebDAVFS implements the webdav.FileSystem interface
@@ -87,10 +89,25 @@ func (fs *WebDAVFS) OpenFile(ctx context.Context, name string, flag int, perm os
 	case 3:
 		return fs.openOnDemandGroupDir(hash, parts[1], parts[2])
 	case 4:
-		return fs.openOnDemandStream(ctx, hash, parts[1], parts[2], parts[3])
-	default:
-		return nil, os.ErrNotExist
+		return fs.openOnDemandGroupSubDir(hash, parts[1], parts[2], parts[3])
+	case 5:
+		if parts[3] == dirSeries {
+			return fs.openOnDemandSeriesDir(hash, parts[1], parts[2], parts[4])
+		}
+		if parts[3] == dirIndividual {
+			return fs.openOnDemandIndividualStream(ctx, hash, parts[1], parts[2], parts[4])
+		}
+	case 6:
+		if parts[3] == dirSeries {
+			return fs.openOnDemandSeasonDir(hash, parts[1], parts[2], parts[4], parts[5])
+		}
+	case 7:
+		if parts[3] == dirSeries {
+			return fs.openOnDemandSeriesStream(ctx, hash, parts[1], parts[2], parts[4], parts[5], parts[6])
+		}
 	}
+
+	return nil, os.ErrNotExist
 }
 
 func (fs *WebDAVFS) openHashDir(hash string) (webdav.File, error) {
@@ -112,14 +129,51 @@ func (fs *WebDAVFS) openHashSubDir(hash, sub string) (webdav.File, error) {
 	return nil, os.ErrNotExist
 }
 
+func (fs *WebDAVFS) groupExists(hash, group string) bool {
+	groups := getGroupsForHash(hash)
+	for _, g := range groups {
+		if sanitizeGroupName(g) == group {
+			return true
+		}
+	}
+	return false
+}
+
 func (fs *WebDAVFS) openOnDemandGroupDir(hash, sub, group string) (webdav.File, error) {
 	if sub != dirOnDemand {
 		return nil, os.ErrNotExist
 	}
-	groups := getGroupsForHash(hash)
+	if !fs.groupExists(hash, group) {
+		return nil, os.ErrNotExist
+	}
+	return &webdavDir{name: path.Join(hash, sub, group)}, nil
+}
+
+func (fs *WebDAVFS) openOnDemandGroupSubDir(hash, sub, group, typeDir string) (webdav.File, error) {
+	if sub != dirOnDemand {
+		return nil, os.ErrNotExist
+	}
+	if !fs.groupExists(hash, group) {
+		return nil, os.ErrNotExist
+	}
+	if typeDir == dirSeries || typeDir == dirIndividual {
+		return &webdavDir{name: path.Join(hash, sub, group, typeDir)}, nil
+	}
+	return nil, os.ErrNotExist
+}
+
+func (fs *WebDAVFS) openOnDemandSeriesDir(hash, sub, group, series string) (webdav.File, error) {
+	if sub != dirOnDemand {
+		return nil, os.ErrNotExist
+	}
+	if !fs.groupExists(hash, group) {
+		return nil, os.ErrNotExist
+	}
+	// Check if series exists
+	seriesList := getSeriesList(hash, group)
 	found := false
-	for _, g := range groups {
-		if sanitizeGroupName(g) == group {
+	for _, s := range seriesList {
+		if s == series {
 			found = true
 			break
 		}
@@ -127,14 +181,51 @@ func (fs *WebDAVFS) openOnDemandGroupDir(hash, sub, group string) (webdav.File, 
 	if !found {
 		return nil, os.ErrNotExist
 	}
-	return &webdavDir{name: path.Join(hash, sub, group)}, nil
+	return &webdavDir{name: path.Join(hash, sub, group, dirSeries, series)}, nil
 }
 
-func (fs *WebDAVFS) openOnDemandStream(ctx context.Context, hash, sub, group, filename string) (webdav.File, error) {
+func (fs *WebDAVFS) openOnDemandSeasonDir(hash, sub, group, series, season string) (webdav.File, error) {
 	if sub != dirOnDemand {
 		return nil, os.ErrNotExist
 	}
-	stream, err := findStreamByFilename(hash, group, filename)
+	if !fs.groupExists(hash, group) {
+		return nil, os.ErrNotExist
+	}
+	// Check if season exists
+	seasons := getSeasonsList(hash, group, series)
+	found := false
+	for _, s := range seasons {
+		if s == season {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return nil, os.ErrNotExist
+	}
+	return &webdavDir{name: path.Join(hash, sub, group, dirSeries, series, season)}, nil
+}
+
+func (fs *WebDAVFS) openOnDemandIndividualStream(ctx context.Context, hash, sub, group, filename string) (webdav.File, error) {
+	if sub != dirOnDemand {
+		return nil, os.ErrNotExist
+	}
+	stream, err := findIndividualStream(hash, group, filename)
+	if err != nil {
+		return nil, os.ErrNotExist
+	}
+	return &webdavStream{
+		stream: stream,
+		name:   filename,
+		ctx:    ctx,
+	}, nil
+}
+
+func (fs *WebDAVFS) openOnDemandSeriesStream(ctx context.Context, hash, sub, group, series, season, filename string) (webdav.File, error) {
+	if sub != dirOnDemand {
+		return nil, os.ErrNotExist
+	}
+	stream, err := findSeriesStream(hash, group, series, season, filename)
 	if err != nil {
 		return nil, os.ErrNotExist
 	}
@@ -164,57 +255,8 @@ func (fs *WebDAVFS) RemoveAll(ctx context.Context, name string) error {
 		return os.ErrNotExist
 	}
 
-	switch len(parts) {
-	case 1:
-		return fs.removeAllHashDir(hash)
-	case 2:
-		return fs.removeAllHashSubDir(hash, parts[1])
-	case 3:
-		return fs.removeAllOnDemandGroupDir(hash, parts[1], parts[2])
-	case 4:
-		return fs.removeAllOnDemandStream(hash, parts[1], parts[2], parts[3])
-	default:
-		return os.ErrNotExist
-	}
-}
-
-func (fs *WebDAVFS) removeAllHashDir(hash string) error {
-	return os.ErrPermission
-}
-
-func (fs *WebDAVFS) removeAllHashSubDir(hash, sub string) error {
-	if sub == fileListing {
-		return os.ErrPermission
-	}
-	if sub == dirOnDemand {
-		return os.ErrPermission
-	}
-	return os.ErrNotExist
-}
-
-func (fs *WebDAVFS) removeAllOnDemandGroupDir(hash, sub, group string) error {
-	if sub != dirOnDemand {
-		return os.ErrNotExist
-	}
-	groups := getGroupsForHash(hash)
-	found := false
-	for _, g := range groups {
-		if sanitizeGroupName(g) == group {
-			found = true
-			break
-		}
-	}
-	if !found {
-		return os.ErrNotExist
-	}
-	return os.ErrPermission
-}
-
-func (fs *WebDAVFS) removeAllOnDemandStream(hash, sub, group, filename string) error {
-	if sub != dirOnDemand {
-		return os.ErrNotExist
-	}
-	_, err := findStreamByFilename(hash, group, filename)
+	// Just check if it exists and return ErrPermission, otherwise ErrNotExist
+	_, err := fs.Stat(ctx, name)
 	if err != nil {
 		return os.ErrNotExist
 	}
@@ -251,12 +293,56 @@ func (fs *WebDAVFS) Stat(ctx context.Context, name string) (os.FileInfo, error) 
 	case 2:
 		return fs.statHashSubDir(hash, parts[1])
 	case 3:
-		return fs.statOnDemandGroupDir(hash, parts[1], parts[2])
+		// Group dir
+		if parts[1] == dirOnDemand && fs.groupExists(hash, parts[2]) {
+			return &mkDirInfo{name: parts[2]}, nil
+		}
 	case 4:
-		return fs.statOnDemandStream(hash, parts[1], parts[2], parts[3])
-	default:
-		return nil, os.ErrNotExist
+		// Series or Individual dir
+		if parts[1] == dirOnDemand && fs.groupExists(hash, parts[2]) {
+			if parts[3] == dirSeries || parts[3] == dirIndividual {
+				return &mkDirInfo{name: parts[3]}, nil
+			}
+		}
+	case 5:
+		if parts[1] == dirOnDemand && fs.groupExists(hash, parts[2]) {
+			if parts[3] == dirIndividual {
+				// File in Individual
+				_, err := findIndividualStream(hash, parts[2], parts[4])
+				if err == nil {
+					return &mkFileInfo{name: parts[4], size: 0, modTime: time.Now()}, nil
+				}
+			} else if parts[3] == dirSeries {
+				// Series Dir
+				seriesList := getSeriesList(hash, parts[2])
+				for _, s := range seriesList {
+					if s == parts[4] {
+						return &mkDirInfo{name: parts[4]}, nil
+					}
+				}
+			}
+		}
+	case 6:
+		if parts[1] == dirOnDemand && fs.groupExists(hash, parts[2]) && parts[3] == dirSeries {
+			// Season Dir
+			seasons := getSeasonsList(hash, parts[2], parts[4])
+			for _, s := range seasons {
+				if s == parts[5] {
+					return &mkDirInfo{name: parts[5]}, nil
+				}
+			}
+		}
+	case 7:
+		if parts[1] == dirOnDemand && fs.groupExists(hash, parts[2]) && parts[3] == dirSeries {
+			// File in Series
+			_, err := findSeriesStream(hash, parts[2], parts[4], parts[5], parts[6])
+			if err == nil {
+				return &mkFileInfo{name: parts[6], size: 0, modTime: time.Now()}, nil
+			}
+		}
 	}
+
+	return nil, os.ErrNotExist
 }
 
 func (fs *WebDAVFS) statHashDir(hash string) (os.FileInfo, error) {
@@ -276,36 +362,6 @@ func (fs *WebDAVFS) statHashSubDir(hash, sub string) (os.FileInfo, error) {
 		return &mkDirInfo{name: dirOnDemand}, nil
 	}
 	return nil, os.ErrNotExist
-}
-
-func (fs *WebDAVFS) statOnDemandGroupDir(hash, sub, group string) (os.FileInfo, error) {
-	if sub != dirOnDemand {
-		return nil, os.ErrNotExist
-	}
-	groups := getGroupsForHash(hash)
-	found := false
-	for _, g := range groups {
-		if sanitizeGroupName(g) == group {
-			found = true
-			break
-		}
-	}
-	if !found {
-		return nil, os.ErrNotExist
-	}
-	return &mkDirInfo{name: group}, nil
-}
-
-func (fs *WebDAVFS) statOnDemandStream(hash, sub, group, filename string) (os.FileInfo, error) {
-	if sub != dirOnDemand {
-		return nil, os.ErrNotExist
-	}
-	_, err := findStreamByFilename(hash, group, filename)
-	if err != nil {
-		return nil, os.ErrNotExist
-	}
-	// Size 0 as we stream it
-	return &mkFileInfo{name: filename, size: 0, modTime: time.Now()}, nil
 }
 
 // webdavDir represents a virtual directory
@@ -361,9 +417,18 @@ func (d *webdavDir) collectInfos() ([]os.FileInfo, error) {
 		return d.readDirOnDemand(parts[0], parts[1])
 	case 3:
 		return d.readDirOnDemandGroup(parts[0], parts[1], parts[2])
-	default:
-		return nil, nil
+	case 4:
+		return d.readDirOnDemandGroupSub(parts[0], parts[1], parts[2], parts[3])
+	case 5:
+		if parts[3] == dirSeries {
+			return d.readDirSeries(parts[0], parts[1], parts[2], parts[4])
+		}
+	case 6:
+		if parts[3] == dirSeries {
+			return d.readDirSeason(parts[0], parts[1], parts[2], parts[4], parts[5])
+		}
 	}
+	return nil, nil
 }
 
 func (d *webdavDir) readDirRoot() ([]os.FileInfo, error) {
@@ -407,7 +472,59 @@ func (d *webdavDir) readDirOnDemandGroup(hash, sub, group string) ([]os.FileInfo
 		return nil, nil
 	}
 	var infos []os.FileInfo
-	files := getStreamFilesForGroup(hash, group)
+
+	// Check if we have individual streams
+	if len(getIndividualStreamFiles(hash, group)) > 0 {
+		infos = append(infos, &mkDirInfo{name: dirIndividual})
+	}
+
+	// Check if we have series
+	if len(getSeriesList(hash, group)) > 0 {
+		infos = append(infos, &mkDirInfo{name: dirSeries})
+	}
+
+	return infos, nil
+}
+
+func (d *webdavDir) readDirOnDemandGroupSub(hash, sub, group, subType string) ([]os.FileInfo, error) {
+	if sub != dirOnDemand {
+		return nil, nil
+	}
+	var infos []os.FileInfo
+
+	if subType == dirIndividual {
+		files := getIndividualStreamFiles(hash, group)
+		for _, f := range files {
+			infos = append(infos, &mkFileInfo{name: f, size: 0, modTime: time.Now()})
+		}
+	} else if subType == dirSeries {
+		series := getSeriesList(hash, group)
+		for _, s := range series {
+			infos = append(infos, &mkDirInfo{name: s})
+		}
+	}
+
+	return infos, nil
+}
+
+func (d *webdavDir) readDirSeries(hash, sub, group, series string) ([]os.FileInfo, error) {
+	if sub != dirOnDemand {
+		return nil, nil
+	}
+	var infos []os.FileInfo
+	seasons := getSeasonsList(hash, group, series)
+	for _, s := range seasons {
+		infos = append(infos, &mkDirInfo{name: s})
+	}
+	return infos, nil
+}
+
+func (d *webdavDir) readDirSeason(hash, sub, group, series, season string) ([]os.FileInfo, error) {
+	if sub != dirOnDemand {
+		return nil, nil
+	}
+	var infos []os.FileInfo
+	files := getSeasonFiles(hash, group, series, season)
 	for _, f := range files {
 		infos = append(infos, &mkFileInfo{name: f, size: 0, modTime: time.Now()})
 	}
@@ -479,9 +596,7 @@ func (s *webdavStream) Seek(offset int64, whence int) (int64, error) {
 			s.readCloser = nil
 		}
 		s.pos = newPos
-		// Actual open will happen on next Read, but we can try to open now or defer.
-		// Deferring is safer to avoid errors during Seek, but returning nil error implies success.
-		// Let's defer opening to Read.
+		// Actual open will happen on next Read
 	}
 
 	return newPos, nil
@@ -534,6 +649,27 @@ func (s *webdavStream) Write(p []byte) (n int, err error) {
 // Helpers
 
 var sanitizeRegex = regexp.MustCompile(`[^a-zA-Z0-9.\-_]`)
+var seriesRegex = regexp.MustCompile(`(?i)^(.*?)\s*S(\d{1,3})\s*E\d{1,3}`)
+
+func parseSeries(name string) (string, int, bool) {
+	matches := seriesRegex.FindStringSubmatch(name)
+	if len(matches) < 3 {
+		// Try a slightly relaxed check if strict failed, similar to the test script logic?
+		// The test script refined regex was: (?i)^(.*?)\s*S(\d{1,3})\s*E\d{1,3}
+		// My regex above has \s* which matches the refined one.
+		return "", 0, false
+	}
+	rawSeriesName := matches[1]
+	seasonStr := matches[2]
+
+	lastHyphen := strings.LastIndex(rawSeriesName, " - ")
+	if lastHyphen != -1 {
+		rawSeriesName = rawSeriesName[lastHyphen+3:]
+	}
+
+	sNum, _ := strconv.Atoi(seasonStr)
+	return strings.TrimSpace(rawSeriesName), sNum, true
+}
 
 func sanitizeFilename(name string) string {
 	return sanitizeRegex.ReplaceAllString(name, "_")
@@ -552,46 +688,9 @@ func getExtensionFromURL(urlStr string) string {
 	return path.Ext(u.Path)
 }
 
-func findStreamByFilename(hash, group, filename string) (map[string]string, error) {
-	// Reconstruct the logic used in getStreamFilesForGroup to match filename
-	// This is inefficient but avoids storing state.
-	// Filter streams for hash and group
-	streams := getStreamsForGroup(hash, group)
-
-	// Since we might have duplicates in names, we need to match exactly how we generated filenames.
-	// We'll generate the map of filename -> stream
-
-	nameCount := make(map[string]int)
-
-	for _, stream := range streams {
-		name := stream["name"]
-		ext := getExtensionFromURL(stream["url"])
-		if ext == "" {
-			ext = ".mp4" // Default extension
-		}
-
-		baseName := sanitizeFilename(name)
-		finalName := baseName + ext
-
-		// Handle duplicates
-		count := nameCount[finalName]
-		if count > 0 {
-			finalName = fmt.Sprintf("%s_%d%s", baseName, count, ext)
-		}
-		nameCount[baseName+ext]++
-
-		if finalName == filename {
-			return stream, nil
-		}
-	}
-
-	return nil, os.ErrNotExist
-}
-
 func getStreamsForGroup(hash, group string) []map[string]string {
 	var results []map[string]string
 
-	// Data.Streams.All is []any
 	for _, s := range Data.Streams.All {
 		stream, ok := s.(map[string]string)
 		if !ok {
@@ -599,15 +698,12 @@ func getStreamsForGroup(hash, group string) []map[string]string {
 		}
 
 		if stream["_file.m3u.id"] == hash {
-			// Check if it's VOD or Stream
 			if isVOD(stream) {
-				// Handle empty group
 				g := stream["group-title"]
 				if g == "" {
 					g = "Uncategorized"
 				}
 
-				// Compare sanitized group name because the client requests with sanitized name
 				if sanitizeGroupName(g) == group {
 					results = append(results, stream)
 				}
@@ -615,6 +711,29 @@ func getStreamsForGroup(hash, group string) []map[string]string {
 		}
 	}
 	return results
+}
+
+func getIndividualStreams(hash, group string) []map[string]string {
+	all := getStreamsForGroup(hash, group)
+	var res []map[string]string
+	for _, s := range all {
+		if _, _, isSeries := parseSeries(s["name"]); !isSeries {
+			res = append(res, s)
+		}
+	}
+	return res
+}
+
+func getSeriesStreams(hash, group, seriesName string, season int) []map[string]string {
+	all := getStreamsForGroup(hash, group)
+	var res []map[string]string
+	for _, s := range all {
+		name, sNum, isSeries := parseSeries(s["name"])
+		if isSeries && sanitizeGroupName(name) == seriesName && sNum == season {
+			res = append(res, s)
+		}
+	}
+	return res
 }
 
 func getGroupsForHash(hash string) []string {
@@ -645,8 +764,25 @@ func getGroupsForHash(hash string) []string {
 	return groups
 }
 
-func getStreamFilesForGroup(hash, group string) []string {
-	streams := getStreamsForGroup(hash, group)
+func getIndividualStreamFiles(hash, group string) []string {
+	streams := getIndividualStreams(hash, group)
+	return generateFilenames(streams)
+}
+
+func getSeasonFiles(hash, group, series, seasonStr string) []string {
+    // seasonStr is "Season X"
+    // Parse X
+    parts := strings.Split(seasonStr, " ")
+    if len(parts) < 2 {
+        return nil
+    }
+    sNum, _ := strconv.Atoi(parts[1])
+
+	streams := getSeriesStreams(hash, group, series, sNum)
+	return generateFilenames(streams)
+}
+
+func generateFilenames(streams []map[string]string) []string {
 	var files []string
 	nameCount := make(map[string]int)
 
@@ -669,6 +805,90 @@ func getStreamFilesForGroup(hash, group string) []string {
 		files = append(files, finalName)
 	}
 	return files
+}
+
+func getSeriesList(hash, group string) []string {
+	all := getStreamsForGroup(hash, group)
+	seen := make(map[string]bool)
+	for _, s := range all {
+		name, _, isSeries := parseSeries(s["name"])
+		if isSeries {
+			seen[sanitizeGroupName(name)] = true
+		}
+	}
+	var res []string
+	for k := range seen {
+		res = append(res, k)
+	}
+	sort.Strings(res)
+	return res
+}
+
+func getSeasonsList(hash, group, series string) []string {
+	// series is already sanitizedGroupName
+	all := getStreamsForGroup(hash, group)
+	seen := make(map[int]bool)
+	for _, s := range all {
+		name, sNum, isSeries := parseSeries(s["name"])
+		if isSeries && sanitizeGroupName(name) == series {
+			seen[sNum] = true
+		}
+	}
+
+	var nums []int
+	for k := range seen {
+		nums = append(nums, k)
+	}
+	sort.Ints(nums)
+
+	var res []string
+	for _, n := range nums {
+		res = append(res, fmt.Sprintf("Season %d", n))
+	}
+	return res
+}
+
+func findIndividualStream(hash, group, filename string) (map[string]string, error) {
+	streams := getIndividualStreams(hash, group)
+	return findStreamInList(streams, filename)
+}
+
+func findSeriesStream(hash, group, series, seasonStr, filename string) (map[string]string, error) {
+    parts := strings.Split(seasonStr, " ")
+    if len(parts) < 2 {
+        return nil, os.ErrNotExist
+    }
+    sNum, _ := strconv.Atoi(parts[1])
+
+	streams := getSeriesStreams(hash, group, series, sNum)
+	return findStreamInList(streams, filename)
+}
+
+func findStreamInList(streams []map[string]string, filename string) (map[string]string, error) {
+	nameCount := make(map[string]int)
+
+	for _, stream := range streams {
+		name := stream["name"]
+		ext := getExtensionFromURL(stream["url"])
+		if ext == "" {
+			ext = ".mp4"
+		}
+
+		baseName := sanitizeFilename(name)
+		finalName := baseName + ext
+
+		count := nameCount[finalName]
+		if count > 0 {
+			finalName = fmt.Sprintf("%s_%d%s", baseName, count, ext)
+		}
+		nameCount[baseName+ext]++
+
+		if finalName == filename {
+			return stream, nil
+		}
+	}
+
+	return nil, os.ErrNotExist
 }
 
 func isVOD(stream map[string]string) bool {

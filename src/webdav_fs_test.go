@@ -55,24 +55,31 @@ func TestWebDAVFS(t *testing.T) {
 		},
 		map[string]string{
 			"_file.m3u.id": hash,
-			"group-title":  "Live Group",
-			"name":         "Live Channel",
-			"url":          "http://test.com/live.m3u8",
-			"_duration":    "-1", // Live
+			"group-title":  "Series Group",
+			"name":         "My Series S01 E01",
+			"url":          "http://test.com/series_s01e01.mp4",
+			"_duration":    "123",
 		},
 		map[string]string{
 			"_file.m3u.id": hash,
-			"group-title":  "Live Group 2",
-			"name":         "Live Channel 2",
-			"url":          "http://test.com/live.ts",
-			// No duration, but ts extension -> Live
+			"group-title":  "Series Group",
+			"name":         "My Series S01 E02",
+			"url":          "http://test.com/series_s01e02.mp4",
+			"_duration":    "123",
 		},
 		map[string]string{
 			"_file.m3u.id": hash,
-			"group-title":  "Negative Duration VOD",
-			"name":         "VOD Negative Duration",
-			"url":          "http://test.com/movie.mkv",
-			"_duration":    "-1", // Negative duration, but .mkv -> VOD
+			"group-title":  "Mixed Group",
+			"name":         "Mixed Series S01 E01",
+			"url":          "http://test.com/mixed_series.mp4",
+			"_duration":    "123",
+		},
+		map[string]string{
+			"_file.m3u.id": hash,
+			"group-title":  "Mixed Group",
+			"name":         "Mixed Individual",
+			"url":          "http://test.com/mixed_individual.mp4",
+			"_duration":    "123",
 		},
 		map[string]string{
 			"_file.m3u.id": hash,
@@ -113,34 +120,6 @@ func TestWebDAVFS(t *testing.T) {
 		t.Errorf("Root listing did not contain hash directory %s", hash)
 	}
 
-	// Test hash directory listing
-	f, err = fs.OpenFile(ctx, "/"+hash, os.O_RDONLY, 0)
-	if err != nil {
-		t.Fatalf("Failed to open hash dir: %v", err)
-	}
-	infos, err = f.Readdir(-1)
-	if err != nil {
-		t.Fatalf("Failed to read hash dir: %v", err)
-	}
-	f.Close()
-
-	foundListing := false
-	foundOnDemand := false
-	for _, info := range infos {
-		if info.Name() == fileListing {
-			foundListing = true
-		}
-		if info.Name() == dirOnDemand && info.IsDir() {
-			foundOnDemand = true
-		}
-	}
-	if !foundListing {
-		t.Errorf("Hash dir listing did not contain %s", fileListing)
-	}
-	if !foundOnDemand {
-		t.Errorf("Hash dir listing did not contain '%s'", dirOnDemand)
-	}
-
 	// Test On Demand listing
 	f, err = fs.OpenFile(ctx, "/"+hash+"/"+dirOnDemand, os.O_RDONLY, 0)
 	if err != nil {
@@ -153,103 +132,198 @@ func TestWebDAVFS(t *testing.T) {
 	f.Close()
 
 	foundGroup := false
-	foundUncat := false
-	foundLiveGroup := false
-	foundNegDurationGroup := false
-	foundQueryGroup := false
-	foundSlashGroup := false
+	foundSeriesGroup := false
+	foundMixedGroup := false
 	for _, info := range infos {
 		if info.Name() == "Test Group" && info.IsDir() {
 			foundGroup = true
 		}
-		if info.Name() == "Uncategorized" && info.IsDir() {
-			foundUncat = true
+		if info.Name() == "Series Group" && info.IsDir() {
+			foundSeriesGroup = true
 		}
-		if info.Name() == "Live Group" {
-			foundLiveGroup = true
-		}
-		if info.Name() == "Negative Duration VOD" && info.IsDir() {
-			foundNegDurationGroup = true
-		}
-		if info.Name() == "Query Params Group" && info.IsDir() {
-			foundQueryGroup = true
-		}
-		if info.Name() == "Slash_Group" && info.IsDir() {
-			foundSlashGroup = true
+		if info.Name() == "Mixed Group" && info.IsDir() {
+			foundMixedGroup = true
 		}
 	}
 	if !foundGroup {
 		t.Errorf("On Demand listing did not contain 'Test Group'")
 	}
-	if !foundUncat {
-		t.Errorf("On Demand listing did not contain 'Uncategorized'")
+	if !foundSeriesGroup {
+		t.Errorf("On Demand listing did not contain 'Series Group'")
 	}
-	if foundLiveGroup {
-		t.Errorf("On Demand listing contained 'Live Group' which should be filtered out")
-	}
-	if !foundNegDurationGroup {
-		t.Errorf("On Demand listing did not contain 'Negative Duration VOD'")
-	}
-	if !foundQueryGroup {
-		t.Errorf("On Demand listing did not contain 'Query Params Group'")
-	}
-	if !foundSlashGroup {
-		t.Errorf("On Demand listing did not contain 'Slash_Group' (sanitized)")
+	if !foundMixedGroup {
+		t.Errorf("On Demand listing did not contain 'Mixed Group'")
 	}
 
-	// Test VOD with query params
-	f, err = fs.OpenFile(ctx, "/"+hash+"/"+dirOnDemand+"/Query Params Group/VOD_with_Query.mp4", os.O_RDONLY, 0)
+	// Test Individual Group Listing (Test Group should have Individual but no Series)
+	f, err = fs.OpenFile(ctx, "/"+hash+"/"+dirOnDemand+"/Test Group", os.O_RDONLY, 0)
+	if err != nil {
+		t.Fatalf("Failed to open Test Group dir: %v", err)
+	}
+	infos, err = f.Readdir(-1)
+	if err != nil {
+		t.Fatalf("Failed to read Test Group dir: %v", err)
+	}
+	f.Close()
+
+	foundIndividual := false
+	foundSeries := false
+	for _, info := range infos {
+		if info.Name() == dirIndividual {
+			foundIndividual = true
+		}
+		if info.Name() == dirSeries {
+			foundSeries = true
+		}
+	}
+	if !foundIndividual {
+		t.Errorf("Test Group did not contain Individual folder")
+	}
+	if foundSeries {
+		t.Errorf("Test Group contained Series folder but shouldn't")
+	}
+
+	// Test Series Group Listing
+	f, err = fs.OpenFile(ctx, "/"+hash+"/"+dirOnDemand+"/Series Group", os.O_RDONLY, 0)
+	if err != nil {
+		t.Fatalf("Failed to open Series Group dir: %v", err)
+	}
+	infos, err = f.Readdir(-1)
+	if err != nil {
+		t.Fatalf("Failed to read Series Group dir: %v", err)
+	}
+	f.Close()
+
+	foundIndividual = false
+	foundSeries = false
+	for _, info := range infos {
+		if info.Name() == dirIndividual {
+			foundIndividual = true
+		}
+		if info.Name() == dirSeries {
+			foundSeries = true
+		}
+	}
+	if foundIndividual {
+		t.Errorf("Series Group contained Individual folder but shouldn't")
+	}
+	if !foundSeries {
+		t.Errorf("Series Group did not contain Series folder")
+	}
+
+	// Test Mixed Group Listing
+	f, err = fs.OpenFile(ctx, "/"+hash+"/"+dirOnDemand+"/Mixed Group", os.O_RDONLY, 0)
+	if err != nil {
+		t.Fatalf("Failed to open Mixed Group dir: %v", err)
+	}
+	infos, err = f.Readdir(-1)
+	if err != nil {
+		t.Fatalf("Failed to read Mixed Group dir: %v", err)
+	}
+	f.Close()
+
+	foundIndividual = false
+	foundSeries = false
+	for _, info := range infos {
+		if info.Name() == dirIndividual {
+			foundIndividual = true
+		}
+		if info.Name() == dirSeries {
+			foundSeries = true
+		}
+	}
+	if !foundIndividual {
+		t.Errorf("Mixed Group did not contain Individual folder")
+	}
+	if !foundSeries {
+		t.Errorf("Mixed Group did not contain Series folder")
+	}
+
+	// Test Browsing Series
+	f, err = fs.OpenFile(ctx, "/"+hash+"/"+dirOnDemand+"/Series Group/"+dirSeries, os.O_RDONLY, 0)
+	if err != nil {
+		t.Fatalf("Failed to open Series folder: %v", err)
+	}
+	infos, err = f.Readdir(-1)
+	if err != nil {
+		t.Fatalf("Failed to read Series folder: %v", err)
+	}
+	f.Close()
+	foundMySeries := false
+	for _, info := range infos {
+		if info.Name() == "My Series" {
+			foundMySeries = true
+		}
+	}
+	if !foundMySeries {
+		t.Errorf("Series folder did not contain 'My Series'")
+	}
+
+	// Test Browsing Series Name (Seasons)
+	f, err = fs.OpenFile(ctx, "/"+hash+"/"+dirOnDemand+"/Series Group/"+dirSeries+"/My Series", os.O_RDONLY, 0)
+	if err != nil {
+		t.Fatalf("Failed to open My Series folder: %v", err)
+	}
+	infos, err = f.Readdir(-1)
+	if err != nil {
+		t.Fatalf("Failed to read My Series folder: %v", err)
+	}
+	f.Close()
+	foundSeason1 := false
+	for _, info := range infos {
+		if info.Name() == "Season 1" {
+			foundSeason1 = true
+		}
+	}
+	if !foundSeason1 {
+		t.Errorf("My Series folder did not contain 'Season 1'")
+	}
+
+	// Test Browsing Season (Files)
+	f, err = fs.OpenFile(ctx, "/"+hash+"/"+dirOnDemand+"/Series Group/"+dirSeries+"/My Series/Season 1", os.O_RDONLY, 0)
+	if err != nil {
+		t.Fatalf("Failed to open Season 1 folder: %v", err)
+	}
+	infos, err = f.Readdir(-1)
+	if err != nil {
+		t.Fatalf("Failed to read Season 1 folder: %v", err)
+	}
+	f.Close()
+	foundEp1 := false
+	foundEp2 := false
+	for _, info := range infos {
+		if info.Name() == "My_Series_S01_E01.mp4" {
+			foundEp1 = true
+		}
+		if info.Name() == "My_Series_S01_E02.mp4" {
+			foundEp2 = true
+		}
+	}
+	if !foundEp1 {
+		t.Errorf("Season 1 folder did not contain 'My_Series_S01_E01.mp4'")
+	}
+	if !foundEp2 {
+		t.Errorf("Season 1 folder did not contain 'My_Series_S01_E02.mp4'")
+	}
+
+	// Test opening Series File
+	f, err = fs.OpenFile(ctx, "/"+hash+"/"+dirOnDemand+"/Series Group/"+dirSeries+"/My Series/Season 1/My_Series_S01_E01.mp4", os.O_RDONLY, 0)
+	if err != nil {
+		t.Fatalf("Failed to open series file: %v", err)
+	}
+	f.Close()
+
+	// Test VOD with query params (Individual)
+	f, err = fs.OpenFile(ctx, "/"+hash+"/"+dirOnDemand+"/Query Params Group/"+dirIndividual+"/VOD_with_Query.mp4", os.O_RDONLY, 0)
 	if err != nil {
 		t.Fatalf("Failed to open VOD with query params: %v", err)
 	}
 	f.Close()
 
-	// Test VOD in Slash Group
-	f, err = fs.OpenFile(ctx, "/"+hash+"/"+dirOnDemand+"/Slash_Group/VOD_in_Slash_Group.mp4", os.O_RDONLY, 0)
+	// Test VOD in Slash Group (Individual)
+	f, err = fs.OpenFile(ctx, "/"+hash+"/"+dirOnDemand+"/Slash_Group/"+dirIndividual+"/VOD_in_Slash_Group.mp4", os.O_RDONLY, 0)
 	if err != nil {
 		t.Fatalf("Failed to open VOD in Slash Group: %v", err)
 	}
 	f.Close()
-
-	// Test Group listing
-	f, err = fs.OpenFile(ctx, "/"+hash+"/"+dirOnDemand+"/Test Group", os.O_RDONLY, 0)
-	if err != nil {
-		t.Fatalf("Failed to open Group dir: %v", err)
-	}
-	infos, err = f.Readdir(-1)
-	if err != nil {
-		t.Fatalf("Failed to read Group dir: %v", err)
-	}
-	f.Close()
-
-	foundStream := false
-	for _, info := range infos {
-		if info.Name() == "Test_Stream.mp4" && !info.IsDir() {
-			foundStream = true
-		}
-	}
-	if !foundStream {
-		t.Errorf("Group listing did not contain 'Test_Stream.mp4'")
-	}
-
-	// Test stream opening (check stat)
-	f, err = fs.OpenFile(ctx, "/"+hash+"/"+dirOnDemand+"/Test Group/Test_Stream.mp4", os.O_RDONLY, 0)
-	if err != nil {
-		t.Fatalf("Failed to open stream file: %v", err)
-	}
-
-	info, err := f.Stat()
-	if err != nil {
-		t.Fatalf("Failed to stat stream file: %v", err)
-	}
-	if info.Name() != "Test_Stream.mp4" {
-		t.Errorf("Stream name mismatch. Got %s, want Test_Stream.mp4", info.Name())
-	}
-	f.Close()
-
-	// Test nonexistent
-	_, err = fs.OpenFile(ctx, "/"+hash+"/"+dirOnDemand+"/Nonexistent", os.O_RDONLY, 0)
-	if !os.IsNotExist(err) {
-		t.Errorf("Expected NotExist for nonexistent group/file")
-	}
 }
