@@ -9,7 +9,7 @@ import (
 	"path"
 	"regexp"
 	"runtime"
-	"sort"
+	"slices"
 
 	"crypto/md5"
 	"encoding/hex"
@@ -18,8 +18,6 @@ import (
 	"time"
 
 	"xteve/src/internal/imgcache"
-
-	"github.com/samber/lo"
 )
 
 // Check provider XMLTV File
@@ -392,7 +390,7 @@ func generateNewXEPGID() (xepgID string) {
 
 // findFreeChannelNumber finds the next available channel number.
 func findFreeChannelNumber(allChannelNumbers *[]float64, startingChannel ...string) (xChannelID string) {
-	sort.Float64s(*allChannelNumbers)
+	slices.Sort(*allChannelNumbers)
 
 	var firstFreeNumber float64 = Settings.MappingFirstChannel
 	if len(startingChannel) > 0 && startingChannel[0] != "" {
@@ -403,7 +401,7 @@ func findFreeChannelNumber(allChannelNumbers *[]float64, startingChannel ...stri
 	}
 
 	for {
-		if lo.IndexOf(*allChannelNumbers, firstFreeNumber) == -1 {
+		if !slices.Contains(*allChannelNumbers, firstFreeNumber) {
 			xChannelID = fmt.Sprintf("%g", firstFreeNumber)
 			*allChannelNumbers = append(*allChannelNumbers, firstFreeNumber)
 			return
@@ -724,7 +722,7 @@ func createXMLTVFile() (err error) {
 	files, err := os.ReadDir(System.Folder.ImagesCache)
 	if err == nil {
 		for _, file := range files {
-			if lo.IndexOf(Data.Cache.ImagesCache, file.Name()) == -1 {
+			if !slices.Contains(Data.Cache.ImagesCache, file.Name()) {
 				Data.Cache.ImagesCache = append(Data.Cache.ImagesCache, file.Name())
 			}
 		}
@@ -1055,11 +1053,11 @@ func cleanupXEPG() {
 		if err != nil {
 			continue
 		}
-		if lo.IndexOf(Data.Cache.Streams.Active, xepgChannel.Name+xepgChannel.FileM3UID) == -1 {
+		if !slices.Contains(Data.Cache.Streams.Active, xepgChannel.Name+xepgChannel.FileM3UID) {
 			delete(Data.XEPG.Channels, id)
 			continue
 		}
-		if lo.IndexOf(sourceIDs, xepgChannel.FileM3UID) == -1 {
+		if !slices.Contains(sourceIDs, xepgChannel.FileM3UID) {
 			delete(Data.XEPG.Channels, id)
 			continue
 		}
