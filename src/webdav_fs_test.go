@@ -127,22 +127,22 @@ func TestWebDAVFS(t *testing.T) {
 	foundListing := false
 	foundOnDemand := false
 	for _, info := range infos {
-		if info.Name() == "listing.m3u" {
+		if info.Name() == fileListing {
 			foundListing = true
 		}
-		if info.Name() == "On Demand" && info.IsDir() {
+		if info.Name() == dirOnDemand && info.IsDir() {
 			foundOnDemand = true
 		}
 	}
 	if !foundListing {
-		t.Errorf("Hash dir listing did not contain listing.m3u")
+		t.Errorf("Hash dir listing did not contain %s", fileListing)
 	}
 	if !foundOnDemand {
-		t.Errorf("Hash dir listing did not contain 'On Demand'")
+		t.Errorf("Hash dir listing did not contain '%s'", dirOnDemand)
 	}
 
 	// Test On Demand listing
-	f, err = fs.OpenFile(ctx, "/"+hash+"/On Demand", os.O_RDONLY, 0)
+	f, err = fs.OpenFile(ctx, "/"+hash+"/"+dirOnDemand, os.O_RDONLY, 0)
 	if err != nil {
 		t.Fatalf("Failed to open On Demand dir: %v", err)
 	}
@@ -198,21 +198,21 @@ func TestWebDAVFS(t *testing.T) {
 	}
 
 	// Test VOD with query params
-	f, err = fs.OpenFile(ctx, "/"+hash+"/On Demand/Query Params Group/VOD_with_Query.mp4", os.O_RDONLY, 0)
+	f, err = fs.OpenFile(ctx, "/"+hash+"/"+dirOnDemand+"/Query Params Group/VOD_with_Query.mp4", os.O_RDONLY, 0)
 	if err != nil {
 		t.Fatalf("Failed to open VOD with query params: %v", err)
 	}
 	f.Close()
 
 	// Test VOD in Slash Group
-	f, err = fs.OpenFile(ctx, "/"+hash+"/On Demand/Slash_Group/VOD_in_Slash_Group.mp4", os.O_RDONLY, 0)
+	f, err = fs.OpenFile(ctx, "/"+hash+"/"+dirOnDemand+"/Slash_Group/VOD_in_Slash_Group.mp4", os.O_RDONLY, 0)
 	if err != nil {
 		t.Fatalf("Failed to open VOD in Slash Group: %v", err)
 	}
 	f.Close()
 
 	// Test Group listing
-	f, err = fs.OpenFile(ctx, "/"+hash+"/On Demand/Test Group", os.O_RDONLY, 0)
+	f, err = fs.OpenFile(ctx, "/"+hash+"/"+dirOnDemand+"/Test Group", os.O_RDONLY, 0)
 	if err != nil {
 		t.Fatalf("Failed to open Group dir: %v", err)
 	}
@@ -233,7 +233,7 @@ func TestWebDAVFS(t *testing.T) {
 	}
 
 	// Test stream opening (check stat)
-	f, err = fs.OpenFile(ctx, "/"+hash+"/On Demand/Test Group/Test_Stream.mp4", os.O_RDONLY, 0)
+	f, err = fs.OpenFile(ctx, "/"+hash+"/"+dirOnDemand+"/Test Group/Test_Stream.mp4", os.O_RDONLY, 0)
 	if err != nil {
 		t.Fatalf("Failed to open stream file: %v", err)
 	}
@@ -248,7 +248,7 @@ func TestWebDAVFS(t *testing.T) {
 	f.Close()
 
 	// Test nonexistent
-	_, err = fs.OpenFile(ctx, "/"+hash+"/On Demand/Nonexistent", os.O_RDONLY, 0)
+	_, err = fs.OpenFile(ctx, "/"+hash+"/"+dirOnDemand+"/Nonexistent", os.O_RDONLY, 0)
 	if !os.IsNotExist(err) {
 		t.Errorf("Expected NotExist for nonexistent group/file")
 	}

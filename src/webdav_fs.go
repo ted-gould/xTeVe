@@ -19,6 +19,11 @@ import (
 	"golang.org/x/net/webdav"
 )
 
+const (
+	dirOnDemand = "On Demand"
+	fileListing = "listing.m3u"
+)
+
 // WebDAVFS implements the webdav.FileSystem interface
 type WebDAVFS struct {
 }
@@ -93,7 +98,7 @@ func (fs *WebDAVFS) openHashDir(hash string) (webdav.File, error) {
 }
 
 func (fs *WebDAVFS) openHashSubDir(hash, sub string) (webdav.File, error) {
-	if sub == "listing.m3u" {
+	if sub == fileListing {
 		realPath := filepath.Join(System.Folder.Data, hash+".m3u")
 		f, err := os.Open(realPath)
 		if err != nil {
@@ -101,14 +106,14 @@ func (fs *WebDAVFS) openHashSubDir(hash, sub string) (webdav.File, error) {
 		}
 		return f, nil
 	}
-	if sub == "On Demand" {
+	if sub == dirOnDemand {
 		return &webdavDir{name: path.Join(hash, sub)}, nil
 	}
 	return nil, os.ErrNotExist
 }
 
 func (fs *WebDAVFS) openOnDemandGroupDir(hash, sub, group string) (webdav.File, error) {
-	if sub != "On Demand" {
+	if sub != dirOnDemand {
 		return nil, os.ErrNotExist
 	}
 	groups := getGroupsForHash(hash)
@@ -126,7 +131,7 @@ func (fs *WebDAVFS) openOnDemandGroupDir(hash, sub, group string) (webdav.File, 
 }
 
 func (fs *WebDAVFS) openOnDemandStream(ctx context.Context, hash, sub, group, filename string) (webdav.File, error) {
-	if sub != "On Demand" {
+	if sub != dirOnDemand {
 		return nil, os.ErrNotExist
 	}
 	stream, err := findStreamByFilename(hash, group, filename)
@@ -178,17 +183,17 @@ func (fs *WebDAVFS) removeAllHashDir(hash string) error {
 }
 
 func (fs *WebDAVFS) removeAllHashSubDir(hash, sub string) error {
-	if sub == "listing.m3u" {
+	if sub == fileListing {
 		return os.ErrPermission
 	}
-	if sub == "On Demand" {
+	if sub == dirOnDemand {
 		return os.ErrPermission
 	}
 	return os.ErrNotExist
 }
 
 func (fs *WebDAVFS) removeAllOnDemandGroupDir(hash, sub, group string) error {
-	if sub != "On Demand" {
+	if sub != dirOnDemand {
 		return os.ErrNotExist
 	}
 	groups := getGroupsForHash(hash)
@@ -206,7 +211,7 @@ func (fs *WebDAVFS) removeAllOnDemandGroupDir(hash, sub, group string) error {
 }
 
 func (fs *WebDAVFS) removeAllOnDemandStream(hash, sub, group, filename string) error {
-	if sub != "On Demand" {
+	if sub != dirOnDemand {
 		return os.ErrNotExist
 	}
 	_, err := findStreamByFilename(hash, group, filename)
@@ -259,22 +264,22 @@ func (fs *WebDAVFS) statHashDir(hash string) (os.FileInfo, error) {
 }
 
 func (fs *WebDAVFS) statHashSubDir(hash, sub string) (os.FileInfo, error) {
-	if sub == "listing.m3u" {
+	if sub == fileListing {
 		realPath := filepath.Join(System.Folder.Data, hash+".m3u")
 		info, err := os.Stat(realPath)
 		if err != nil {
 			return nil, err
 		}
-		return &mkFileInfo{name: "listing.m3u", size: info.Size(), modTime: info.ModTime()}, nil
+		return &mkFileInfo{name: fileListing, size: info.Size(), modTime: info.ModTime()}, nil
 	}
-	if sub == "On Demand" {
-		return &mkDirInfo{name: "On Demand"}, nil
+	if sub == dirOnDemand {
+		return &mkDirInfo{name: dirOnDemand}, nil
 	}
 	return nil, os.ErrNotExist
 }
 
 func (fs *WebDAVFS) statOnDemandGroupDir(hash, sub, group string) (os.FileInfo, error) {
-	if sub != "On Demand" {
+	if sub != dirOnDemand {
 		return nil, os.ErrNotExist
 	}
 	groups := getGroupsForHash(hash)
@@ -292,7 +297,7 @@ func (fs *WebDAVFS) statOnDemandGroupDir(hash, sub, group string) (os.FileInfo, 
 }
 
 func (fs *WebDAVFS) statOnDemandStream(hash, sub, group, filename string) (os.FileInfo, error) {
-	if sub != "On Demand" {
+	if sub != dirOnDemand {
 		return nil, os.ErrNotExist
 	}
 	_, err := findStreamByFilename(hash, group, filename)
@@ -379,14 +384,14 @@ func (d *webdavDir) readDirHash(hash string) ([]os.FileInfo, error) {
 	realPath := filepath.Join(System.Folder.Data, hash+".m3u")
 	info, err := os.Stat(realPath)
 	if err == nil {
-		infos = append(infos, &mkFileInfo{name: "listing.m3u", size: info.Size(), modTime: info.ModTime()})
+		infos = append(infos, &mkFileInfo{name: fileListing, size: info.Size(), modTime: info.ModTime()})
 	}
-	infos = append(infos, &mkDirInfo{name: "On Demand"})
+	infos = append(infos, &mkDirInfo{name: dirOnDemand})
 	return infos, nil
 }
 
 func (d *webdavDir) readDirOnDemand(hash, sub string) ([]os.FileInfo, error) {
-	if sub != "On Demand" {
+	if sub != dirOnDemand {
 		return nil, nil
 	}
 	var infos []os.FileInfo
@@ -398,7 +403,7 @@ func (d *webdavDir) readDirOnDemand(hash, sub string) ([]os.FileInfo, error) {
 }
 
 func (d *webdavDir) readDirOnDemandGroup(hash, sub, group string) ([]os.FileInfo, error) {
-	if sub != "On Demand" {
+	if sub != dirOnDemand {
 		return nil, nil
 	}
 	var infos []os.FileInfo
