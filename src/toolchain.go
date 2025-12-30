@@ -322,7 +322,6 @@ func resolveHostIP() (err error) {
 
 	for _, netInterfaceAddress := range netInterfaceAddresses {
 		networkIP, ok := netInterfaceAddress.(*net.IPNet)
-		System.IPAddressesList = append(System.IPAddressesList, networkIP.IP.String())
 
 		if ok {
 			var ip = networkIP.IP.String()

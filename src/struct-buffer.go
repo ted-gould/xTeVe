@@ -43,22 +43,15 @@ type ThisStream struct {
 
 	// Is only used for HLS / M3U8
 	Body             string
-	Difference       float64
 	Duration         float64
 	DynamicBandwidth bool
-	FirstSequence    int64
 	HLS              bool
 	LastSequence     int64
 	M3U8URL          string
-	NewSegCount      int
-	OldSegCount      int
 	Sequence         int64
 	TimeDiff         float64
 	TimeEnd          time.Time
-	TimeSegDuration  float64
 	TimeStart        time.Time
-	Version          int
-	Wait             float64
 
 	DynamicStream map[int]DynamicStream
 
@@ -79,29 +72,19 @@ type SegmentInfo struct {
 // Segment : URL Segments (HLS / M3U8)
 type Segment struct {
 	Duration     float64
-	Info         bool
 	PlaylistType string
 	Sequence     int64
 	URL          string
-	Version      int
-	Wait         float64
 
 	StreamInf struct {
-		AverageBandwidth int
-		Bandwidth        int
-		Framerate        float64
-		Resolution       string
-		SegmentURL       string
+		Bandwidth int
 	}
 }
 
 // DynamicStream : Stream Information with dynamic Bandwidth
 type DynamicStream struct {
-	AverageBandwidth int
-	Bandwidth        int
-	Framerate        float64
-	Resolution       string
-	URL              string
+	Bandwidth int
+	URL       string
 }
 
 // ClientConnection : Client Connections

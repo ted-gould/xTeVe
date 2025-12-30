@@ -29,16 +29,6 @@ var tokens = make(map[string]any)
 
 var initAuthentication = false
 
-// Cookie : cookie
-type Cookie struct {
-	Name       string
-	Value      string
-	Path       string
-	Domain     string
-	Expires    time.Time
-	RawExpires string
-}
-
 // Init : databasePath = Path to authentication.json
 func Init(databasePath string, validity int) (err error) {
 	database = filepath.Dir(databasePath) + string(os.PathSeparator) + databaseFile
