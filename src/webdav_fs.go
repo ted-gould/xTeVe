@@ -142,6 +142,77 @@ func (fs *WebDAVFS) openOnDemandStream(ctx context.Context, hash, sub, group, fi
 
 // RemoveAll returns an error as the filesystem is read-only
 func (fs *WebDAVFS) RemoveAll(ctx context.Context, name string) error {
+	name = strings.TrimPrefix(name, "/")
+	name = strings.TrimSuffix(name, "/")
+
+	if name == "" {
+		return os.ErrPermission
+	}
+
+	parts := strings.Split(name, "/")
+	if len(parts) == 0 {
+		return os.ErrNotExist
+	}
+
+	hash := parts[0]
+	if _, ok := Settings.Files.M3U[hash]; !ok {
+		return os.ErrNotExist
+	}
+
+	switch len(parts) {
+	case 1:
+		return fs.removeAllHashDir(hash)
+	case 2:
+		return fs.removeAllHashSubDir(hash, parts[1])
+	case 3:
+		return fs.removeAllOnDemandGroupDir(hash, parts[1], parts[2])
+	case 4:
+		return fs.removeAllOnDemandStream(hash, parts[1], parts[2], parts[3])
+	default:
+		return os.ErrNotExist
+	}
+}
+
+func (fs *WebDAVFS) removeAllHashDir(hash string) error {
+	return os.ErrPermission
+}
+
+func (fs *WebDAVFS) removeAllHashSubDir(hash, sub string) error {
+	if sub == "listing.m3u" {
+		return os.ErrPermission
+	}
+	if sub == "On Demand" {
+		return os.ErrPermission
+	}
+	return os.ErrNotExist
+}
+
+func (fs *WebDAVFS) removeAllOnDemandGroupDir(hash, sub, group string) error {
+	if sub != "On Demand" {
+		return os.ErrNotExist
+	}
+	groups := getGroupsForHash(hash)
+	found := false
+	for _, g := range groups {
+		if sanitizeGroupName(g) == group {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return os.ErrNotExist
+	}
+	return os.ErrPermission
+}
+
+func (fs *WebDAVFS) removeAllOnDemandStream(hash, sub, group, filename string) error {
+	if sub != "On Demand" {
+		return os.ErrNotExist
+	}
+	_, err := findStreamByFilename(hash, group, filename)
+	if err != nil {
+		return os.ErrNotExist
+	}
 	return os.ErrPermission
 }
 
@@ -160,17 +231,35 @@ func (fs *WebDAVFS) Stat(ctx context.Context, name string) (os.FileInfo, error) 
 	}
 
 	parts := strings.Split(name, "/")
-	hash := parts[0]
+	if len(parts) == 0 {
+		return nil, os.ErrNotExist
+	}
 
+	hash := parts[0]
 	if _, ok := Settings.Files.M3U[hash]; !ok {
 		return nil, os.ErrNotExist
 	}
 
-	if len(parts) == 1 {
-		return &mkDirInfo{name: hash}, nil
+	switch len(parts) {
+	case 1:
+		return fs.statHashDir(hash)
+	case 2:
+		return fs.statHashSubDir(hash, parts[1])
+	case 3:
+		return fs.statOnDemandGroupDir(hash, parts[1], parts[2])
+	case 4:
+		return fs.statOnDemandStream(hash, parts[1], parts[2], parts[3])
+	default:
+		return nil, os.ErrNotExist
 	}
+}
 
-	if len(parts) == 2 && parts[1] == "listing.m3u" {
+func (fs *WebDAVFS) statHashDir(hash string) (os.FileInfo, error) {
+	return &mkDirInfo{name: hash}, nil
+}
+
+func (fs *WebDAVFS) statHashSubDir(hash, sub string) (os.FileInfo, error) {
+	if sub == "listing.m3u" {
 		realPath := filepath.Join(System.Folder.Data, hash+".m3u")
 		info, err := os.Stat(realPath)
 		if err != nil {
@@ -178,40 +267,40 @@ func (fs *WebDAVFS) Stat(ctx context.Context, name string) (os.FileInfo, error) 
 		}
 		return &mkFileInfo{name: "listing.m3u", size: info.Size(), modTime: info.ModTime()}, nil
 	}
+	if sub == "On Demand" {
+		return &mkDirInfo{name: "On Demand"}, nil
+	}
+	return nil, os.ErrNotExist
+}
 
-	// On Demand structure
-	if len(parts) >= 2 && parts[1] == "On Demand" {
-		if len(parts) == 2 {
-			return &mkDirInfo{name: "On Demand"}, nil
-		}
-		if len(parts) == 3 {
-			group := parts[2]
-			groups := getGroupsForHash(hash)
-			found := false
-			for _, g := range groups {
-				if g == group {
-					found = true
-					break
-				}
-			}
-			if !found {
-				return nil, os.ErrNotExist
-			}
-			return &mkDirInfo{name: parts[2]}, nil
-		}
-		if len(parts) == 4 {
-			group := parts[2]
-			filename := parts[3]
-			_, err := findStreamByFilename(hash, group, filename)
-			if err != nil {
-				return nil, os.ErrNotExist
-			}
-			// Size 0 as we stream it
-			return &mkFileInfo{name: filename, size: 0, modTime: time.Now()}, nil
+func (fs *WebDAVFS) statOnDemandGroupDir(hash, sub, group string) (os.FileInfo, error) {
+	if sub != "On Demand" {
+		return nil, os.ErrNotExist
+	}
+	groups := getGroupsForHash(hash)
+	found := false
+	for _, g := range groups {
+		if sanitizeGroupName(g) == group {
+			found = true
+			break
 		}
 	}
+	if !found {
+		return nil, os.ErrNotExist
+	}
+	return &mkDirInfo{name: group}, nil
+}
 
-	return nil, os.ErrNotExist
+func (fs *WebDAVFS) statOnDemandStream(hash, sub, group, filename string) (os.FileInfo, error) {
+	if sub != "On Demand" {
+		return nil, os.ErrNotExist
+	}
+	_, err := findStreamByFilename(hash, group, filename)
+	if err != nil {
+		return nil, os.ErrNotExist
+	}
+	// Size 0 as we stream it
+	return &mkFileInfo{name: filename, size: 0, modTime: time.Now()}, nil
 }
 
 // webdavDir represents a virtual directory
@@ -233,45 +322,9 @@ func (d *webdavDir) Seek(offset int64, whence int) (int64, error) {
 }
 
 func (d *webdavDir) Readdir(count int) ([]os.FileInfo, error) {
-	var infos []os.FileInfo
-
-	parts := strings.Split(d.name, "/")
-	// Root: name="" -> parts=[""]
-	if d.name == "" {
-		// List all M3U hashes
-		var hashes []string
-		for hash := range Settings.Files.M3U {
-			hashes = append(hashes, hash)
-		}
-		sort.Strings(hashes)
-		for _, hash := range hashes {
-			infos = append(infos, &mkDirInfo{name: hash})
-		}
-	} else if len(parts) == 1 {
-		// <hash> -> listing.m3u, On Demand
-		hash := parts[0]
-		// check listing.m3u
-		realPath := filepath.Join(System.Folder.Data, hash+".m3u")
-		info, err := os.Stat(realPath)
-		if err == nil {
-			infos = append(infos, &mkFileInfo{name: "listing.m3u", size: info.Size(), modTime: info.ModTime()})
-		}
-		infos = append(infos, &mkDirInfo{name: "On Demand"})
-	} else if len(parts) == 2 && parts[1] == "On Demand" {
-		// <hash>/On Demand -> Groups
-		hash := parts[0]
-		groups := getGroupsForHash(hash)
-		for _, g := range groups {
-			infos = append(infos, &mkDirInfo{name: sanitizeGroupName(g)})
-		}
-	} else if len(parts) == 3 && parts[1] == "On Demand" {
-		// <hash>/On Demand/<Group> -> Streams
-		hash := parts[0]
-		group := parts[2]
-		files := getStreamFilesForGroup(hash, group)
-		for _, f := range files {
-			infos = append(infos, &mkFileInfo{name: f, size: 0, modTime: time.Now()})
-		}
+	infos, err := d.collectInfos()
+	if err != nil {
+		return nil, err
 	}
 
 	if count > 0 {
@@ -287,6 +340,72 @@ func (d *webdavDir) Readdir(count int) ([]os.FileInfo, error) {
 		return res, nil
 	}
 
+	return infos, nil
+}
+
+func (d *webdavDir) collectInfos() ([]os.FileInfo, error) {
+	if d.name == "" {
+		return d.readDirRoot()
+	}
+
+	parts := strings.Split(d.name, "/")
+	switch len(parts) {
+	case 1:
+		return d.readDirHash(parts[0])
+	case 2:
+		return d.readDirOnDemand(parts[0], parts[1])
+	case 3:
+		return d.readDirOnDemandGroup(parts[0], parts[1], parts[2])
+	default:
+		return nil, nil
+	}
+}
+
+func (d *webdavDir) readDirRoot() ([]os.FileInfo, error) {
+	var infos []os.FileInfo
+	var hashes []string
+	for hash := range Settings.Files.M3U {
+		hashes = append(hashes, hash)
+	}
+	sort.Strings(hashes)
+	for _, hash := range hashes {
+		infos = append(infos, &mkDirInfo{name: hash})
+	}
+	return infos, nil
+}
+
+func (d *webdavDir) readDirHash(hash string) ([]os.FileInfo, error) {
+	var infos []os.FileInfo
+	realPath := filepath.Join(System.Folder.Data, hash+".m3u")
+	info, err := os.Stat(realPath)
+	if err == nil {
+		infos = append(infos, &mkFileInfo{name: "listing.m3u", size: info.Size(), modTime: info.ModTime()})
+	}
+	infos = append(infos, &mkDirInfo{name: "On Demand"})
+	return infos, nil
+}
+
+func (d *webdavDir) readDirOnDemand(hash, sub string) ([]os.FileInfo, error) {
+	if sub != "On Demand" {
+		return nil, nil
+	}
+	var infos []os.FileInfo
+	groups := getGroupsForHash(hash)
+	for _, g := range groups {
+		infos = append(infos, &mkDirInfo{name: sanitizeGroupName(g)})
+	}
+	return infos, nil
+}
+
+func (d *webdavDir) readDirOnDemandGroup(hash, sub, group string) ([]os.FileInfo, error) {
+	if sub != "On Demand" {
+		return nil, nil
+	}
+	var infos []os.FileInfo
+	files := getStreamFilesForGroup(hash, group)
+	for _, f := range files {
+		infos = append(infos, &mkFileInfo{name: f, size: 0, modTime: time.Now()})
+	}
 	return infos, nil
 }
 
