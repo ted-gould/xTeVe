@@ -65,7 +65,6 @@ type SystemStruct struct {
 
 	Hostname               string
 	ImageCachingInProgress int
-	IPAddressesList        []string // Every IP address available (IPv4 + IPv6)
 	IPAddressesV4          []string // Every IPv4 address available in string format
 	IPAddressesV4Host      []string // Every IPv4 address available except loopback and link-local
 	IPAddressesV4Raw       []net.IP // Every IPv4 address available in net.IP format

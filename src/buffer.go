@@ -476,7 +476,6 @@ func connectToStreamingServer(streamID int, playlistID string) {
 
 			stream.HLS = false
 			stream.Sequence = 0
-			stream.Wait = 0
 			stream.NetworkBandwidth = Settings.M3U8AdaptiveBandwidthMBPS * 1e+6
 
 			playlist.Streams[streamID] = stream

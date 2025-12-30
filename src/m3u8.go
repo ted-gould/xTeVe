@@ -49,10 +49,7 @@ func ParseM3U8(stream *ThisStream) (err error) {
 
 				switch parameter {
 				case "#EXT-X-VERSION:":
-					version, err := strconv.Atoi(value)
-					if err == nil {
-						segment.Version = version
-					}
+					// Version parsing removed as unused
 				case "#EXT-X-PLAYLIST-TYPE:":
 					segment.PlaylistType = value
 				case "#EXT-X-MEDIA-SEQUENCE:":
@@ -62,7 +59,6 @@ func ParseM3U8(stream *ThisStream) (err error) {
 						sequence = n
 					}
 				case "#EXT-X-STREAM-INF:":
-					segment.Info = true
 					segment.StreamInf.Bandwidth = getBandwidth(value)
 				case "#EXTINF:":
 					var d = strings.Split(value, ",")
@@ -124,7 +120,7 @@ func ParseM3U8(stream *ThisStream) (err error) {
 				}
 
 				// M3U8 contains several links to additional M3U8 Playlists (Bandwidth option)
-				if segment.Info && len(line) > 0 && line[0:1] != "#" {
+				if segment.StreamInf.Bandwidth > 0 && len(line) > 0 && line[0:1] != "#" {
 					var dynamicStream DynamicStream
 
 					segment.Duration = 0
