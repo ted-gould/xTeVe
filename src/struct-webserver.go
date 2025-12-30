@@ -137,10 +137,12 @@ type APIRequestStruct struct {
 
 // APIResponseStruct : Response to the Client (API)
 type APIResponseStruct struct {
-	EpgSource     string `json:"epg.source,omitempty"`
-	Error         string `json:"err,omitempty"`
-	Status        bool   `json:"status"`
-	StreamsActive int64  `json:"streams.active,omitempty"`
+	EpgSource            string `json:"epg.source,omitempty"`
+	Error                string `json:"err,omitempty"`
+	OtelExporterEndpoint string `json:"otel.exporter.endpoint,omitempty"`
+	OtelExporterType     string `json:"otel.exporter.type,omitempty"`
+	Status               bool   `json:"status"`
+	StreamsActive        int64  `json:"streams.active,omitempty"`
 	StreamsAll    int64  `json:"streams.all,omitempty"`
 	StreamsXepg   int64  `json:"streams.xepg,omitempty"`
 	Token         string `json:"token,omitempty"`
@@ -148,6 +150,7 @@ type APIResponseStruct struct {
 	TunerAll      int64  `json:"tuners.all,omitempty"`
 	URLDvr        string `json:"url.dvr,omitempty"`
 	URLM3U        string `json:"url.m3u,omitempty"`
+	URLWebDAV     string `json:"url.webdav,omitempty"`
 	URLXepg       string `json:"url.xepg,omitempty"`
 	VersionAPI    string `json:"version.api,omitempty"`
 	VersionXteve  string `json:"version.xteve,omitempty"`

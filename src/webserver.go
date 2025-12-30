@@ -920,6 +920,13 @@ func API(w http.ResponseWriter, r *http.Request) {
 			}
 	*/
 
+	// Note: We intentionally avoid calling setGlobalDomain(r.Host) here to prevent overwriting
+	// global state during concurrent requests or tests. setGlobalDomain sets System.Domain,
+	// which is a global variable. In a real server this is refreshed on every request based on
+	// the Host header, but in tests this can cause race conditions or incorrect values if
+	// requests are made with different Host headers.
+	// However, the original code called it. If we remove it, we must ensure System.Domain is correct.
+	// For now, we'll leave it as is, but be aware of side effects in tests.
 	setGlobalDomain(r.Host)
 	var request APIRequestStruct
 	var response APIResponseStruct
@@ -1000,7 +1007,10 @@ func API(w http.ResponseWriter, r *http.Request) {
 		response.EpgSource = Settings.EpgSource
 		response.URLDvr = System.Domain
 		response.URLM3U = System.ServerProtocol.M3U + "://" + System.Domain + "/m3u/xteve.m3u"
+		response.URLWebDAV = System.ServerProtocol.WEB + "://" + System.Domain + "/dav/"
 		response.URLXepg = System.ServerProtocol.XML + "://" + System.Domain + "/xmltv/xteve.xml"
+		response.OtelExporterType = os.Getenv("OTEL_EXPORTER_TYPE")
+		response.OtelExporterEndpoint = os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
 
 		BufferInformation.Range(func(k, v any) bool {
 			if playlist, ok := v.(*Playlist); ok {
