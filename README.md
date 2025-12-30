@@ -104,5 +104,5 @@ To export traces to [Axiom](https://axiom.co), you can use the following configu
 ```sh
 sudo snap set xteve otel-exporter-type="otlp"
 sudo snap set xteve otel-exporter-otlp-endpoint="https://api.axiom.co"
-sudo snap set xteve otel-exporter-otlp-headers="Authorization=Bearer <YOUR_AXIOM_API_TOKEN>"
+sudo snap set xteve otel-exporter-otlp-headers="Authorization=Bearer <YOUR_AXIOM_API_TOKEN>,x-axiom-dataset=<YOUR_DATASET_NAME>"
 ```
