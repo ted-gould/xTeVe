@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -905,8 +904,8 @@ func buildDatabaseDVR() (err error) {
 		Data.Playlist.M3U.Groups.Value = append(Data.Playlist.M3U.Groups.Value, value)
 	}
 
-	sort.Strings(Data.Playlist.M3U.Groups.Text)
-	sort.Strings(Data.Playlist.M3U.Groups.Value)
+	slices.Sort(Data.Playlist.M3U.Groups.Text)
+	slices.Sort(Data.Playlist.M3U.Groups.Value)
 
 	if len(Data.Streams.Active) == 0 && len(Settings.Filter) == 0 {
 		Data.Streams.Active = Data.Streams.All
@@ -925,8 +924,8 @@ func buildDatabaseDVR() (err error) {
 	showInfo(fmt.Sprintf("Active streams:%d", len(Data.Streams.Active)))
 	showInfo(fmt.Sprintf("Filter:%d", len(Data.Filter)))
 
-	sort.Strings(Data.StreamPreviewUI.Active)
-	sort.Strings(Data.StreamPreviewUI.Inactive)
+	slices.Sort(Data.StreamPreviewUI.Active)
+	slices.Sort(Data.StreamPreviewUI.Inactive)
 	return
 }
 

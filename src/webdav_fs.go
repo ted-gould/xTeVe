@@ -11,7 +11,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -437,7 +437,7 @@ func (d *webdavDir) readDirRoot() ([]os.FileInfo, error) {
 	for hash := range Settings.Files.M3U {
 		hashes = append(hashes, hash)
 	}
-	sort.Strings(hashes)
+	slices.Sort(hashes)
 	for _, hash := range hashes {
 		infos = append(infos, &mkDirInfo{name: hash})
 	}
@@ -760,7 +760,7 @@ func getGroupsForHash(hash string) []string {
 	for g := range groupsMap {
 		groups = append(groups, g)
 	}
-	sort.Strings(groups)
+	slices.Sort(groups)
 	return groups
 }
 
@@ -820,7 +820,7 @@ func getSeriesList(hash, group string) []string {
 	for k := range seen {
 		res = append(res, k)
 	}
-	sort.Strings(res)
+	slices.Sort(res)
 	return res
 }
 
@@ -839,7 +839,7 @@ func getSeasonsList(hash, group, series string) []string {
 	for k := range seen {
 		nums = append(nums, k)
 	}
-	sort.Ints(nums)
+	slices.Sort(nums)
 
 	var res []string
 	for _, n := range nums {

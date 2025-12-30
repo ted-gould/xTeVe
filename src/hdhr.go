@@ -5,10 +5,9 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
-	"sort"
+	"slices"
 	"strconv"
 
-	"github.com/samber/lo"
 )
 
 func makeInteraceFromHDHR(content []byte, playlistName, id string) (channels []any, err error) {
@@ -162,22 +161,28 @@ func getLineup() (jsonContent []byte, err error) {
 
 	// Sort the lineup
 	// Have to use type assertions (https://golang.org/ref/spec#Type_assertions) to cast generic interface{} into LineupStream
-	sort.Slice(lineup, func(i, j int) bool {
+	slices.SortFunc(lineup, func(a, b any) int {
 		var chanA, chanB float64
 		var ok bool
-		var lineupI, lineupJ LineupStream
+		var lineupA, lineupB LineupStream
 
-		if lineupI, ok = lineup[i].(LineupStream); !ok {
-			return false
+		if lineupA, ok = a.(LineupStream); !ok {
+			return 0
 		}
 
-		if lineupJ, ok = lineup[j].(LineupStream); !ok {
-			return false
+		if lineupB, ok = b.(LineupStream); !ok {
+			return 0
 		}
 
-		chanA, _ = strconv.ParseFloat(lineupI.GuideNumber, 64)
-		chanB, _ = strconv.ParseFloat(lineupJ.GuideNumber, 64)
-		return chanA < chanB
+		chanA, _ = strconv.ParseFloat(lineupA.GuideNumber, 64)
+		chanB, _ = strconv.ParseFloat(lineupB.GuideNumber, 64)
+		if chanA < chanB {
+			return -1
+		}
+		if chanA > chanB {
+			return 1
+		}
+		return 0
 	})
 
 	jsonContent, err = json.MarshalIndent(lineup, "", "  ")
@@ -218,7 +223,7 @@ func getGuideNumberPMS(channelName string) (pmsID string, err error) {
 			ids = append(ids, v)
 		}
 
-		if lo.IndexOf(ids, id) != -1 {
+		if slices.Contains(ids, id) {
 			i++
 			goto newID
 		}

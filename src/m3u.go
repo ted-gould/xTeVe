@@ -5,13 +5,12 @@ import (
 	"fmt"
 	"path"
 	"regexp"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 
 	m3u "xteve/src/internal/m3u-parser"
 
-	"github.com/samber/lo"
 )
 
 var (
@@ -204,7 +203,7 @@ func buildM3U(groups []string) (m3u string, err error) {
 			channel.XEPG = channel.XChannelID // For channelID attribute
 
 			if len(groups) > 0 {
-				if lo.IndexOf(groups, channel.XGroupTitle) == -1 {
+				if !slices.Contains(groups, channel.XGroupTitle) {
 					continue
 				}
 			}
@@ -219,7 +218,7 @@ func buildM3U(groups []string) (m3u string, err error) {
 			if err == nil {
 				if xepgChannel.XActive {
 					if len(groups) > 0 {
-						if lo.IndexOf(groups, xepgChannel.XGroupTitle) == -1 {
+						if !slices.Contains(groups, xepgChannel.XGroupTitle) {
 							continue // Not goto
 						}
 					}
@@ -230,10 +229,16 @@ func buildM3U(groups []string) (m3u string, err error) {
 	}
 
 	// Sort channels by numeric channel ID
-	sort.Slice(m3uChannelsForSort, func(i, j int) bool {
-		numA, _ := strconv.ParseFloat(m3uChannelsForSort[i].XChannelID, 64)
-		numB, _ := strconv.ParseFloat(m3uChannelsForSort[j].XChannelID, 64)
-		return numA < numB
+	slices.SortFunc(m3uChannelsForSort, func(a, b XEPGChannelStruct) int {
+		numA, _ := strconv.ParseFloat(a.XChannelID, 64)
+		numB, _ := strconv.ParseFloat(b.XChannelID, 64)
+		if numA < numB {
+			return -1
+		}
+		if numA > numB {
+			return 1
+		}
+		return 0
 	})
 
 	// Create M3U Content

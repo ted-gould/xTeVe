@@ -8,7 +8,6 @@ import (
 	"net/url"
 	"os"
 	"path"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -896,7 +895,7 @@ func switchBandwidth(stream *ThisStream) (err error) {
 		bandwidth = append(bandwidth, key)
 	}
 
-	sort.Ints(bandwidth)
+	slices.Sort(bandwidth)
 
 	if len(bandwidth) > 0 {
 		for i := range bandwidth {
