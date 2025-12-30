@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -30,6 +31,17 @@ func TestExporterSelection(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotNil(t, exporter)
 		assert.IsType(t, &stdouttrace.Exporter{}, exporter)
+	})
+
+	// Test case 3: AXIOM_DATASET is set
+	t.Run("axiom_dataset", func(t *testing.T) {
+		os.Setenv("AXIOM_DATASET", "test-dataset")
+		defer os.Unsetenv("AXIOM_DATASET")
+
+		exporter, err := newSpanExporter(context.Background(), ExporterTypeOTLP)
+		assert.NoError(t, err)
+		assert.NotNil(t, exporter)
+		assert.IsType(t, &otlptrace.Exporter{}, exporter)
 	})
 }
 

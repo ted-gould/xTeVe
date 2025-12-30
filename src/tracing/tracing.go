@@ -3,6 +3,7 @@ package tracing
 import (
 	"context"
 	"errors"
+	"os"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -105,7 +106,13 @@ func newTracerProvider(ctx context.Context, exporterType ExporterType) (*trace.T
 func newSpanExporter(ctx context.Context, exporterType ExporterType) (trace.SpanExporter, error) {
 	switch exporterType {
 	case ExporterTypeOTLP:
-		return otlptracegrpc.New(ctx)
+		var opts []otlptracegrpc.Option
+		if dataset := os.Getenv("AXIOM_DATASET"); dataset != "" {
+			opts = append(opts, otlptracegrpc.WithHeaders(map[string]string{
+				"x-axiom-dataset": dataset,
+			}))
+		}
+		return otlptracegrpc.New(ctx, opts...)
 	default:
 		return stdouttrace.New(
 			stdouttrace.WithPrettyPrint())
