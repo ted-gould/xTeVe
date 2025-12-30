@@ -33,10 +33,10 @@ func TestExporterSelection(t *testing.T) {
 		assert.IsType(t, &stdouttrace.Exporter{}, exporter)
 	})
 
-	// Test case 3: AXIOM_DATASET is set
-	t.Run("axiom_dataset", func(t *testing.T) {
-		os.Setenv("AXIOM_DATASET", "test-dataset")
-		defer os.Unsetenv("AXIOM_DATASET")
+	// Test case 3: OTEL_EXPORTER_OTLP_HEADERS is set
+	t.Run("otlp_headers", func(t *testing.T) {
+		os.Setenv("OTEL_EXPORTER_OTLP_HEADERS", "x-axiom-dataset=test-dataset")
+		defer os.Unsetenv("OTEL_EXPORTER_OTLP_HEADERS")
 
 		exporter, err := newSpanExporter(context.Background(), ExporterTypeOTLP)
 		assert.NoError(t, err)
