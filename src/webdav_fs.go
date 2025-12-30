@@ -74,13 +74,26 @@ func (fs *WebDAVFS) OpenFile(ctx context.Context, name string, flag int, perm os
 		return nil, os.ErrNotExist
 	}
 
-	// /<hash>
-	if len(parts) == 1 {
-		return &webdavDir{name: hash}, nil
+	switch len(parts) {
+	case 1:
+		return fs.openHashDir(hash)
+	case 2:
+		return fs.openHashSubDir(hash, parts[1])
+	case 3:
+		return fs.openOnDemandGroupDir(hash, parts[1], parts[2])
+	case 4:
+		return fs.openOnDemandStream(ctx, hash, parts[1], parts[2], parts[3])
+	default:
+		return nil, os.ErrNotExist
 	}
+}
 
-	// /<hash>/listing.m3u
-	if len(parts) == 2 && parts[1] == "listing.m3u" {
+func (fs *WebDAVFS) openHashDir(hash string) (webdav.File, error) {
+	return &webdavDir{name: hash}, nil
+}
+
+func (fs *WebDAVFS) openHashSubDir(hash, sub string) (webdav.File, error) {
+	if sub == "listing.m3u" {
 		realPath := filepath.Join(System.Folder.Data, hash+".m3u")
 		f, err := os.Open(realPath)
 		if err != nil {
@@ -88,50 +101,43 @@ func (fs *WebDAVFS) OpenFile(ctx context.Context, name string, flag int, perm os
 		}
 		return f, nil
 	}
+	if sub == "On Demand" {
+		return &webdavDir{name: path.Join(hash, sub)}, nil
+	}
+	return nil, os.ErrNotExist
+}
 
-	// /<hash>/On Demand
-	if len(parts) >= 2 && parts[1] == "On Demand" {
-		if len(parts) == 2 {
-			return &webdavDir{name: name}, nil
-		}
-
-		// /<hash>/On Demand/<Group Title>
-		if len(parts) == 3 {
-			group := parts[2]
-			groups := getGroupsForHash(hash)
-			found := false
-			for _, g := range groups {
-				sanitizedG := sanitizeGroupName(g)
-				if sanitizedG == group {
-					found = true
-					break
-				}
-			}
-			if !found {
-				return nil, os.ErrNotExist
-			}
-			return &webdavDir{name: name}, nil
-		}
-
-		// /<hash>/On Demand/<Group Title>/<Entry Title>.<ext>
-		if len(parts) == 4 {
-			group := parts[2]
-			filename := parts[3]
-
-			stream, err := findStreamByFilename(hash, group, filename)
-			if err != nil {
-				return nil, os.ErrNotExist
-			}
-
-			return &webdavStream{
-				stream: stream,
-				name:   filename,
-				ctx:    ctx,
-			}, nil
+func (fs *WebDAVFS) openOnDemandGroupDir(hash, sub, group string) (webdav.File, error) {
+	if sub != "On Demand" {
+		return nil, os.ErrNotExist
+	}
+	groups := getGroupsForHash(hash)
+	found := false
+	for _, g := range groups {
+		if sanitizeGroupName(g) == group {
+			found = true
+			break
 		}
 	}
+	if !found {
+		return nil, os.ErrNotExist
+	}
+	return &webdavDir{name: path.Join(hash, sub, group)}, nil
+}
 
-	return nil, os.ErrNotExist
+func (fs *WebDAVFS) openOnDemandStream(ctx context.Context, hash, sub, group, filename string) (webdav.File, error) {
+	if sub != "On Demand" {
+		return nil, os.ErrNotExist
+	}
+	stream, err := findStreamByFilename(hash, group, filename)
+	if err != nil {
+		return nil, os.ErrNotExist
+	}
+	return &webdavStream{
+		stream: stream,
+		name:   filename,
+		ctx:    ctx,
+	}, nil
 }
 
 // RemoveAll returns an error as the filesystem is read-only
