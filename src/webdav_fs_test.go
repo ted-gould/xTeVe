@@ -67,6 +67,25 @@ func TestWebDAVFS(t *testing.T) {
 			"url":          "http://test.com/live.ts",
 			// No duration, but ts extension -> Live
 		},
+		map[string]string{
+			"_file.m3u.id": hash,
+			"group-title":  "Negative Duration VOD",
+			"name":         "VOD Negative Duration",
+			"url":          "http://test.com/movie.mkv",
+			"_duration":    "-1", // Negative duration, but .mkv -> VOD
+		},
+		map[string]string{
+			"_file.m3u.id": hash,
+			"group-title":  "Query Params Group",
+			"name":         "VOD with Query",
+			"url":          "http://test.com/movie.mp4?token=123",
+		},
+		map[string]string{
+			"_file.m3u.id": hash,
+			"group-title":  "Slash/Group",
+			"name":         "VOD in Slash Group",
+			"url":          "http://test.com/slash.mp4",
+		},
 	}
 
 	fs := &WebDAVFS{}
@@ -136,6 +155,9 @@ func TestWebDAVFS(t *testing.T) {
 	foundGroup := false
 	foundUncat := false
 	foundLiveGroup := false
+	foundNegDurationGroup := false
+	foundQueryGroup := false
+	foundSlashGroup := false
 	for _, info := range infos {
 		if info.Name() == "Test Group" && info.IsDir() {
 			foundGroup = true
@@ -145,6 +167,15 @@ func TestWebDAVFS(t *testing.T) {
 		}
 		if info.Name() == "Live Group" {
 			foundLiveGroup = true
+		}
+		if info.Name() == "Negative Duration VOD" && info.IsDir() {
+			foundNegDurationGroup = true
+		}
+		if info.Name() == "Query Params Group" && info.IsDir() {
+			foundQueryGroup = true
+		}
+		if info.Name() == "Slash_Group" && info.IsDir() {
+			foundSlashGroup = true
 		}
 	}
 	if !foundGroup {
@@ -156,6 +187,29 @@ func TestWebDAVFS(t *testing.T) {
 	if foundLiveGroup {
 		t.Errorf("On Demand listing contained 'Live Group' which should be filtered out")
 	}
+	if !foundNegDurationGroup {
+		t.Errorf("On Demand listing did not contain 'Negative Duration VOD'")
+	}
+	if !foundQueryGroup {
+		t.Errorf("On Demand listing did not contain 'Query Params Group'")
+	}
+	if !foundSlashGroup {
+		t.Errorf("On Demand listing did not contain 'Slash_Group' (sanitized)")
+	}
+
+	// Test VOD with query params
+	f, err = fs.OpenFile(ctx, "/"+hash+"/On Demand/Query Params Group/VOD_with_Query.mp4", os.O_RDONLY, 0)
+	if err != nil {
+		t.Fatalf("Failed to open VOD with query params: %v", err)
+	}
+	f.Close()
+
+	// Test VOD in Slash Group
+	f, err = fs.OpenFile(ctx, "/"+hash+"/On Demand/Slash_Group/VOD_in_Slash_Group.mp4", os.O_RDONLY, 0)
+	if err != nil {
+		t.Fatalf("Failed to open VOD in Slash Group: %v", err)
+	}
+	f.Close()
 
 	// Test Group listing
 	f, err = fs.OpenFile(ctx, "/"+hash+"/On Demand/Test Group", os.O_RDONLY, 0)

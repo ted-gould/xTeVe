@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -100,7 +101,8 @@ func (fs *WebDAVFS) OpenFile(ctx context.Context, name string, flag int, perm os
 			groups := getGroupsForHash(hash)
 			found := false
 			for _, g := range groups {
-				if g == group {
+				sanitizedG := sanitizeGroupName(g)
+				if sanitizedG == group {
 					found = true
 					break
 				}
@@ -254,7 +256,7 @@ func (d *webdavDir) Readdir(count int) ([]os.FileInfo, error) {
 		hash := parts[0]
 		groups := getGroupsForHash(hash)
 		for _, g := range groups {
-			infos = append(infos, &mkDirInfo{name: g})
+			infos = append(infos, &mkDirInfo{name: sanitizeGroupName(g)})
 		}
 	} else if len(parts) == 3 && parts[1] == "On Demand" {
 		// <hash>/On Demand/<Group> -> Streams
@@ -407,6 +409,19 @@ func sanitizeFilename(name string) string {
 	return sanitizeRegex.ReplaceAllString(name, "_")
 }
 
+func sanitizeGroupName(name string) string {
+	// Replace forward slashes to avoid path conflicts
+	return strings.ReplaceAll(name, "/", "_")
+}
+
+func getExtensionFromURL(urlStr string) string {
+	u, err := url.Parse(urlStr)
+	if err != nil {
+		return path.Ext(urlStr)
+	}
+	return path.Ext(u.Path)
+}
+
 func findStreamByFilename(hash, group, filename string) (map[string]string, error) {
 	// Reconstruct the logic used in getStreamFilesForGroup to match filename
 	// This is inefficient but avoids storing state.
@@ -420,7 +435,7 @@ func findStreamByFilename(hash, group, filename string) (map[string]string, erro
 
 	for _, stream := range streams {
 		name := stream["name"]
-		ext := path.Ext(stream["url"])
+		ext := getExtensionFromURL(stream["url"])
 		if ext == "" {
 			ext = ".mp4" // Default extension
 		}
@@ -462,7 +477,8 @@ func getStreamsForGroup(hash, group string) []map[string]string {
 					g = "Uncategorized"
 				}
 
-				if g == group {
+				// Compare sanitized group name because the client requests with sanitized name
+				if sanitizeGroupName(g) == group {
 					results = append(results, stream)
 				}
 			}
@@ -506,7 +522,7 @@ func getStreamFilesForGroup(hash, group string) []string {
 
 	for _, stream := range streams {
 		name := stream["name"]
-		ext := path.Ext(stream["url"])
+		ext := getExtensionFromURL(stream["url"])
 		if ext == "" {
 			ext = ".mp4"
 		}
@@ -526,34 +542,35 @@ func getStreamFilesForGroup(hash, group string) []string {
 }
 
 func isVOD(stream map[string]string) bool {
-	// Check duration first
-	if val, ok := stream["_duration"]; ok {
-		duration, err := strconv.Atoi(val)
-		if err == nil {
-			if duration <= 0 {
-				return false // Live
-			}
-			return true // VOD
-		}
-	}
-
-	// Fallback to extension check
+	// 1. Check extension first (priority over duration)
 	urlStr := stream["url"]
-	ext := strings.ToLower(path.Ext(urlStr))
-
-	// List of extensions typically associated with streams
-	streamExts := []string{".m3u8", ".ts", ".php", ".pl"} // .php/pl often used for live stream redirects
-	for _, e := range streamExts {
-		if ext == e {
-			return false
-		}
-	}
+	ext := strings.ToLower(getExtensionFromURL(urlStr))
 
 	// List of extensions typically associated with VOD
 	vodExts := []string{".mp4", ".mkv", ".avi", ".mov", ".wmv", ".flv", ".webm", ".mpg", ".mpeg", ".m4v"}
 	for _, e := range vodExts {
 		if ext == e {
-			return true
+			return true // Is VOD
+		}
+	}
+
+	// List of extensions typically associated with streams
+	streamExts := []string{".m3u8", ".ts", ".php", ".pl"} // .php/pl often used for live stream redirects
+	for _, e := range streamExts {
+		if ext == e {
+			return false // Is Live
+		}
+	}
+
+	// 2. Fallback to duration check if extension is ambiguous or unknown
+	if val, ok := stream["_duration"]; ok {
+		duration, err := strconv.Atoi(val)
+		if err == nil {
+			if duration > 0 {
+				return true // VOD
+			}
+			// If duration <= 0, we assume Live (since extension check failed to find VOD)
+			return false
 		}
 	}
 
