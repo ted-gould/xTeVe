@@ -22,6 +22,7 @@ import (
 	"github.com/samber/lo"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/net/webdav"
 )
@@ -1123,12 +1124,26 @@ func (rs *ResponseStruct) setDefaultResponseData(data bool) {
 	}
 }
 
+// withRouteTag wraps a handler to manually add the http.route attribute to spans and metrics.
+// This is necessary because otelhttp.WithRouteTag is deprecated, and automatic route detection
+// works best when handlers are wrapped directly, not when using a global middleware over a mux.
+func withRouteTag(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if route := r.Pattern; route != "" {
+			if labeler, ok := otelhttp.LabelerFromContext(r.Context()); ok {
+				labeler.Add(attribute.String("http.route", route))
+			}
+			trace.SpanFromContext(r.Context()).SetAttributes(attribute.String("http.route", route))
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func newHTTPHandler() http.Handler {
 	mux := http.NewServeMux()
 
 	handleFunc := func(pattern string, handlerFunc func(http.ResponseWriter, *http.Request)) {
-		handler := otelhttp.WithRouteTag(pattern, http.HandlerFunc(handlerFunc))
-		mux.Handle(pattern, handler)
+		mux.Handle(pattern, withRouteTag(http.HandlerFunc(handlerFunc)))
 	}
 
 	handleFunc("/", Index)
@@ -1152,7 +1167,7 @@ func newHTTPHandler() http.Handler {
 			}
 		},
 	}
-	mux.Handle("/dav/", otelhttp.WithRouteTag("/dav/", davHandler))
+	mux.Handle("/dav/", withRouteTag(davHandler))
 
 	handler := otelhttp.NewHandler(mux, "/")
 	return handler
