@@ -13,6 +13,7 @@ import (
 var exceptForParameterRx = regexp.MustCompile(`[a-z-A-Z=]*(".*?")`)
 var exceptForChannelNameRx = regexp.MustCompile(`,([^\n]*|,[^\r]*)`)
 var extGrpRx = regexp.MustCompile(`#EXTGRP: *(.*)`)
+var durationRx = regexp.MustCompile(`^:(-?[0-9]+)`)
 
 // MakeInterfaceFromM3U :
 func MakeInterfaceFromM3U(byteStream []byte) (allChannels []any, err error) {
@@ -97,6 +98,10 @@ func MakeInterfaceFromM3U(byteStream []byte) (allChannels []any, err error) {
 					stream["_values"] = value
 				}
 			}
+		}
+
+		if durationMatch := durationRx.FindStringSubmatch(channelBlock); len(durationMatch) > 1 {
+			stream["_duration"] = durationMatch[1]
 		}
 
 		// Search for a unique ID in the stream (optimized with map, using captured processedUUIDs)
