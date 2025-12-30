@@ -60,10 +60,18 @@ func run() (err error) {
 	defer stop()
 
 	// Set up OpenTelemetry.
-	otelExporterType, err := snap.Get("otel-exporter-type")
-	if err != nil {
-		log.Printf("could not get otel-exporter-type from snap: %v", err)
+	if err := snap.LoadEnv("otel.env"); err != nil {
+		log.Printf("could not load otel.env from snap: %v", err)
 	}
+
+	otelExporterType := os.Getenv("OTEL_EXPORTER_TYPE")
+	if otelExporterType == "" {
+		otelExporterType, err = snap.Get("otel-exporter-type")
+		if err != nil {
+			log.Printf("could not get otel-exporter-type from snap: %v", err)
+		}
+	}
+
 	otelShutdown, err := tracing.SetupOTelSDK(ctx, tracing.ExporterType(otelExporterType))
 	if err != nil {
 		return
