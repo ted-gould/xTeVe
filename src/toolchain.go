@@ -408,3 +408,13 @@ func getMD5(str string) (string, error) {
 	}
 	return hex.EncodeToString(md5Hasher.Sum(nil)), nil
 }
+
+// bindToStruct converts a map (or any object) to a struct via JSON marshalling,
+// avoiding unnecessary indentation and string conversions.
+func bindToStruct(input any, output any) error {
+	bytes, err := json.Marshal(input)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(bytes, output)
+}

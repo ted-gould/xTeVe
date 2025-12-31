@@ -1,7 +1,6 @@
 package src
 
 import (
-	"encoding/json"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -238,7 +237,7 @@ func createXEPGDatabase() (err error) {
 	// Delete Channel with missing Channel Numbers.
 	for id, dxc := range Data.XEPG.Channels {
 		var xepgChannel XEPGChannelStruct
-		err = json.Unmarshal([]byte(mapToJSON(dxc)), &xepgChannel)
+		err = bindToStruct(dxc, &xepgChannel)
 		if err != nil {
 			return
 		}
@@ -256,7 +255,7 @@ func createXEPGDatabase() (err error) {
 	var xepgChannelsValuesMap = make(map[string]XEPGChannelStruct)
 	for _, v := range Data.XEPG.Channels {
 		var channel XEPGChannelStruct
-		err = json.Unmarshal([]byte(mapToJSON(v)), &channel)
+		err = bindToStruct(v, &channel)
 		if err != nil {
 			return
 		}
@@ -284,7 +283,7 @@ func createXEPGDatabase() (err error) {
 		var currentXEPGID string   // Current Database ID (XEPG) Used to update the Channel in the Database with the Stream of the M3U
 
 		var m3uChannel M3UChannelStructXEPG
-		err = json.Unmarshal([]byte(mapToJSON(dsa)), &m3uChannel)
+		err = bindToStruct(dsa, &m3uChannel)
 		if err != nil {
 			return
 		}
@@ -419,7 +418,7 @@ func generateChannelHash(m3uID, name, groupTitle, tvgID, tvgName, uuidKey, uuidV
 // processExistingXEPGChannel updates an existing channel in the XEPG database.
 func processExistingXEPGChannel(m3uChannel M3UChannelStructXEPG, currentXEPGID string, channelHasUUID bool) (err error) {
 	var xepgChannel XEPGChannelStruct
-	err = json.Unmarshal([]byte(mapToJSON(Data.XEPG.Channels[currentXEPGID])), &xepgChannel)
+	err = bindToStruct(Data.XEPG.Channels[currentXEPGID], &xepgChannel)
 	if err != nil {
 		return
 	}
@@ -503,7 +502,7 @@ func mapping() (err error) {
 
 	for xepgID, dxc := range Data.XEPG.Channels {
 		var xepgChannel XEPGChannelStruct
-		err = json.Unmarshal([]byte(mapToJSON(dxc)), &xepgChannel)
+		err = bindToStruct(dxc, &xepgChannel)
 		if err != nil {
 			return
 		}
@@ -742,7 +741,7 @@ func createXMLTVFile() (err error) {
 
 	for _, dxc := range Data.XEPG.Channels {
 		var xepgChannel XEPGChannelStruct
-		jsonErr := json.Unmarshal([]byte(mapToJSON(dxc)), &xepgChannel) // Renamed err to jsonErr
+		jsonErr := bindToStruct(dxc, &xepgChannel) // Renamed err to jsonErr
 		if jsonErr == nil {
 			if xepgChannel.XActive {
 				// Create Channel Element
@@ -1049,7 +1048,7 @@ func cleanupXEPG() {
 
 	for id, dxc := range Data.XEPG.Channels {
 		var xepgChannel XEPGChannelStruct
-		err := json.Unmarshal([]byte(mapToJSON(dxc)), &xepgChannel)
+		err := bindToStruct(dxc, &xepgChannel)
 		if err != nil {
 			continue
 		}
