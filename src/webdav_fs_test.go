@@ -327,3 +327,60 @@ func TestWebDAVFS(t *testing.T) {
 	}
 	f.Close()
 }
+
+func TestParseSeriesUserScenario(t *testing.T) {
+	testCases := []struct {
+		input          string
+		expectedName   string
+		expectedSeason int
+		expectedOk     bool
+	}{
+		{
+			input:          "text_-_Foo_Bar_S01_E01",
+			expectedName:   "Foo Bar",
+			expectedSeason: 1,
+			expectedOk:     true,
+		},
+		{
+			input:          "text_-_Foo_Bar_S01_E01.mkv",
+			expectedName:   "Foo Bar",
+			expectedSeason: 1,
+			expectedOk:     true,
+		},
+		// Existing cases should still work
+		{
+			input:          "My Series S01 E01",
+			expectedName:   "My Series",
+			expectedSeason: 1,
+			expectedOk:     true,
+		},
+		{
+			input:          "Prefix - My Series S01 E01",
+			expectedName:   "My Series",
+			expectedSeason: 1,
+			expectedOk:     true,
+		},
+		// Case insensitive
+		{
+			input:          "text_-_foo_bar_s02_e05",
+			expectedName:   "foo bar",
+			expectedSeason: 2,
+			expectedOk:     true,
+		},
+	}
+
+	for _, tc := range testCases {
+		name, season, ok := parseSeries(tc.input)
+		if ok != tc.expectedOk {
+			t.Errorf("Input: %s, Expected ok: %v, got: %v", tc.input, tc.expectedOk, ok)
+		}
+		if ok {
+			if name != tc.expectedName {
+				t.Errorf("Input: %s, Expected name: '%s', got: '%s'", tc.input, tc.expectedName, name)
+			}
+			if season != tc.expectedSeason {
+				t.Errorf("Input: %s, Expected season: %d, got: %d", tc.input, tc.expectedSeason, season)
+			}
+		}
+	}
+}
