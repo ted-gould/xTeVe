@@ -928,7 +928,7 @@ func buildDatabaseDVR() (err error) {
 	slices.Sort(Data.StreamPreviewUI.Inactive)
 
 	// Invalidate WebDAV group cache after streams are rebuilt to avoid caching partial states
-	ClearGroupCache("")
+	ClearWebDAVCache("")
 
 	return
 }

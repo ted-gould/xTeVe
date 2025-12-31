@@ -650,18 +650,37 @@ func (s *webdavStream) Write(p []byte) (n int, err error) {
 // Helpers
 
 var (
-	groupCache      = make(map[string][]string)
-	groupCacheMutex sync.RWMutex
+	webdavCache      = make(map[string]*HashCache)
+	webdavCacheMutex sync.RWMutex
 )
 
-// ClearGroupCache clears the group cache for a specific hash or all if empty
-func ClearGroupCache(hash string) {
-	groupCacheMutex.Lock()
-	defer groupCacheMutex.Unlock()
+type HashCache struct {
+	Groups          []string
+	Series          map[string][]string        // Key: Group
+	Seasons         map[seasonKey][]string     // Key: Group, Series
+	SeasonFiles     map[seasonFileKey][]string // Key: Group, Series, Season
+	IndividualFiles map[string][]string        // Key: Group
+}
+
+type seasonKey struct {
+	Group  string
+	Series string
+}
+
+type seasonFileKey struct {
+	Group  string
+	Series string
+	Season string
+}
+
+// ClearWebDAVCache clears the WebDAV cache for a specific hash or all if empty
+func ClearWebDAVCache(hash string) {
+	webdavCacheMutex.Lock()
+	defer webdavCacheMutex.Unlock()
 	if hash == "" {
-		groupCache = make(map[string][]string)
+		webdavCache = make(map[string]*HashCache)
 	} else {
-		delete(groupCache, hash)
+		delete(webdavCache, hash)
 	}
 }
 
@@ -754,12 +773,14 @@ func getSeriesStreams(hash, group, seriesName string, season int) []map[string]s
 }
 
 func getGroupsForHash(hash string) []string {
-	groupCacheMutex.RLock()
-	if groups, ok := groupCache[hash]; ok {
-		groupCacheMutex.RUnlock()
-		return groups
+	webdavCacheMutex.RLock()
+	if hc, ok := webdavCache[hash]; ok {
+		if hc.Groups != nil {
+			webdavCacheMutex.RUnlock()
+			return hc.Groups
+		}
 	}
-	groupCacheMutex.RUnlock()
+	webdavCacheMutex.RUnlock()
 
 	groupsMap := make(map[string]bool)
 
@@ -786,29 +807,96 @@ func getGroupsForHash(hash string) []string {
 	}
 	slices.Sort(groups)
 
-	groupCacheMutex.Lock()
-	groupCache[hash] = groups
-	groupCacheMutex.Unlock()
+	webdavCacheMutex.Lock()
+	hc, ok := webdavCache[hash]
+	if !ok {
+		hc = &HashCache{
+			Series:          make(map[string][]string),
+			Seasons:         make(map[seasonKey][]string),
+			SeasonFiles:     make(map[seasonFileKey][]string),
+			IndividualFiles: make(map[string][]string),
+		}
+		webdavCache[hash] = hc
+	}
+	hc.Groups = groups
+	webdavCacheMutex.Unlock()
 
 	return groups
 }
 
 func getIndividualStreamFiles(hash, group string) []string {
+	webdavCacheMutex.RLock()
+	if hc, ok := webdavCache[hash]; ok {
+		if list, ok := hc.IndividualFiles[group]; ok {
+			webdavCacheMutex.RUnlock()
+			return list
+		}
+	}
+	webdavCacheMutex.RUnlock()
+
 	streams := getIndividualStreams(hash, group)
-	return generateFilenames(streams)
+	files := generateFilenames(streams)
+
+	webdavCacheMutex.Lock()
+	hc, ok := webdavCache[hash]
+	if !ok {
+		hc = &HashCache{
+			Series:          make(map[string][]string),
+			Seasons:         make(map[seasonKey][]string),
+			SeasonFiles:     make(map[seasonFileKey][]string),
+			IndividualFiles: make(map[string][]string),
+		}
+		webdavCache[hash] = hc
+	}
+	if hc.IndividualFiles == nil {
+		hc.IndividualFiles = make(map[string][]string)
+	}
+	hc.IndividualFiles[group] = files
+	webdavCacheMutex.Unlock()
+
+	return files
 }
 
 func getSeasonFiles(hash, group, series, seasonStr string) []string {
-    // seasonStr is "Season X"
-    // Parse X
-    parts := strings.Split(seasonStr, " ")
-    if len(parts) < 2 {
-        return nil
-    }
-    sNum, _ := strconv.Atoi(parts[1])
+	key := seasonFileKey{Group: group, Series: series, Season: seasonStr}
+	webdavCacheMutex.RLock()
+	if hc, ok := webdavCache[hash]; ok {
+		if list, ok := hc.SeasonFiles[key]; ok {
+			webdavCacheMutex.RUnlock()
+			return list
+		}
+	}
+	webdavCacheMutex.RUnlock()
+
+	// seasonStr is "Season X"
+	// Parse X
+	parts := strings.Split(seasonStr, " ")
+	if len(parts) < 2 {
+		return nil
+	}
+	sNum, _ := strconv.Atoi(parts[1])
 
 	streams := getSeriesStreams(hash, group, series, sNum)
-	return generateFilenames(streams)
+	files := generateFilenames(streams)
+
+	webdavCacheMutex.Lock()
+	hc, ok := webdavCache[hash]
+	if !ok {
+		hc = &HashCache{
+			Series:          make(map[string][]string),
+			Seasons:         make(map[seasonKey][]string),
+			SeasonFiles:     make(map[seasonFileKey][]string),
+			IndividualFiles: make(map[string][]string),
+		}
+		webdavCache[hash] = hc
+	}
+	if hc.SeasonFiles == nil {
+		hc.SeasonFiles = make(map[seasonFileKey][]string)
+	}
+	hc.SeasonFiles[key] = files
+	webdavCacheMutex.Unlock()
+
+	return files
 }
 
 func generateFilenames(streams []map[string]string) []string {
@@ -837,6 +925,15 @@ func generateFilenames(streams []map[string]string) []string {
 }
 
 func getSeriesList(hash, group string) []string {
+	webdavCacheMutex.RLock()
+	if hc, ok := webdavCache[hash]; ok {
+		if list, ok := hc.Series[group]; ok {
+			webdavCacheMutex.RUnlock()
+			return list
+		}
+	}
+	webdavCacheMutex.RUnlock()
+
 	all := getStreamsForGroup(hash, group)
 	seen := make(map[string]bool)
 	for _, s := range all {
@@ -850,10 +947,38 @@ func getSeriesList(hash, group string) []string {
 		res = append(res, k)
 	}
 	slices.Sort(res)
+
+	webdavCacheMutex.Lock()
+	hc, ok := webdavCache[hash]
+	if !ok {
+		hc = &HashCache{
+			Series:          make(map[string][]string),
+			Seasons:         make(map[seasonKey][]string),
+			SeasonFiles:     make(map[seasonFileKey][]string),
+			IndividualFiles: make(map[string][]string),
+		}
+		webdavCache[hash] = hc
+	}
+	if hc.Series == nil {
+		hc.Series = make(map[string][]string)
+	}
+	hc.Series[group] = res
+	webdavCacheMutex.Unlock()
+
 	return res
 }
 
 func getSeasonsList(hash, group, series string) []string {
+	key := seasonKey{Group: group, Series: series}
+	webdavCacheMutex.RLock()
+	if hc, ok := webdavCache[hash]; ok {
+		if list, ok := hc.Seasons[key]; ok {
+			webdavCacheMutex.RUnlock()
+			return list
+		}
+	}
+	webdavCacheMutex.RUnlock()
+
 	// series is already sanitizedGroupName
 	all := getStreamsForGroup(hash, group)
 	seen := make(map[int]bool)
@@ -874,6 +999,24 @@ func getSeasonsList(hash, group, series string) []string {
 	for _, n := range nums {
 		res = append(res, fmt.Sprintf("Season %d", n))
 	}
+
+	webdavCacheMutex.Lock()
+	hc, ok := webdavCache[hash]
+	if !ok {
+		hc = &HashCache{
+			Series:          make(map[string][]string),
+			Seasons:         make(map[seasonKey][]string),
+			SeasonFiles:     make(map[seasonFileKey][]string),
+			IndividualFiles: make(map[string][]string),
+		}
+		webdavCache[hash] = hc
+	}
+	if hc.Seasons == nil {
+		hc.Seasons = make(map[seasonKey][]string)
+	}
+	hc.Seasons[key] = res
+	webdavCacheMutex.Unlock()
+
 	return res
 }
 
