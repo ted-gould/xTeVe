@@ -65,7 +65,8 @@ func TestWebDAVCacheRefresh(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open On Demand dir: %v", err)
 	}
-	infos, err := f.Readdir(-1)
+	// Use blank identifier as we only care about the side-effect of caching
+	_, err = f.Readdir(-1)
 	if err != nil {
 		t.Fatalf("Failed to read On Demand dir: %v", err)
 	}
@@ -86,7 +87,10 @@ func TestWebDAVCacheRefresh(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open Series dir: %v", err)
 	}
-	f.Readdir(-1)
+	_, err = f.Readdir(-1)
+	if err != nil {
+		t.Fatalf("Failed to read Series dir: %v", err)
+	}
 	f.Close()
 
 	// Verify Series Cache
@@ -108,7 +112,10 @@ func TestWebDAVCacheRefresh(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open My Series dir: %v", err)
 	}
-	f.Readdir(-1)
+	_, err = f.Readdir(-1)
+	if err != nil {
+		t.Fatalf("Failed to read My Series dir: %v", err)
+	}
 	f.Close()
 
 	// Verify Seasons Cache
@@ -131,7 +138,10 @@ func TestWebDAVCacheRefresh(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open Season 1 dir: %v", err)
 	}
-	f.Readdir(-1)
+	_, err = f.Readdir(-1)
+	if err != nil {
+		t.Fatalf("Failed to read Season 1 dir: %v", err)
+	}
 	f.Close()
 
 	// Verify SeasonFiles Cache
@@ -154,7 +164,10 @@ func TestWebDAVCacheRefresh(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open Individual dir: %v", err)
 	}
-	f.Readdir(-1)
+	_, err = f.Readdir(-1)
+	if err != nil {
+		t.Fatalf("Failed to read Individual dir: %v", err)
+	}
 	f.Close()
 
 	// Verify IndividualFiles Cache
@@ -187,7 +200,10 @@ func TestWebDAVCacheRefresh(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open On Demand dir after clear: %v", err)
 	}
-	infos, err = f.Readdir(-1)
+	infos, err := f.Readdir(-1)
+	if err != nil {
+		t.Fatalf("Failed to read On Demand dir after clear: %v", err)
+	}
 	f.Close()
 	if len(infos) == 0 {
 		t.Errorf("Refetch returned empty list")
