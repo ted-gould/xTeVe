@@ -1,7 +1,6 @@
 package src
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -144,7 +143,7 @@ func loadSettings() (settings SettingsStruct, err error) {
 		}
 	}
 
-	err = json.Unmarshal([]byte(mapToJSON(settingsMap)), &settings)
+	err = bindToStruct(settingsMap, &settings)
 	if err != nil {
 		return
 	}
@@ -311,7 +310,7 @@ func getStreamInfo(urlID string) (streamInfo StreamInfo, err error) {
 			return streamInfo, err
 		}
 
-		err = json.Unmarshal([]byte(mapToJSON(tmp)), &Data.Cache.StreamingURLS)
+		err = bindToStruct(tmp, &Data.Cache.StreamingURLS)
 		if err != nil {
 			return streamInfo, err
 		}

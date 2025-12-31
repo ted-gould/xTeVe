@@ -209,15 +209,6 @@ func mapToJSON(tmpMap any) string {
 	return string(jsonString)
 }
 
-func jsonToMap(content string) map[string]any {
-	var tmpMap = make(map[string]any)
-	if err := json.Unmarshal([]byte(content), &tmpMap); err != nil {
-		log.Printf("Error unmarshalling JSON to map: %v. Content: %s", err, content)
-		// Return an empty map or handle as appropriate for the callers
-		return make(map[string]any)
-	}
-	return tmpMap
-}
 
 func jsonToInterface(content string) (tmpMap any, err error) {
 	err = json.Unmarshal([]byte(content), &tmpMap)

@@ -723,7 +723,7 @@ func Web(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	err = json.Unmarshal([]byte(mapToJSON(lang)), &language)
+	err = bindToStruct(lang, &language)
 	if err != nil {
 		ShowError(err, 0)
 		return
