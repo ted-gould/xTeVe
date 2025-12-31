@@ -32,13 +32,14 @@ type WebDAVFS struct {
 
 // mkDirInfo implements os.FileInfo for a directory
 type mkDirInfo struct {
-	name string
+	name    string
+	modTime time.Time
 }
 
 func (d *mkDirInfo) Name() string       { return d.name }
 func (d *mkDirInfo) Size() int64        { return 0 }
 func (d *mkDirInfo) Mode() os.FileMode  { return os.ModeDir | 0555 }
-func (d *mkDirInfo) ModTime() time.Time { return time.Now() }
+func (d *mkDirInfo) ModTime() time.Time { return d.modTime }
 func (d *mkDirInfo) IsDir() bool        { return true }
 func (d *mkDirInfo) Sys() interface{}   { return nil }
 
@@ -214,10 +215,12 @@ func (fs *WebDAVFS) openOnDemandIndividualStream(ctx context.Context, hash, sub,
 	if err != nil {
 		return nil, os.ErrNotExist
 	}
+	modTime := getM3UModTime(hash)
 	return &webdavStream{
-		stream: stream,
-		name:   filename,
-		ctx:    ctx,
+		stream:  stream,
+		name:    filename,
+		ctx:     ctx,
+		modTime: modTime,
 	}, nil
 }
 
@@ -229,10 +232,12 @@ func (fs *WebDAVFS) openOnDemandSeriesStream(ctx context.Context, hash, sub, gro
 	if err != nil {
 		return nil, os.ErrNotExist
 	}
+	modTime := getM3UModTime(hash)
 	return &webdavStream{
-		stream: stream,
-		name:   filename,
-		ctx:    ctx,
+		stream:  stream,
+		name:    filename,
+		ctx:     ctx,
+		modTime: modTime,
 	}, nil
 }
 
@@ -274,7 +279,7 @@ func (fs *WebDAVFS) Stat(ctx context.Context, name string) (os.FileInfo, error) 
 	name = strings.TrimSuffix(name, "/")
 
 	if name == "" {
-		return &mkDirInfo{name: ""}, nil
+		return &mkDirInfo{name: "", modTime: time.Now()}, nil
 	}
 
 	parts := strings.Split(name, "/")
@@ -287,21 +292,23 @@ func (fs *WebDAVFS) Stat(ctx context.Context, name string) (os.FileInfo, error) 
 		return nil, os.ErrNotExist
 	}
 
+	modTime := getM3UModTime(hash)
+
 	switch len(parts) {
 	case 1:
-		return fs.statHashDir(hash)
+		return fs.statHashDir(hash, modTime)
 	case 2:
-		return fs.statHashSubDir(hash, parts[1])
+		return fs.statHashSubDir(hash, parts[1], modTime)
 	case 3:
 		// Group dir
 		if parts[1] == dirOnDemand && fs.groupExists(hash, parts[2]) {
-			return &mkDirInfo{name: parts[2]}, nil
+			return &mkDirInfo{name: parts[2], modTime: modTime}, nil
 		}
 	case 4:
 		// Series or Individual dir
 		if parts[1] == dirOnDemand && fs.groupExists(hash, parts[2]) {
 			if parts[3] == dirSeries || parts[3] == dirIndividual {
-				return &mkDirInfo{name: parts[3]}, nil
+				return &mkDirInfo{name: parts[3], modTime: modTime}, nil
 			}
 		}
 	case 5:
@@ -310,14 +317,14 @@ func (fs *WebDAVFS) Stat(ctx context.Context, name string) (os.FileInfo, error) 
 				// File in Individual
 				_, err := findIndividualStream(hash, parts[2], parts[4])
 				if err == nil {
-					return &mkFileInfo{name: parts[4], size: 0, modTime: time.Now()}, nil
+					return &mkFileInfo{name: parts[4], size: 0, modTime: modTime}, nil
 				}
 			} else if parts[3] == dirSeries {
 				// Series Dir
 				seriesList := getSeriesList(hash, parts[2])
 				for _, s := range seriesList {
 					if s == parts[4] {
-						return &mkDirInfo{name: parts[4]}, nil
+						return &mkDirInfo{name: parts[4], modTime: modTime}, nil
 					}
 				}
 			}
@@ -328,7 +335,7 @@ func (fs *WebDAVFS) Stat(ctx context.Context, name string) (os.FileInfo, error) 
 			seasons := getSeasonsList(hash, parts[2], parts[4])
 			for _, s := range seasons {
 				if s == parts[5] {
-					return &mkDirInfo{name: parts[5]}, nil
+					return &mkDirInfo{name: parts[5], modTime: modTime}, nil
 				}
 			}
 		}
@@ -337,7 +344,7 @@ func (fs *WebDAVFS) Stat(ctx context.Context, name string) (os.FileInfo, error) 
 			// File in Series
 			_, err := findSeriesStream(hash, parts[2], parts[4], parts[5], parts[6])
 			if err == nil {
-				return &mkFileInfo{name: parts[6], size: 0, modTime: time.Now()}, nil
+				return &mkFileInfo{name: parts[6], size: 0, modTime: modTime}, nil
 			}
 		}
 	}
@@ -345,12 +352,13 @@ func (fs *WebDAVFS) Stat(ctx context.Context, name string) (os.FileInfo, error) 
 	return nil, os.ErrNotExist
 }
 
-func (fs *WebDAVFS) statHashDir(hash string) (os.FileInfo, error) {
-	return &mkDirInfo{name: hash}, nil
+func (fs *WebDAVFS) statHashDir(hash string, modTime time.Time) (os.FileInfo, error) {
+	return &mkDirInfo{name: hash, modTime: modTime}, nil
 }
 
-func (fs *WebDAVFS) statHashSubDir(hash, sub string) (os.FileInfo, error) {
+func (fs *WebDAVFS) statHashSubDir(hash, sub string, modTime time.Time) (os.FileInfo, error) {
 	if sub == fileListing {
+		// Use real file stat for listing.m3u
 		realPath := filepath.Join(System.Folder.Data, hash+".m3u")
 		info, err := os.Stat(realPath)
 		if err != nil {
@@ -359,7 +367,7 @@ func (fs *WebDAVFS) statHashSubDir(hash, sub string) (os.FileInfo, error) {
 		return &mkFileInfo{name: fileListing, size: info.Size(), modTime: info.ModTime()}, nil
 	}
 	if sub == dirOnDemand {
-		return &mkDirInfo{name: dirOnDemand}, nil
+		return &mkDirInfo{name: dirOnDemand, modTime: modTime}, nil
 	}
 	return nil, os.ErrNotExist
 }
@@ -410,22 +418,31 @@ func (d *webdavDir) collectInfos() ([]os.FileInfo, error) {
 	}
 
 	parts := strings.Split(d.name, "/")
+
+	// We can try to extract hash from parts[0] if available
+	var modTime time.Time
+	if len(parts) > 0 {
+		modTime = getM3UModTime(parts[0])
+	} else {
+		modTime = time.Now()
+	}
+
 	switch len(parts) {
 	case 1:
-		return d.readDirHash(parts[0])
+		return d.readDirHash(parts[0], modTime)
 	case 2:
-		return d.readDirOnDemand(parts[0], parts[1])
+		return d.readDirOnDemand(parts[0], parts[1], modTime)
 	case 3:
-		return d.readDirOnDemandGroup(parts[0], parts[1], parts[2])
+		return d.readDirOnDemandGroup(parts[0], parts[1], parts[2], modTime)
 	case 4:
-		return d.readDirOnDemandGroupSub(parts[0], parts[1], parts[2], parts[3])
+		return d.readDirOnDemandGroupSub(parts[0], parts[1], parts[2], parts[3], modTime)
 	case 5:
 		if parts[3] == dirSeries {
-			return d.readDirSeries(parts[0], parts[1], parts[2], parts[4])
+			return d.readDirSeries(parts[0], parts[1], parts[2], parts[4], modTime)
 		}
 	case 6:
 		if parts[3] == dirSeries {
-			return d.readDirSeason(parts[0], parts[1], parts[2], parts[4], parts[5])
+			return d.readDirSeason(parts[0], parts[1], parts[2], parts[4], parts[5], modTime)
 		}
 	}
 	return nil, nil
@@ -439,35 +456,36 @@ func (d *webdavDir) readDirRoot() ([]os.FileInfo, error) {
 	}
 	slices.Sort(hashes)
 	for _, hash := range hashes {
-		infos = append(infos, &mkDirInfo{name: hash})
+		modTime := getM3UModTime(hash)
+		infos = append(infos, &mkDirInfo{name: hash, modTime: modTime})
 	}
 	return infos, nil
 }
 
-func (d *webdavDir) readDirHash(hash string) ([]os.FileInfo, error) {
+func (d *webdavDir) readDirHash(hash string, modTime time.Time) ([]os.FileInfo, error) {
 	var infos []os.FileInfo
 	realPath := filepath.Join(System.Folder.Data, hash+".m3u")
 	info, err := os.Stat(realPath)
 	if err == nil {
 		infos = append(infos, &mkFileInfo{name: fileListing, size: info.Size(), modTime: info.ModTime()})
 	}
-	infos = append(infos, &mkDirInfo{name: dirOnDemand})
+	infos = append(infos, &mkDirInfo{name: dirOnDemand, modTime: modTime})
 	return infos, nil
 }
 
-func (d *webdavDir) readDirOnDemand(hash, sub string) ([]os.FileInfo, error) {
+func (d *webdavDir) readDirOnDemand(hash, sub string, modTime time.Time) ([]os.FileInfo, error) {
 	if sub != dirOnDemand {
 		return nil, nil
 	}
 	var infos []os.FileInfo
 	groups := getGroupsForHash(hash)
 	for _, g := range groups {
-		infos = append(infos, &mkDirInfo{name: sanitizeGroupName(g)})
+		infos = append(infos, &mkDirInfo{name: sanitizeGroupName(g), modTime: modTime})
 	}
 	return infos, nil
 }
 
-func (d *webdavDir) readDirOnDemandGroup(hash, sub, group string) ([]os.FileInfo, error) {
+func (d *webdavDir) readDirOnDemandGroup(hash, sub, group string, modTime time.Time) ([]os.FileInfo, error) {
 	if sub != dirOnDemand {
 		return nil, nil
 	}
@@ -475,18 +493,18 @@ func (d *webdavDir) readDirOnDemandGroup(hash, sub, group string) ([]os.FileInfo
 
 	// Check if we have individual streams
 	if len(getIndividualStreamFiles(hash, group)) > 0 {
-		infos = append(infos, &mkDirInfo{name: dirIndividual})
+		infos = append(infos, &mkDirInfo{name: dirIndividual, modTime: modTime})
 	}
 
 	// Check if we have series
 	if len(getSeriesList(hash, group)) > 0 {
-		infos = append(infos, &mkDirInfo{name: dirSeries})
+		infos = append(infos, &mkDirInfo{name: dirSeries, modTime: modTime})
 	}
 
 	return infos, nil
 }
 
-func (d *webdavDir) readDirOnDemandGroupSub(hash, sub, group, subType string) ([]os.FileInfo, error) {
+func (d *webdavDir) readDirOnDemandGroupSub(hash, sub, group, subType string, modTime time.Time) ([]os.FileInfo, error) {
 	if sub != dirOnDemand {
 		return nil, nil
 	}
@@ -495,38 +513,38 @@ func (d *webdavDir) readDirOnDemandGroupSub(hash, sub, group, subType string) ([
 	if subType == dirIndividual {
 		files := getIndividualStreamFiles(hash, group)
 		for _, f := range files {
-			infos = append(infos, &mkFileInfo{name: f, size: 0, modTime: time.Now()})
+			infos = append(infos, &mkFileInfo{name: f, size: 0, modTime: modTime})
 		}
 	} else if subType == dirSeries {
 		series := getSeriesList(hash, group)
 		for _, s := range series {
-			infos = append(infos, &mkDirInfo{name: s})
+			infos = append(infos, &mkDirInfo{name: s, modTime: modTime})
 		}
 	}
 
 	return infos, nil
 }
 
-func (d *webdavDir) readDirSeries(hash, sub, group, series string) ([]os.FileInfo, error) {
+func (d *webdavDir) readDirSeries(hash, sub, group, series string, modTime time.Time) ([]os.FileInfo, error) {
 	if sub != dirOnDemand {
 		return nil, nil
 	}
 	var infos []os.FileInfo
 	seasons := getSeasonsList(hash, group, series)
 	for _, s := range seasons {
-		infos = append(infos, &mkDirInfo{name: s})
+		infos = append(infos, &mkDirInfo{name: s, modTime: modTime})
 	}
 	return infos, nil
 }
 
-func (d *webdavDir) readDirSeason(hash, sub, group, series, season string) ([]os.FileInfo, error) {
+func (d *webdavDir) readDirSeason(hash, sub, group, series, season string, modTime time.Time) ([]os.FileInfo, error) {
 	if sub != dirOnDemand {
 		return nil, nil
 	}
 	var infos []os.FileInfo
 	files := getSeasonFiles(hash, group, series, season)
 	for _, f := range files {
-		infos = append(infos, &mkFileInfo{name: f, size: 0, modTime: time.Now()})
+		infos = append(infos, &mkFileInfo{name: f, size: 0, modTime: modTime})
 	}
 	return infos, nil
 }
@@ -534,9 +552,19 @@ func (d *webdavDir) readDirSeason(hash, sub, group, series, season string) ([]os
 func (d *webdavDir) Stat() (os.FileInfo, error) {
 	name := d.name
 	if name == "" {
-		return &mkDirInfo{name: ""}, nil
+		// Root
+		return &mkDirInfo{name: "", modTime: time.Now()}, nil
 	}
-	return &mkDirInfo{name: path.Base(name)}, nil
+
+	parts := strings.Split(name, "/")
+	var modTime time.Time
+	if len(parts) > 0 {
+		modTime = getM3UModTime(parts[0])
+	} else {
+		modTime = time.Now()
+	}
+
+	return &mkDirInfo{name: path.Base(name), modTime: modTime}, nil
 }
 
 func (d *webdavDir) Write(p []byte) (n int, err error) {
@@ -550,6 +578,7 @@ type webdavStream struct {
 	ctx        context.Context
 	readCloser io.ReadCloser
 	pos        int64
+	modTime    time.Time
 }
 
 func (s *webdavStream) Close() error {
@@ -639,7 +668,7 @@ func (s *webdavStream) Readdir(count int) ([]os.FileInfo, error) {
 }
 
 func (s *webdavStream) Stat() (os.FileInfo, error) {
-	return &mkFileInfo{name: s.name, size: 0, modTime: time.Now()}, nil
+	return &mkFileInfo{name: s.name, size: 0, modTime: s.modTime}, nil
 }
 
 func (s *webdavStream) Write(p []byte) (n int, err error) {
@@ -647,6 +676,15 @@ func (s *webdavStream) Write(p []byte) (n int, err error) {
 }
 
 // Helpers
+
+func getM3UModTime(hash string) time.Time {
+	realPath := filepath.Join(System.Folder.Data, hash+".m3u")
+	info, err := os.Stat(realPath)
+	if err != nil {
+		return time.Now()
+	}
+	return info.ModTime()
+}
 
 var sanitizeRegex = regexp.MustCompile(`[^a-zA-Z0-9.\-_]`)
 var seriesRegex = regexp.MustCompile(`(?i)^(.*?)\s*S(\d{1,3})\s*E\d{1,3}`)
