@@ -649,22 +649,28 @@ func (s *webdavStream) Write(p []byte) (n int, err error) {
 // Helpers
 
 var sanitizeRegex = regexp.MustCompile(`[^a-zA-Z0-9.\-_]`)
-var seriesRegex = regexp.MustCompile(`(?i)^(.*?)\s*S(\d{1,3})\s*E\d{1,3}`)
+var seriesRegex = regexp.MustCompile(`(?i)^(.*?)[_\s]*S(\d{1,3})[_\s]*E\d{1,3}`)
 
 func parseSeries(name string) (string, int, bool) {
 	matches := seriesRegex.FindStringSubmatch(name)
 	if len(matches) < 3 {
-		// Try a slightly relaxed check if strict failed, similar to the test script logic?
-		// The test script refined regex was: (?i)^(.*?)\s*S(\d{1,3})\s*E\d{1,3}
-		// My regex above has \s* which matches the refined one.
 		return "", 0, false
 	}
 	rawSeriesName := matches[1]
 	seasonStr := matches[2]
 
+	// Handle standard " - " separator
 	lastHyphen := strings.LastIndex(rawSeriesName, " - ")
 	if lastHyphen != -1 {
 		rawSeriesName = rawSeriesName[lastHyphen+3:]
+	} else {
+		// Handle "_-_" separator (User scenario: text_-_Foo_Bar_S01_E01)
+		lastUnderscoreHyphen := strings.LastIndex(rawSeriesName, "_-_")
+		if lastUnderscoreHyphen != -1 {
+			rawSeriesName = rawSeriesName[lastUnderscoreHyphen+3:]
+			// If we found _-_, we assume the rest of the name uses underscores as spaces
+			rawSeriesName = strings.ReplaceAll(rawSeriesName, "_", " ")
+		}
 	}
 
 	sNum, _ := strconv.Atoi(seasonStr)
