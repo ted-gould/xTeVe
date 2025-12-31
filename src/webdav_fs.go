@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/net/webdav"
@@ -648,6 +649,22 @@ func (s *webdavStream) Write(p []byte) (n int, err error) {
 
 // Helpers
 
+var (
+	groupCache      = make(map[string][]string)
+	groupCacheMutex sync.RWMutex
+)
+
+// ClearGroupCache clears the group cache for a specific hash or all if empty
+func ClearGroupCache(hash string) {
+	groupCacheMutex.Lock()
+	defer groupCacheMutex.Unlock()
+	if hash == "" {
+		groupCache = make(map[string][]string)
+	} else {
+		delete(groupCache, hash)
+	}
+}
+
 var sanitizeRegex = regexp.MustCompile(`[^a-zA-Z0-9.\-_]`)
 var seriesRegex = regexp.MustCompile(`(?i)^(.*?)\s*S(\d{1,3})\s*E\d{1,3}`)
 
@@ -737,6 +754,13 @@ func getSeriesStreams(hash, group, seriesName string, season int) []map[string]s
 }
 
 func getGroupsForHash(hash string) []string {
+	groupCacheMutex.RLock()
+	if groups, ok := groupCache[hash]; ok {
+		groupCacheMutex.RUnlock()
+		return groups
+	}
+	groupCacheMutex.RUnlock()
+
 	groupsMap := make(map[string]bool)
 
 	for _, s := range Data.Streams.All {
@@ -761,6 +785,11 @@ func getGroupsForHash(hash string) []string {
 		groups = append(groups, g)
 	}
 	slices.Sort(groups)
+
+	groupCacheMutex.Lock()
+	groupCache[hash] = groups
+	groupCacheMutex.Unlock()
+
 	return groups
 }
 
