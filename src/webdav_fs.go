@@ -212,16 +212,17 @@ func (fs *WebDAVFS) openOnDemandIndividualStream(ctx context.Context, hash, sub,
 	if sub != dirOnDemand {
 		return nil, os.ErrNotExist
 	}
-	stream, err := findIndividualStream(hash, group, filename)
+	stream, targetURL, err := findIndividualStream(hash, group, filename)
 	if err != nil {
 		return nil, os.ErrNotExist
 	}
 	modTime := getM3UModTime(hash)
 	return &webdavStream{
-		stream:  stream,
-		name:    filename,
-		ctx:     ctx,
-		modTime: modTime,
+		stream:    stream,
+		name:      filename,
+		ctx:       ctx,
+		modTime:   modTime,
+		targetURL: targetURL,
 	}, nil
 }
 
@@ -229,16 +230,17 @@ func (fs *WebDAVFS) openOnDemandSeriesStream(ctx context.Context, hash, sub, gro
 	if sub != dirOnDemand {
 		return nil, os.ErrNotExist
 	}
-	stream, err := findSeriesStream(hash, group, series, season, filename)
+	stream, targetURL, err := findSeriesStream(hash, group, series, season, filename)
 	if err != nil {
 		return nil, os.ErrNotExist
 	}
 	modTime := getM3UModTime(hash)
 	return &webdavStream{
-		stream:  stream,
-		name:    filename,
-		ctx:     ctx,
-		modTime: modTime,
+		stream:    stream,
+		name:      filename,
+		ctx:       ctx,
+		modTime:   modTime,
+		targetURL: targetURL,
 	}, nil
 }
 
@@ -316,55 +318,9 @@ func (fs *WebDAVFS) Stat(ctx context.Context, name string) (os.FileInfo, error) 
 		if parts[1] == dirOnDemand && fs.groupExists(hash, parts[2]) {
 			if parts[3] == dirIndividual {
 				// File in Individual
-				stream, err := findIndividualStream(hash, parts[2], parts[4])
+				stream, targetURL, err := findIndividualStream(hash, parts[2], parts[4])
 				if err == nil {
-					// Use metadata
-					size := int64(0)
-					mt := modTime
-
-					// Check cache first
-					webdavCacheMutex.RLock()
-					hc, _ := webdavCache[hash]
-
-					urlStr := stream["url"]
-					if hc != nil && urlStr != "" {
-						if meta, ok := hc.FileMetadata[urlStr]; ok {
-							size = meta.Size
-							if !meta.ModTime.IsZero() {
-								mt = meta.ModTime
-							}
-							webdavCacheMutex.RUnlock()
-						} else {
-							webdavCacheMutex.RUnlock()
-							// Not in cache, try fetch single (or check M3U)
-							if meta, found := getStreamMetadata(stream); found {
-								// Found in M3U
-								size = meta.Size
-								if !meta.ModTime.IsZero() {
-									mt = meta.ModTime
-								}
-								// Ideally we update cache here too
-								webdavCacheMutex.Lock()
-								hc.FileMetadata[urlStr] = meta
-								webdavCacheMutex.Unlock()
-							} else {
-								// Remote fetch
-								if meta, err := fetchRemoteMetadata(urlStr); err == nil {
-									size = meta.Size
-									if !meta.ModTime.IsZero() {
-										mt = meta.ModTime
-									}
-									webdavCacheMutex.Lock()
-									hc.FileMetadata[urlStr] = meta
-									webdavCacheMutex.Unlock()
-								}
-							}
-						}
-					} else {
-						webdavCacheMutex.RUnlock()
-					}
-
-					return &mkFileInfo{name: parts[4], size: size, modTime: mt}, nil
+					return fs.statWithMetadata(hash, stream, targetURL, parts[4], modTime)
 				}
 			} else if parts[3] == dirSeries {
 				// Series Dir
@@ -389,57 +345,68 @@ func (fs *WebDAVFS) Stat(ctx context.Context, name string) (os.FileInfo, error) 
 	case 7:
 		if parts[1] == dirOnDemand && fs.groupExists(hash, parts[2]) && parts[3] == dirSeries {
 			// File in Series
-			stream, err := findSeriesStream(hash, parts[2], parts[4], parts[5], parts[6])
+			stream, targetURL, err := findSeriesStream(hash, parts[2], parts[4], parts[5], parts[6])
 			if err == nil {
-				// Use metadata
-				size := int64(0)
-				mt := modTime
-
-				// Check cache first
-				webdavCacheMutex.RLock()
-				hc, _ := webdavCache[hash]
-
-				urlStr := stream["url"]
-				if hc != nil && urlStr != "" {
-					if meta, ok := hc.FileMetadata[urlStr]; ok {
-						size = meta.Size
-						if !meta.ModTime.IsZero() {
-							mt = meta.ModTime
-						}
-						webdavCacheMutex.RUnlock()
-					} else {
-						webdavCacheMutex.RUnlock()
-						// Not in cache, try fetch single (or check M3U)
-						if meta, found := getStreamMetadata(stream); found {
-							size = meta.Size
-							if !meta.ModTime.IsZero() {
-								mt = meta.ModTime
-							}
-							webdavCacheMutex.Lock()
-							hc.FileMetadata[urlStr] = meta
-							webdavCacheMutex.Unlock()
-						} else {
-							if meta, err := fetchRemoteMetadata(urlStr); err == nil {
-								size = meta.Size
-								if !meta.ModTime.IsZero() {
-									mt = meta.ModTime
-								}
-								webdavCacheMutex.Lock()
-								hc.FileMetadata[urlStr] = meta
-								webdavCacheMutex.Unlock()
-							}
-						}
-					}
-				} else {
-					webdavCacheMutex.RUnlock()
-				}
-
-				return &mkFileInfo{name: parts[6], size: size, modTime: mt}, nil
+				return fs.statWithMetadata(hash, stream, targetURL, parts[6], modTime)
 			}
 		}
 	}
 
 	return nil, os.ErrNotExist
+}
+
+func (fs *WebDAVFS) statWithMetadata(hash string, stream map[string]string, targetURL, name string, defaultModTime time.Time) (os.FileInfo, error) {
+	// Use metadata
+	size := int64(0)
+	mt := defaultModTime
+
+	// Check cache first
+	webdavCacheMutex.RLock()
+	hc, _ := webdavCache[hash]
+
+	if hc != nil && targetURL != "" {
+		if meta, ok := hc.FileMetadata[targetURL]; ok {
+			size = meta.Size
+			if !meta.ModTime.IsZero() {
+				mt = meta.ModTime
+			}
+			webdavCacheMutex.RUnlock()
+		} else {
+			webdavCacheMutex.RUnlock()
+			// Not in cache, try fetch single (or check M3U if it's the video stream)
+
+			// Only check M3U attributes if targetURL is the main stream URL
+			isVideo := targetURL == stream["url"]
+
+			if isVideo {
+				if meta, found := getStreamMetadata(stream); found {
+					size = meta.Size
+					if !meta.ModTime.IsZero() {
+						mt = meta.ModTime
+					}
+					webdavCacheMutex.Lock()
+					hc.FileMetadata[targetURL] = meta
+					webdavCacheMutex.Unlock()
+					return &mkFileInfo{name: name, size: size, modTime: mt}, nil
+				}
+			}
+
+			// Remote fetch
+			if meta, err := fetchRemoteMetadata(targetURL); err == nil {
+				size = meta.Size
+				if !meta.ModTime.IsZero() {
+					mt = meta.ModTime
+				}
+				webdavCacheMutex.Lock()
+				hc.FileMetadata[targetURL] = meta
+				webdavCacheMutex.Unlock()
+			}
+		}
+	} else {
+		webdavCacheMutex.RUnlock()
+	}
+
+	return &mkFileInfo{name: name, size: size, modTime: mt}, nil
 }
 
 func (fs *WebDAVFS) statHashDir(hash string, modTime time.Time) (os.FileInfo, error) {
@@ -603,12 +570,8 @@ func (d *webdavDir) readDirOnDemandGroupSub(hash, sub, group, subType string, mo
 	if subType == dirIndividual {
 		fileInfos := getIndividualStreamFiles(hash, group)
 
-		// Extract streams for metadata fetching
-		var streams []map[string]string
-		for _, f := range fileInfos {
-			streams = append(streams, f.Stream)
-		}
-		ensureMetadataOptimized(hash, streams)
+		// Ensure metadata for all files (videos and logos)
+		ensureMetadataOptimized(hash, fileInfos)
 
 		webdavCacheMutex.RLock()
 		hc, _ := webdavCache[hash]
@@ -617,8 +580,8 @@ func (d *webdavDir) readDirOnDemandGroupSub(hash, sub, group, subType string, mo
 			size := int64(0)
 			mt := modTime
 
-			if hc != nil && f.Stream["url"] != "" {
-				if meta, ok := hc.FileMetadata[f.Stream["url"]]; ok {
+			if hc != nil && f.TargetURL != "" {
+				if meta, ok := hc.FileMetadata[f.TargetURL]; ok {
 					size = meta.Size
 					if !meta.ModTime.IsZero() {
 						mt = meta.ModTime
@@ -658,12 +621,8 @@ func (d *webdavDir) readDirSeason(hash, sub, group, series, season string, modTi
 	var infos []os.FileInfo
 	fileInfos := getSeasonFiles(hash, group, series, season)
 
-	// Extract streams for metadata fetching
-	var streams []map[string]string
-	for _, f := range fileInfos {
-		streams = append(streams, f.Stream)
-	}
-	ensureMetadataOptimized(hash, streams)
+	// Ensure metadata for all files (videos and logos)
+	ensureMetadataOptimized(hash, fileInfos)
 
 	webdavCacheMutex.RLock()
 	hc, _ := webdavCache[hash]
@@ -672,8 +631,8 @@ func (d *webdavDir) readDirSeason(hash, sub, group, series, season string, modTi
 		size := int64(0)
 		mt := modTime
 
-		if hc != nil && f.Stream["url"] != "" {
-			if meta, ok := hc.FileMetadata[f.Stream["url"]]; ok {
+		if hc != nil && f.TargetURL != "" {
+			if meta, ok := hc.FileMetadata[f.TargetURL]; ok {
 				size = meta.Size
 				if !meta.ModTime.IsZero() {
 					mt = meta.ModTime
@@ -717,6 +676,7 @@ type webdavStream struct {
 	readCloser io.ReadCloser
 	pos        int64
 	modTime    time.Time
+	targetURL  string
 }
 
 func (s *webdavStream) Close() error {
@@ -810,8 +770,14 @@ func (s *webdavStream) Seek(offset int64, whence int) (int64, error) {
 }
 
 func (s *webdavStream) openStream(offset int64) error {
-	url, ok := s.stream["url"]
-	if !ok || url == "" {
+	url := s.targetURL
+	if url == "" {
+		// Fallback for safety, though targetURL should be set
+		if u, ok := s.stream["url"]; ok {
+			url = u
+		}
+	}
+	if url == "" {
 		return errors.New("no url in stream")
 	}
 
@@ -875,8 +841,9 @@ type FileMeta struct {
 }
 
 type FileStreamInfo struct {
-	Name   string
-	Stream map[string]string
+	Name      string
+	Stream    map[string]string
+	TargetURL string
 }
 
 type seasonKey struct {
@@ -985,7 +952,7 @@ func fetchRemoteMetadata(urlStr string) (FileMeta, error) {
 }
 
 // Improved ensureMetadata that checks M3U first
-func ensureMetadataOptimized(hash string, streams []map[string]string) {
+func ensureMetadataOptimized(hash string, files []FileStreamInfo) {
 	// Identify streams needing metadata
 	var toFetch []string
 
@@ -1006,8 +973,8 @@ func ensureMetadataOptimized(hash string, streams []map[string]string) {
 	}
 
 	// Check cache and M3U attributes
-	for _, stream := range streams {
-		urlStr := stream["url"]
+	for _, file := range files {
+		urlStr := file.TargetURL
 		if urlStr == "" {
 			continue
 		}
@@ -1017,13 +984,17 @@ func ensureMetadataOptimized(hash string, streams []map[string]string) {
 			continue
 		}
 
-		// Check M3U attributes
-		if meta, found := getStreamMetadata(stream); found {
-			hc.FileMetadata[urlStr] = meta
-		} else {
-			// Needs remote fetch
-			toFetch = append(toFetch, urlStr)
+		// Check M3U attributes (only if this is the video stream)
+		isVideo := urlStr == file.Stream["url"]
+		if isVideo {
+			if meta, found := getStreamMetadata(file.Stream); found {
+				hc.FileMetadata[urlStr] = meta
+				continue
+			}
 		}
+
+		// Needs remote fetch (fallback for video, or always for logo)
+		toFetch = append(toFetch, urlStr)
 	}
 	webdavCacheMutex.Unlock()
 
@@ -1302,41 +1273,78 @@ func getSeasonFiles(hash, group, series, seasonStr string) []FileStreamInfo {
 
 func generateFileStreamInfos(streams []map[string]string) []FileStreamInfo {
 	var files []FileStreamInfo
-	nameCount := make(map[string]int)
+	// We need to track counts for base names to ensure videos and logos match
+	// Key: baseName (without extension) -> count
+	baseNameCounts := make(map[string]int)
 
-	for _, stream := range streams {
+	// First pass: determine unique base names
+	type streamBase struct {
+		baseName string
+		count    int
+	}
+	streamBases := make([]streamBase, len(streams))
+
+	for i, stream := range streams {
 		name := stream["name"]
 
-		// If it's a series, attempt to use the clean series name (stripping prefix)
+		// Series cleaning logic
 		if cleanName, _, isSeries := parseSeries(name); isSeries {
 			matches := seriesRegex.FindStringSubmatch(name)
 			if len(matches) >= 2 {
 				rawSeriesName := matches[1]
-				// Replace the raw series name part with the clean name
-				// We assume matches[1] is at the start of the string because the regex starts with ^
 				remainder := name[len(rawSeriesName):]
 				name = cleanName + remainder
 			}
 		}
 
-		ext := getExtensionFromURL(stream["url"])
-		if ext == "" {
-			ext = ".mp4"
-		}
-
 		baseName := sanitizeFilename(name)
-		finalName := baseName + ext
+		count := baseNameCounts[baseName]
+		streamBases[i] = streamBase{baseName: baseName, count: count}
+		baseNameCounts[baseName]++
+	}
 
-		count := nameCount[finalName]
-		if count > 0 {
-			finalName = fmt.Sprintf("%s_%d%s", baseName, count, ext)
+	for i, stream := range streams {
+		sb := streamBases[i]
+
+		// Video File
+		videoExt := getExtensionFromURL(stream["url"])
+		if videoExt == "" {
+			videoExt = ".mp4"
 		}
-		nameCount[baseName+ext]++
+
+		var videoName string
+		if sb.count > 0 {
+			videoName = fmt.Sprintf("%s_%d%s", sb.baseName, sb.count, videoExt)
+		} else {
+			videoName = sb.baseName + videoExt
+		}
 
 		files = append(files, FileStreamInfo{
-			Name:   finalName,
-			Stream: stream,
+			Name:      videoName,
+			Stream:    stream,
+			TargetURL: stream["url"],
 		})
+
+		// Logo File
+		if logo := stream["tvg-logo"]; logo != "" {
+			logoExt := getExtensionFromURL(logo)
+			if logoExt == "" {
+				logoExt = ".jpg" // Default
+			}
+
+			var logoName string
+			if sb.count > 0 {
+				logoName = fmt.Sprintf("%s_%d%s", sb.baseName, sb.count, logoExt)
+			} else {
+				logoName = sb.baseName + logoExt
+			}
+
+			files = append(files, FileStreamInfo{
+				Name:      logoName,
+				Stream:    stream,
+				TargetURL: logo,
+			})
+		}
 	}
 	return files
 }
@@ -1439,15 +1447,15 @@ func getSeasonsList(hash, group, series string) []string {
 	return res
 }
 
-func findIndividualStream(hash, group, filename string) (map[string]string, error) {
+func findIndividualStream(hash, group, filename string) (map[string]string, string, error) {
 	streams := getIndividualStreams(hash, group)
 	return findStreamInList(streams, filename)
 }
 
-func findSeriesStream(hash, group, series, seasonStr, filename string) (map[string]string, error) {
+func findSeriesStream(hash, group, series, seasonStr, filename string) (map[string]string, string, error) {
     parts := strings.Split(seasonStr, " ")
     if len(parts) < 2 {
-        return nil, os.ErrNotExist
+        return nil, "", os.ErrNotExist
     }
     sNum, _ := strconv.Atoi(parts[1])
 
@@ -1455,31 +1463,16 @@ func findSeriesStream(hash, group, series, seasonStr, filename string) (map[stri
 	return findStreamInList(streams, filename)
 }
 
-func findStreamInList(streams []map[string]string, filename string) (map[string]string, error) {
-	nameCount := make(map[string]int)
-
-	for _, stream := range streams {
-		name := stream["name"]
-		ext := getExtensionFromURL(stream["url"])
-		if ext == "" {
-			ext = ".mp4"
-		}
-
-		baseName := sanitizeFilename(name)
-		finalName := baseName + ext
-
-		count := nameCount[finalName]
-		if count > 0 {
-			finalName = fmt.Sprintf("%s_%d%s", baseName, count, ext)
-		}
-		nameCount[baseName+ext]++
-
-		if finalName == filename {
-			return stream, nil
+func findStreamInList(streams []map[string]string, filename string) (map[string]string, string, error) {
+	// Re-use logic from generateFileStreamInfos by generating and searching
+	// This is less efficient than recalculating but ensures consistency with ReadDir
+	infos := generateFileStreamInfos(streams)
+	for _, info := range infos {
+		if info.Name == filename {
+			return info.Stream, info.TargetURL, nil
 		}
 	}
-
-	return nil, os.ErrNotExist
+	return nil, "", os.ErrNotExist
 }
 
 func isVOD(stream map[string]string) bool {
