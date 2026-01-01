@@ -3,19 +3,12 @@ package src
 import (
 	"fmt"
 	"path"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
 
 	m3u "xteve/src/internal/m3u-parser"
 
-)
-
-var (
-	// Optimizations: Precompile regexps used in FilterThisStream
-	regexpYES = regexp.MustCompile(`[{]+[^.]+[}]`)
-	regexpNO  = regexp.MustCompile(`!+[{]+[^.]+[}]`)
 )
 
 // Parse Playlists
@@ -58,39 +51,15 @@ func FilterThisStream(s any) (status bool) {
 			continue
 		}
 
-		var baseFilterRule = filter.Rule // The rule from the filter struct
-		var exclude, include string
 		var match = false
 		var searchTarget string // This will hold the stream value to search within (e.g., name or _values)
 
-		// Determine effective stream and rule values based on case sensitivity
+		// Determine effective stream values based on case sensitivity
 		var effectiveStreamGroup = rawStreamGroup
 		var effectiveStreamValues = rawStreamValues
-		var effectiveMainFilterRulePart string // Declare, assign after baseFilterRule is processed
-
-		// Extract exclude/include specifiers first from the original baseFilterRule
-		// These specifiers might contain mixed case if the filter is case-sensitive
-		valNO := regexpNO.FindStringSubmatch(baseFilterRule)
-		if len(valNO) == 1 {
-			exclude = valNO[0][2 : len(valNO[0])-1] // Store with original casing
-			baseFilterRule = strings.Replace(baseFilterRule, " "+valNO[0], "", -1)
-			baseFilterRule = strings.Replace(baseFilterRule, valNO[0], "", -1)
-		}
-
-		valYES := regexpYES.FindStringSubmatch(baseFilterRule)
-		if len(valYES) == 1 {
-			include = valYES[0][1 : len(valYES[0])-1] // Store with original casing
-			baseFilterRule = strings.Replace(baseFilterRule, " "+valYES[0], "", -1)
-			baseFilterRule = strings.Replace(baseFilterRule, valYES[0], "", -1)
-		}
-		effectiveMainFilterRulePart = baseFilterRule // This is now the main rule part
 
 		// Apply case insensitivity if needed
 		if !filter.CaseSensitive {
-			effectiveMainFilterRulePart = strings.ToLower(baseFilterRule)
-			exclude = strings.ToLower(exclude) // Lowercase exclude if filter is case-insensitive
-			include = strings.ToLower(include) // Lowercase include if filter is case-insensitive
-
 			if streamGroupOK {
 				effectiveStreamGroup = strings.ToLower(rawStreamGroup)
 			}
@@ -103,28 +72,30 @@ func FilterThisStream(s any) (status bool) {
 		switch filter.Type {
 		case "group-title":
 			searchTarget = effectiveStreamGroup // For group-title, conditions check against stream group
-			if streamGroupOK && effectiveStreamGroup == effectiveMainFilterRulePart {
+			// Use precompiled rule
+			if streamGroupOK && effectiveStreamGroup == filter.CompiledRule {
 				match = true
 				stream["_preserve-mapping"] = strconv.FormatBool(filter.PreserveMapping)
 				stream["_starting-channel"] = filter.StartingChannel
 			}
 		case "custom-filter":
 			searchTarget = effectiveStreamValues // For custom-filter, conditions check against stream values
-			if streamValuesOK && strings.Contains(effectiveStreamValues, effectiveMainFilterRulePart) {
+			// Use precompiled rule
+			if streamValuesOK && strings.Contains(effectiveStreamValues, filter.CompiledRule) {
 				match = true
 			}
 		}
 
 		if match {
 			// If matched, check exclude/include conditions
-			// `searchTarget` and `exclude`/`include` are already correctly cased
-			if len(exclude) > 0 {
-				if !checkConditions(searchTarget, exclude, "exclude") {
+			// `searchTarget` is already correctly cased. CompiledInclude/Exclude are also pre-cased if needed.
+			if len(filter.CompiledExclude) > 0 {
+				if !checkConditions(searchTarget, filter.CompiledExclude, "exclude") {
 					return false // Fails exclude condition
 				}
 			}
-			if len(include) > 0 {
-				if !checkConditions(searchTarget, include, "include") {
+			if len(filter.CompiledInclude) > 0 {
+				if !checkConditions(searchTarget, filter.CompiledInclude, "include") {
 					return false // Fails include condition
 				}
 			}
