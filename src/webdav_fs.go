@@ -362,7 +362,7 @@ func (fs *WebDAVFS) statWithMetadata(hash string, stream map[string]string, targ
 
 	// Check cache first
 	webdavCacheMutex.RLock()
-	hc, _ := webdavCache[hash]
+	hc := webdavCache[hash]
 
 	if hc != nil && targetURL != "" {
 		if meta, ok := hc.FileMetadata[targetURL]; ok {
@@ -574,7 +574,7 @@ func (d *webdavDir) readDirOnDemandGroupSub(hash, sub, group, subType string, mo
 		ensureMetadataOptimized(hash, fileInfos)
 
 		webdavCacheMutex.RLock()
-		hc, _ := webdavCache[hash]
+		hc := webdavCache[hash]
 
 		for _, f := range fileInfos {
 			size := int64(0)
@@ -625,7 +625,7 @@ func (d *webdavDir) readDirSeason(hash, sub, group, series, season string, modTi
 	ensureMetadataOptimized(hash, fileInfos)
 
 	webdavCacheMutex.RLock()
-	hc, _ := webdavCache[hash]
+	hc := webdavCache[hash]
 
 	for _, f := range fileInfos {
 		size := int64(0)
