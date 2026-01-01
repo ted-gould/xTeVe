@@ -737,6 +737,12 @@ func createFilterRules() (err error) {
 			dataFilter.Rule = filter.Filter
 			dataFilter.Type = filter.Type
 
+			// Precompile rule for custom-filter
+			dataFilter.CompiledRule = dataFilter.Rule
+			if !dataFilter.CaseSensitive {
+				dataFilter.CompiledRule = strings.ToLower(dataFilter.Rule)
+			}
+
 			Data.Filter = append(Data.Filter, dataFilter)
 		case "group-title":
 			if len(filter.Include) > 0 {
@@ -752,6 +758,17 @@ func createFilterRules() (err error) {
 			dataFilter.StartingChannel = filter.StartingChannel
 			dataFilter.Rule = fmt.Sprintf("%s%s%s", filter.Filter, include, exclude)
 			dataFilter.Type = filter.Type
+
+			// Precompile rule parts for group-title
+			dataFilter.CompiledRule = filter.Filter
+			dataFilter.CompiledInclude = filter.Include
+			dataFilter.CompiledExclude = filter.Exclude
+
+			if !dataFilter.CaseSensitive {
+				dataFilter.CompiledRule = strings.ToLower(dataFilter.CompiledRule)
+				dataFilter.CompiledInclude = strings.ToLower(dataFilter.CompiledInclude)
+				dataFilter.CompiledExclude = strings.ToLower(dataFilter.CompiledExclude)
+			}
 
 			Data.Filter = append(Data.Filter, dataFilter)
 		}

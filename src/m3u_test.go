@@ -23,9 +23,11 @@ func TestFilterThisStream_GroupTitle_Bug(t *testing.T) {
 
 	// Setup: Create a filter
 	filter := Filter{
-		Type:          "group-title",
-		Rule:          "News {News}",
-		CaseSensitive: false,
+		Type:            "group-title",
+		Rule:            "News {News}",
+		CaseSensitive:   false,
+		CompiledRule:    "news",
+		CompiledInclude: "news",
 	}
 
 	// Setup: Reset and populate Data.Filter
@@ -53,6 +55,7 @@ func TestFilterThisStream_CustomFilter(t *testing.T) {
 		Type:          "custom-filter",
 		Rule:          "keyword",
 		CaseSensitive: false,
+		CompiledRule:  "keyword",
 	}
 	Data.Filter = []Filter{filter}
 
@@ -78,6 +81,7 @@ func TestFilterThisStream_GroupTitle_SpecialCharacters(t *testing.T) {
 		Type:          "group-title",
 		Rule:          "!@#$%^&*()_+-=[]{};':\",./<>?",
 		CaseSensitive: true,
+		CompiledRule:  "!@#$%^&*()_+-=[]{};':\",./<>?",
 	}
 	Data.Filter = []Filter{filter}
 
@@ -103,6 +107,7 @@ func TestFilterThisStream_GroupTitle_UnicodeCharacters(t *testing.T) {
 		Type:          "group-title",
 		Rule:          "뉴스",
 		CaseSensitive: false,
+		CompiledRule:  "뉴스",
 	}
 	Data.Filter = []Filter{filter}
 
@@ -131,9 +136,11 @@ func TestFilterThisStream_ExcludeExactPhrase(t *testing.T) {
 
 	// Setup: Create a filter to exclude "CSPAN 2" from the "News" group
 	filter := Filter{
-		Type:          "group-title",
-		Rule:          "News !{CSPAN 2}",
-		CaseSensitive: false,
+		Type:            "group-title",
+		Rule:            "News !{CSPAN 2}",
+		CaseSensitive:   false,
+		CompiledRule:    "news",
+		CompiledExclude: "cspan 2",
 	}
 	Data.Filter = []Filter{filter}
 
