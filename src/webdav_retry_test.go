@@ -35,7 +35,9 @@ func TestWebDAVRetryLogic(t *testing.T) {
 			}
 
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(fullContent[:5]))
+			if _, err := w.Write([]byte(fullContent[:5])); err != nil {
+				t.Errorf("failed to write initial content: %v", err)
+			}
 			flusher.Flush()
 
 			// Now we want to simulate a failure.
@@ -76,7 +78,9 @@ func TestWebDAVRetryLogic(t *testing.T) {
 		w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, len(fullContent)-1, len(fullContent)))
 		w.Header().Set("Content-Length", strconv.Itoa(len(fullContent)-start))
 		w.WriteHeader(http.StatusPartialContent)
-		w.Write([]byte(fullContent[start:]))
+		if _, err := w.Write([]byte(fullContent[start:])); err != nil {
+			t.Errorf("failed to write remaining content: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -105,7 +109,9 @@ func TestWebDAVRetryLogic(t *testing.T) {
 	Settings.Files.M3U[hash] = map[string]interface{}{"name": "Retry Playlist"}
 
 	// Create dummy M3U
-	os.WriteFile(tempDir+"/"+hash+".m3u", []byte("#EXTM3U"), 0644)
+	if err := os.WriteFile(tempDir+"/"+hash+".m3u", []byte("#EXTM3U"), 0644); err != nil {
+		t.Fatalf("Failed to write dummy M3U: %v", err)
+	}
 
 	Data.Streams.All = []interface{}{
 		map[string]string{
