@@ -1043,7 +1043,7 @@ func getM3UModTime(hash string) time.Time {
 	return info.ModTime()
 }
 
-var sanitizeRegex = regexp.MustCompile(`[^a-zA-Z0-9.\-_ ]`)
+var sanitizeRegex = regexp.MustCompile(`[^a-zA-Z0-9.\-_ ():]`)
 var seriesRegex = regexp.MustCompile(`(?i)^(.*?)[_\s]*S(\d{1,3})[_\s]*E\d{1,3}`)
 
 func parseSeries(name string) (string, int, bool) {
