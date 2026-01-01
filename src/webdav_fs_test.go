@@ -30,6 +30,7 @@ func TestWebDAVFS(t *testing.T) {
 
 	// Create a dummy M3U file
 	hash := "testhash"
+	ClearWebDAVCache(hash) // Ensure cache is clear before test
 	content := "#EXTM3U\n#EXTINF:-1 group-title=\"Test Group\",Test Stream\nhttp://test.com/stream.mp4"
 	err = os.WriteFile(filepath.Join(tempDir, hash+".m3u"), []byte(content), 0644)
 	if err != nil {
@@ -292,36 +293,36 @@ func TestWebDAVFS(t *testing.T) {
 	foundEp1 := false
 	foundEp2 := false
 	for _, info := range infos {
-		if info.Name() == "My_Series_S01_E01.mp4" {
+		if info.Name() == "My Series S01 E01.mp4" {
 			foundEp1 = true
 		}
-		if info.Name() == "My_Series_S01_E02.mp4" {
+		if info.Name() == "My Series S01 E02.mp4" {
 			foundEp2 = true
 		}
 	}
 	if !foundEp1 {
-		t.Errorf("Season 1 folder did not contain 'My_Series_S01_E01.mp4'")
+		t.Errorf("Season 1 folder did not contain 'My Series S01 E01.mp4'")
 	}
 	if !foundEp2 {
-		t.Errorf("Season 1 folder did not contain 'My_Series_S01_E02.mp4'")
+		t.Errorf("Season 1 folder did not contain 'My Series S01 E02.mp4'")
 	}
 
 	// Test opening Series File
-	f, err = fs.OpenFile(ctx, "/"+hash+"/"+dirOnDemand+"/Series Group/"+dirSeries+"/My Series/Season 1/My_Series_S01_E01.mp4", os.O_RDONLY, 0)
+	f, err = fs.OpenFile(ctx, "/"+hash+"/"+dirOnDemand+"/Series Group/"+dirSeries+"/My Series/Season 1/My Series S01 E01.mp4", os.O_RDONLY, 0)
 	if err != nil {
 		t.Fatalf("Failed to open series file: %v", err)
 	}
 	f.Close()
 
 	// Test VOD with query params (Individual)
-	f, err = fs.OpenFile(ctx, "/"+hash+"/"+dirOnDemand+"/Query Params Group/"+dirIndividual+"/VOD_with_Query.mp4", os.O_RDONLY, 0)
+	f, err = fs.OpenFile(ctx, "/"+hash+"/"+dirOnDemand+"/Query Params Group/"+dirIndividual+"/VOD with Query.mp4", os.O_RDONLY, 0)
 	if err != nil {
 		t.Fatalf("Failed to open VOD with query params: %v", err)
 	}
 	f.Close()
 
 	// Test VOD in Slash Group (Individual)
-	f, err = fs.OpenFile(ctx, "/"+hash+"/"+dirOnDemand+"/Slash_Group/"+dirIndividual+"/VOD_in_Slash_Group.mp4", os.O_RDONLY, 0)
+	f, err = fs.OpenFile(ctx, "/"+hash+"/"+dirOnDemand+"/Slash_Group/"+dirIndividual+"/VOD in Slash Group.mp4", os.O_RDONLY, 0)
 	if err != nil {
 		t.Fatalf("Failed to open VOD in Slash Group: %v", err)
 	}
@@ -394,5 +395,82 @@ func TestParseSeriesUserScenario(t *testing.T) {
 				t.Errorf("Input: %s, Expected season: %d, got: %d", tc.input, tc.expectedSeason, season)
 			}
 		}
+	}
+}
+
+func TestWebDAVFS_FilenameSanitization(t *testing.T) {
+	// Setup
+	tempDir, err := os.MkdirTemp("", "xteve_webdav_filename_test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Save original values
+	origFolderData := System.Folder.Data
+	origFilesM3U := Settings.Files.M3U
+	origStreamsAll := Data.Streams.All
+	defer func() {
+		System.Folder.Data = origFolderData
+		Settings.Files.M3U = origFilesM3U
+		Data.Streams.All = origStreamsAll
+	}()
+
+	System.Folder.Data = tempDir
+	Settings.Files.M3U = make(map[string]interface{})
+
+	hash := "testhash_filename"
+	ClearWebDAVCache(hash)
+	Settings.Files.M3U[hash] = map[string]interface{}{"name": "Test Playlist"}
+
+	// Create dummy M3U file to satisfy stat checks
+	err = os.WriteFile(filepath.Join(tempDir, hash+".m3u"), []byte("#EXTM3U"), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// This replicates the user's issue
+	// m3u entry: #EXTINF:-1 ... group-title="AMAZON SERIES",AMZ - As We See It S01 E01
+	// Expected filename: As We See It S01 E01.mp4
+	// Current filename: AMZ_-_As_We_See_It_S01_E01.mp4 (Before fix)
+	Data.Streams.All = []interface{}{
+		map[string]string{
+			"_file.m3u.id": hash,
+			"group-title":  "AMAZON SERIES",
+			"name":         "AMZ - As We See It S01 E01",
+			"url":          "http://example.com/stream.mp4",
+			"_duration":    "3600", // VOD
+		},
+	}
+
+	fs := &WebDAVFS{}
+	ctx := context.Background()
+
+	// Navigate to the season folder
+	// /dav/<hash>/On Demand/AMAZON SERIES/Series/As We See It/Season 1
+	path := "/" + hash + "/" + dirOnDemand + "/AMAZON SERIES/" + dirSeries + "/As We See It/Season 1"
+
+	f, err := fs.OpenFile(ctx, path, os.O_RDONLY, 0)
+	if err != nil {
+		t.Fatalf("Failed to open season dir: %v", err)
+	}
+
+	infos, err := f.Readdir(-1)
+	f.Close()
+	if err != nil {
+		t.Fatalf("Failed to read dir: %v", err)
+	}
+
+	if len(infos) != 1 {
+		t.Fatalf("Expected 1 file, got %d", len(infos))
+	}
+
+	actualName := infos[0].Name()
+	expectedName := "As We See It S01 E01.mp4"
+
+	if actualName != expectedName {
+		t.Errorf("Filename mismatch.\nExpected: %s\nActual:   %s", expectedName, actualName)
+	} else {
+		t.Logf("Filename matched expected: %s", actualName)
 	}
 }
