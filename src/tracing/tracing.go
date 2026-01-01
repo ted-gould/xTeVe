@@ -22,6 +22,7 @@ type ExporterType string
 const (
 	ExporterTypeStdout ExporterType = "stdout"
 	ExporterTypeOTLP   ExporterType = "otlp"
+	ExporterTypeNone   ExporterType = "none"
 )
 
 // SetupOTelSDK bootstraps the OpenTelemetry pipeline.
@@ -94,11 +95,14 @@ func newTracerProvider(ctx context.Context, exporterType ExporterType) (*trace.T
 		return nil, err
 	}
 
-	tracerProvider := trace.NewTracerProvider(
-		trace.WithBatcher(traceExporter,
+	opts := []trace.TracerProviderOption{}
+	if traceExporter != nil {
+		opts = append(opts, trace.WithBatcher(traceExporter,
 			// Default is 5s. Set to 1s for demonstrative purposes.
-			trace.WithBatchTimeout(time.Second)),
-	)
+			trace.WithBatchTimeout(time.Second)))
+	}
+
+	tracerProvider := trace.NewTracerProvider(opts...)
 	return tracerProvider, nil
 }
 
@@ -106,9 +110,11 @@ func newSpanExporter(ctx context.Context, exporterType ExporterType) (trace.Span
 	switch exporterType {
 	case ExporterTypeOTLP:
 		return otlptracegrpc.New(ctx)
-	default:
+	case ExporterTypeStdout:
 		return stdouttrace.New(
 			stdouttrace.WithPrettyPrint())
+	default:
+		return nil, nil
 	}
 }
 
