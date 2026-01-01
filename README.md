@@ -114,8 +114,8 @@ The OpenTelemetry exporter can be configured using `snap set`:
 
 | Key | Description | Default |
 | --- | --- | --- |
-| `otel-exporter-type` | The type of exporter to use. Supported values are `stdout` and `otlp`. | `stdout` |
-| `otel-exporter-otlp-endpoint` | The endpoint to send traces to when using the `otlp` exporter. | |
+| `otel-exporter-type` | The type of exporter to use. Supported values are `stdout`, `otlp` (gRPC), and `otlp-http` (HTTP). | `stdout` |
+| `otel-exporter-otlp-endpoint` | The endpoint to send traces to when using the `otlp` or `otlp-http` exporter. | |
 | `otel-exporter-otlp-headers` | Headers to send with each trace when using the `otlp` exporter. | |
 
 ### Example: Exporting to Axiom

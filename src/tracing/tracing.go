@@ -5,6 +5,8 @@ import (
 	"errors"
 	"time"
 
+	"fmt"
+
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
@@ -30,6 +32,7 @@ const (
 // SetupOTelSDK bootstraps the OpenTelemetry pipeline.
 // If it does not return an error, make sure to call shutdown for proper cleanup.
 func SetupOTelSDK(ctx context.Context, exporterType ExporterType) (func(context.Context) error, error) {
+	fmt.Printf("Setting up OpenTelemetry with exporter: %s\n", exporterType)
 	var shutdownFuncs []func(context.Context) error
 	var err error
 
