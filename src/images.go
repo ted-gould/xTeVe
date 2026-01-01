@@ -3,6 +3,7 @@ package src
 import (
 	b64 "encoding/base64"
 	"fmt"
+	"path/filepath"
 	"strings"
 )
 
@@ -15,6 +16,8 @@ func uploadLogo(input, filename string) (logoURL string, err error) {
 		return
 	}
 
+	// Sanitize filename to prevent path traversal
+	filename = filepath.Base(filename)
 	var file = fmt.Sprintf("%s%s", System.Folder.ImagesUpload, filename)
 
 	err = writeByteToFile(file, sDec)
