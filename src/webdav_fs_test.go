@@ -367,6 +367,18 @@ func TestParseSeriesUserScenario(t *testing.T) {
 			expectedSeason: 2,
 			expectedOk:     true,
 		},
+		{
+			input:          "EN_-_The_Queen_s_Gambit__US__S01_E03.mp4",
+			expectedName:   "The Queen s Gambit  US",
+			expectedSeason: 1,
+			expectedOk:     true,
+		},
+		{
+			input:          "The Queen's Gambit - S01E03",
+			expectedName:   "The Queen's Gambit",
+			expectedSeason: 1,
+			expectedOk:     true,
+		},
 	}
 
 	for _, tc := range testCases {

@@ -733,6 +733,10 @@ func parseSeries(name string) (string, int, bool) {
 	rawSeriesName := matches[1]
 	seasonStr := matches[2]
 
+	// Trim trailing separators that might have been captured
+	rawSeriesName = strings.TrimSuffix(rawSeriesName, " -")
+	rawSeriesName = strings.TrimSuffix(rawSeriesName, "_-_")
+
 	// Handle standard " - " separator
 	lastHyphen := strings.LastIndex(rawSeriesName, " - ")
 	if lastHyphen != -1 {
