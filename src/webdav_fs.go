@@ -212,16 +212,17 @@ func (fs *WebDAVFS) openOnDemandIndividualStream(ctx context.Context, hash, sub,
 	if sub != dirOnDemand {
 		return nil, os.ErrNotExist
 	}
-	stream, err := findIndividualStream(hash, group, filename)
+	stream, targetURL, err := findIndividualStream(hash, group, filename)
 	if err != nil {
 		return nil, os.ErrNotExist
 	}
 	modTime := getM3UModTime(hash)
 	return &webdavStream{
-		stream:  stream,
-		name:    filename,
-		ctx:     ctx,
-		modTime: modTime,
+		stream:    stream,
+		targetURL: targetURL,
+		name:      filename,
+		ctx:       ctx,
+		modTime:   modTime,
 	}, nil
 }
 
@@ -229,16 +230,17 @@ func (fs *WebDAVFS) openOnDemandSeriesStream(ctx context.Context, hash, sub, gro
 	if sub != dirOnDemand {
 		return nil, os.ErrNotExist
 	}
-	stream, err := findSeriesStream(hash, group, series, season, filename)
+	stream, targetURL, err := findSeriesStream(hash, group, series, season, filename)
 	if err != nil {
 		return nil, os.ErrNotExist
 	}
 	modTime := getM3UModTime(hash)
 	return &webdavStream{
-		stream:  stream,
-		name:    filename,
-		ctx:     ctx,
-		modTime: modTime,
+		stream:    stream,
+		targetURL: targetURL,
+		name:      filename,
+		ctx:       ctx,
+		modTime:   modTime,
 	}, nil
 }
 
@@ -316,7 +318,7 @@ func (fs *WebDAVFS) Stat(ctx context.Context, name string) (os.FileInfo, error) 
 		if parts[1] == dirOnDemand && fs.groupExists(hash, parts[2]) {
 			if parts[3] == dirIndividual {
 				// File in Individual
-				_, err := findIndividualStream(hash, parts[2], parts[4])
+				_, _, err := findIndividualStream(hash, parts[2], parts[4])
 				if err == nil {
 					return &mkFileInfo{name: parts[4], size: 0, modTime: modTime}, nil
 				}
@@ -343,7 +345,7 @@ func (fs *WebDAVFS) Stat(ctx context.Context, name string) (os.FileInfo, error) 
 	case 7:
 		if parts[1] == dirOnDemand && fs.groupExists(hash, parts[2]) && parts[3] == dirSeries {
 			// File in Series
-			_, err := findSeriesStream(hash, parts[2], parts[4], parts[5], parts[6])
+			_, _, err := findSeriesStream(hash, parts[2], parts[4], parts[5], parts[6])
 			if err == nil {
 				return &mkFileInfo{name: parts[6], size: 0, modTime: modTime}, nil
 			}
@@ -575,6 +577,7 @@ func (d *webdavDir) Write(p []byte) (n int, err error) {
 // webdavStream implements webdav.File for streaming
 type webdavStream struct {
 	stream     map[string]string
+	targetURL  string
 	name       string
 	ctx        context.Context
 	readCloser io.ReadCloser
@@ -673,8 +676,15 @@ func (s *webdavStream) Seek(offset int64, whence int) (int64, error) {
 }
 
 func (s *webdavStream) openStream(offset int64) error {
-	url, ok := s.stream["url"]
-	if !ok || url == "" {
+	// Use explicit targetURL if available, otherwise fallback (should not happen with new logic)
+	url := s.targetURL
+	if url == "" {
+		if u, ok := s.stream["url"]; ok {
+			url = u
+		}
+	}
+
+	if url == "" {
 		return errors.New("no url in stream")
 	}
 
@@ -810,6 +820,15 @@ func getExtensionFromURL(urlStr string) string {
 		return path.Ext(urlStr)
 	}
 	return path.Ext(u.Path)
+}
+
+func isSupportedImage(ext string) bool {
+	ext = strings.ToLower(ext)
+	switch ext {
+	case ".jpg", ".jpeg", ".png", ".gif":
+		return true
+	}
+	return false
 }
 
 func getStreamsForGroup(hash, group string) []map[string]string {
@@ -1001,13 +1020,29 @@ func generateFilenames(streams []map[string]string) []string {
 		baseName := sanitizeFilename(name)
 		finalName := baseName + ext
 
-		count := nameCount[finalName]
+		count := nameCount[baseName+ext]
+
+		// Handle duplicate for video
 		if count > 0 {
 			finalName = fmt.Sprintf("%s_%d%s", baseName, count, ext)
 		}
+		// Increment count for this video file variant
 		nameCount[baseName+ext]++
-
 		files = append(files, finalName)
+
+		// Check for logo
+		if logoUrl, ok := stream["tvg-logo"]; ok && logoUrl != "" {
+			logoExt := getExtensionFromURL(logoUrl)
+			if isSupportedImage(logoExt) {
+				var finalLogoName string
+				if count > 0 {
+					finalLogoName = fmt.Sprintf("%s_%d%s", baseName, count, logoExt)
+				} else {
+					finalLogoName = baseName + logoExt
+				}
+				files = append(files, finalLogoName)
+			}
+		}
 	}
 	return files
 }
@@ -1108,15 +1143,15 @@ func getSeasonsList(hash, group, series string) []string {
 	return res
 }
 
-func findIndividualStream(hash, group, filename string) (map[string]string, error) {
+func findIndividualStream(hash, group, filename string) (map[string]string, string, error) {
 	streams := getIndividualStreams(hash, group)
 	return findStreamInList(streams, filename)
 }
 
-func findSeriesStream(hash, group, series, seasonStr, filename string) (map[string]string, error) {
+func findSeriesStream(hash, group, series, seasonStr, filename string) (map[string]string, string, error) {
     parts := strings.Split(seasonStr, " ")
     if len(parts) < 2 {
-        return nil, os.ErrNotExist
+        return nil, "", os.ErrNotExist
     }
     sNum, _ := strconv.Atoi(parts[1])
 
@@ -1124,7 +1159,7 @@ func findSeriesStream(hash, group, series, seasonStr, filename string) (map[stri
 	return findStreamInList(streams, filename)
 }
 
-func findStreamInList(streams []map[string]string, filename string) (map[string]string, error) {
+func findStreamInList(streams []map[string]string, filename string) (map[string]string, string, error) {
 	nameCount := make(map[string]int)
 
 	for _, stream := range streams {
@@ -1137,18 +1172,36 @@ func findStreamInList(streams []map[string]string, filename string) (map[string]
 		baseName := sanitizeFilename(name)
 		finalName := baseName + ext
 
-		count := nameCount[finalName]
+		count := nameCount[baseName+ext]
+
 		if count > 0 {
 			finalName = fmt.Sprintf("%s_%d%s", baseName, count, ext)
 		}
 		nameCount[baseName+ext]++
 
 		if finalName == filename {
-			return stream, nil
+			return stream, stream["url"], nil
+		}
+
+		// Check for logo
+		if logoUrl, ok := stream["tvg-logo"]; ok && logoUrl != "" {
+			logoExt := getExtensionFromURL(logoUrl)
+			if isSupportedImage(logoExt) {
+				var finalLogoName string
+				if count > 0 {
+					finalLogoName = fmt.Sprintf("%s_%d%s", baseName, count, logoExt)
+				} else {
+					finalLogoName = baseName + logoExt
+				}
+
+				if finalLogoName == filename {
+					return stream, logoUrl, nil
+				}
+			}
 		}
 	}
 
-	return nil, os.ErrNotExist
+	return nil, "", os.ErrNotExist
 }
 
 func isVOD(stream map[string]string) bool {
