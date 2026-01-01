@@ -87,7 +87,7 @@ func TestWebDAVTimestamp(t *testing.T) {
 	checkTimestamp("/" + hash + "/" + dirOnDemand + "/Test Group/" + dirIndividual)
 
 	// 5. Check File
-	checkTimestamp("/" + hash + "/" + dirOnDemand + "/Test Group/" + dirIndividual + "/Test_Stream.mp4")
+	checkTimestamp("/" + hash + "/" + dirOnDemand + "/Test Group/" + dirIndividual + "/Test Stream.mp4")
 
 	// 6. Check Listing File
 	checkTimestamp("/" + hash + "/" + fileListing)
@@ -104,14 +104,14 @@ func TestWebDAVTimestamp(t *testing.T) {
     }
     found := false
     for _, info := range infos {
-        if info.Name() == "Test_Stream.mp4" {
+        if info.Name() == "Test Stream.mp4" {
             found = true
             if !info.ModTime().Truncate(time.Second).Equal(fixedTime.Truncate(time.Second)) {
-                 t.Errorf("Readdir Timestamp for Test_Stream.mp4 mismatch. Expected %v, got %v", fixedTime, info.ModTime())
+                 t.Errorf("Readdir Timestamp for Test Stream.mp4 mismatch. Expected %v, got %v", fixedTime, info.ModTime())
             }
         }
     }
     if !found {
-        t.Errorf("Test_Stream.mp4 not found in Readdir")
+        t.Errorf("Test Stream.mp4 not found in Readdir")
     }
 }
