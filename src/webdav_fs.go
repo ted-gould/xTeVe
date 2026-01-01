@@ -599,6 +599,46 @@ func (s *webdavStream) Read(p []byte) (n int, err error) {
 	if n > 0 {
 		s.pos += int64(n)
 	}
+
+	if err != nil && err != io.EOF {
+		// Attempt to retry
+		const maxRetries = 3
+		for i := 0; i < maxRetries; i++ {
+			time.Sleep(200 * time.Millisecond) // Wait a bit before retrying
+
+			// Close old connection
+			if s.readCloser != nil {
+				s.readCloser.Close()
+				s.readCloser = nil
+			}
+
+			// Re-open stream at current position
+			if openErr := s.openStream(s.pos); openErr != nil {
+				continue // Retry open
+			}
+
+			// If we already read some bytes (n > 0), we can return those
+			// and let the *next* Read call use the newly opened stream.
+			if n > 0 {
+				return n, nil
+			}
+
+			// If we haven't read anything yet (n == 0), try reading from new stream immediately
+			var newN int
+			var newErr error
+			newN, newErr = s.readCloser.Read(p)
+			if newN > 0 {
+				s.pos += int64(newN)
+				return newN, newErr
+			}
+			if newErr != nil && newErr != io.EOF {
+				err = newErr // Update error for next retry loop
+				continue     // Retry read
+			}
+			return newN, newErr
+		}
+	}
+
 	return n, err
 }
 
