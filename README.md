@@ -41,6 +41,27 @@ Documentation for setup and configuration is [here](https://github.com/ted-gould
 
 ---
 
+## WebDAV
+
+xTeVe includes a read-only WebDAV server accessible at `/dav/`. This feature allows you to mount your M3U playlists as a file system, which is particularly useful for integrating VOD (Video On Demand) content into media centers like Plex or Emby.
+
+### Structure
+
+The WebDAV file system is organized as follows:
+
+```text
+/dav/<M3U Hash>/On Demand/<Group Title>/
+```
+
+Inside each group, content is further organized into:
+
+*   **Series:** `Series/<Series Name>/Season <N>/<Episode>`
+*   **Individual:** `Individual/<Movie Name>`
+
+Note: WebDAV support is read-only.
+
+---
+
 ## Downloads
 
 [![Get it from the Snap Store](https://snapcraft.io/en/dark/install.svg)](https://snapcraft.io/xteve)
