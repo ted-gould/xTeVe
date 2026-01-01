@@ -1,7 +1,6 @@
 package src
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -17,8 +16,12 @@ import (
 
 // Change Settings (WebUI)
 func updateServerSettings(request RequestStruct) (settings SettingsStruct, err error) {
-	var oldSettings = jsonToMap(mapToJSON(Settings))
-	var newSettings = jsonToMap(mapToJSON(request.Settings))
+	var oldSettings = make(map[string]any)
+	_ = bindToStruct(Settings, &oldSettings)
+
+	var newSettings = make(map[string]any)
+	_ = bindToStruct(request.Settings, &newSettings)
+
 	var reloadData = false
 	var cacheImages = false
 	var createXEPGFiles = false
@@ -118,7 +121,7 @@ func updateServerSettings(request RequestStruct) (settings SettingsStruct, err e
 	}
 
 	// Update Settings
-	err = json.Unmarshal([]byte(mapToJSON(oldSettings)), &Settings)
+	err = bindToStruct(oldSettings, &Settings)
 	if err != nil {
 		return
 	}
@@ -428,7 +431,8 @@ func saveFilter(request RequestStruct) (settings SettingsStruct, err error) {
 				StartingChannel: strconv.FormatFloat(Settings.MappingFirstChannel, 'f', -1, 64),
 			}
 			// Convert to map and merge with provided properties
-			newFilterMap := jsonToMap(mapToJSON(defaultFilter))
+			newFilterMap := make(map[string]any)
+			_ = bindToStruct(defaultFilter, &newFilterMap)
 			for k, v := range filterProperties {
 				newFilterMap[k] = v
 			}
@@ -471,7 +475,7 @@ func saveXEpgMapping(request RequestStruct) (err error) {
 		ShowError(err, 0)
 	}
 
-	err = json.Unmarshal([]byte(mapToJSON(request.EpgMapping)), &tmp)
+	err = bindToStruct(request.EpgMapping, &tmp)
 	if err != nil {
 		return
 	}
@@ -608,7 +612,8 @@ func saveNewUser(request RequestStruct) (err error) {
 
 // Wizard (WebUI)
 func saveWizard(request RequestStruct) (nextStep int, err error) {
-	var wizard = jsonToMap(mapToJSON(request.Wizard))
+	var wizard = make(map[string]any)
+	_ = bindToStruct(request.Wizard, &wizard)
 
 	for key, value := range wizard {
 		switch key {
@@ -721,7 +726,7 @@ func createFilterRules() (err error) {
 		var filter FilterStruct
 		var exclude, include string
 
-		err = json.Unmarshal([]byte(mapToJSON(f)), &filter)
+		err = bindToStruct(f, &filter)
 		if err != nil {
 			return
 		}

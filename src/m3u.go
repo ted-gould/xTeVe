@@ -1,7 +1,6 @@
 package src
 
 import (
-	"encoding/json"
 	"fmt"
 	"path"
 	"regexp"
@@ -214,7 +213,7 @@ func buildM3U(groups []string) (m3u string, err error) {
 	case "XEPG":
 		for _, dxc := range Data.XEPG.Channels {
 			var xepgChannel XEPGChannelStruct
-			err := json.Unmarshal([]byte(mapToJSON(dxc)), &xepgChannel)
+			err := bindToStruct(dxc, &xepgChannel)
 			if err == nil {
 				if xepgChannel.XActive {
 					if len(groups) > 0 {

@@ -209,15 +209,6 @@ func mapToJSON(tmpMap any) string {
 	return string(jsonString)
 }
 
-func jsonToMap(content string) map[string]any {
-	var tmpMap = make(map[string]any)
-	if err := json.Unmarshal([]byte(content), &tmpMap); err != nil {
-		log.Printf("Error unmarshalling JSON to map: %v. Content: %s", err, content)
-		// Return an empty map or handle as appropriate for the callers
-		return make(map[string]any)
-	}
-	return tmpMap
-}
 
 func jsonToInterface(content string) (tmpMap any, err error) {
 	err = json.Unmarshal([]byte(content), &tmpMap)
@@ -407,4 +398,14 @@ func getMD5(str string) (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(md5Hasher.Sum(nil)), nil
+}
+
+// bindToStruct converts a map (or any object) to a struct via JSON marshalling,
+// avoiding unnecessary indentation and string conversions.
+func bindToStruct(input any, output any) error {
+	bytes, err := json.Marshal(input)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(bytes, output)
 }
