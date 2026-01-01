@@ -772,7 +772,7 @@ func getM3UModTime(hash string) time.Time {
 	return info.ModTime()
 }
 
-var sanitizeRegex = regexp.MustCompile(`[^a-zA-Z0-9.\-_]`)
+var sanitizeRegex = regexp.MustCompile(`[^a-zA-Z0-9.\-_ ]`)
 var seriesRegex = regexp.MustCompile(`(?i)^(.*?)[_\s]*S(\d{1,3})[_\s]*E\d{1,3}`)
 
 func parseSeries(name string) (string, int, bool) {
@@ -1012,6 +1012,19 @@ func generateFilenames(streams []map[string]string) []string {
 
 	for _, stream := range streams {
 		name := stream["name"]
+
+		// If it's a series, attempt to use the clean series name (stripping prefix)
+		if cleanName, _, isSeries := parseSeries(name); isSeries {
+			matches := seriesRegex.FindStringSubmatch(name)
+			if len(matches) >= 2 {
+				rawSeriesName := matches[1]
+				// Replace the raw series name part with the clean name
+				// We assume matches[1] is at the start of the string because the regex starts with ^
+				remainder := name[len(rawSeriesName):]
+				name = cleanName + remainder
+			}
+		}
+
 		ext := getExtensionFromURL(stream["url"])
 		if ext == "" {
 			ext = ".mp4"
@@ -1164,6 +1177,17 @@ func findStreamInList(streams []map[string]string, filename string) (map[string]
 
 	for _, stream := range streams {
 		name := stream["name"]
+
+		// Handle series renaming (same as in generateFilenames)
+		if cleanName, _, isSeries := parseSeries(name); isSeries {
+			matches := seriesRegex.FindStringSubmatch(name)
+			if len(matches) >= 2 {
+				rawSeriesName := matches[1]
+				remainder := name[len(rawSeriesName):]
+				name = cleanName + remainder
+			}
+		}
+
 		ext := getExtensionFromURL(stream["url"])
 		if ext == "" {
 			ext = ".mp4"

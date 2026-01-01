@@ -179,7 +179,7 @@ func TestWebDAVCacheRefresh(t *testing.T) {
 	} else {
 		if list, ok := hc.IndividualFiles["Group A"]; !ok {
 			t.Errorf("IndividualFiles cache missing Group A")
-		} else if len(list) != 1 || list[0] != "Stream_A.mp4" {
+		} else if len(list) != 1 || list[0] != "Stream A.mp4" {
 			t.Errorf("IndividualFiles cache content incorrect: %v", list)
 		}
 	}
