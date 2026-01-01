@@ -396,3 +396,177 @@ func TestParseSeriesUserScenario(t *testing.T) {
 		}
 	}
 }
+
+func TestWebDAVFS_Images(t *testing.T) {
+	// Setup
+	tempDir, err := os.MkdirTemp("", "xteve_webdav_images_test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Save original values
+	origFolderData := System.Folder.Data
+	origFilesM3U := Settings.Files.M3U
+	origStreamsAll := Data.Streams.All
+	defer func() {
+		System.Folder.Data = origFolderData
+		Settings.Files.M3U = origFilesM3U
+		Data.Streams.All = origStreamsAll
+	}()
+
+	System.Folder.Data = tempDir
+	Settings.Files.M3U = make(map[string]interface{})
+	ClearWebDAVCache("")
+
+	// Create a dummy M3U file
+	hash := "testhash"
+	content := "#EXTM3U\n#EXTINF:-1 group-title=\"Test Group\" tvg-logo=\"http://test.com/logo.jpg\",Test Stream\nhttp://test.com/stream.mp4"
+	err = os.WriteFile(filepath.Join(tempDir, hash+".m3u"), []byte(content), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	Settings.Files.M3U[hash] = map[string]interface{}{"name": "Test Playlist"}
+
+	// Populate Data.Streams.All
+	Data.Streams.All = []interface{}{
+		map[string]string{
+			"_file.m3u.id": hash,
+			"group-title":  "Test Group",
+			"name":         "Test Stream",
+			"url":          "http://test.com/stream.mp4",
+			"tvg-logo":     "http://test.com/logo.jpg",
+			"_duration":    "123", // VOD
+		},
+		map[string]string{
+			"_file.m3u.id": hash,
+			"group-title":  "Series Group",
+			"name":         "My Series S01 E01",
+			"url":          "http://test.com/series_s01e01.mp4",
+			"tvg-logo":     "http://test.com/series_logo.png",
+			"_duration":    "123",
+		},
+		map[string]string{
+			"_file.m3u.id": hash,
+			"group-title":  "Duplicate Group",
+			"name":         "Duplicate Stream",
+			"url":          "http://test.com/stream1.mp4",
+			"tvg-logo":     "http://test.com/logo1.jpg",
+			"_duration":    "123", // VOD
+		},
+		map[string]string{
+			"_file.m3u.id": hash,
+			"group-title":  "Duplicate Group",
+			"name":         "Duplicate Stream",
+			"url":          "http://test.com/stream2.mp4",
+			"tvg-logo":     "http://test.com/logo2.jpg",
+			"_duration":    "123", // VOD
+		},
+	}
+
+	fs := &WebDAVFS{}
+	ctx := context.Background()
+
+	// Test Individual Listing
+	f, err := fs.OpenFile(ctx, "/"+hash+"/"+dirOnDemand+"/Test Group/"+dirIndividual, os.O_RDONLY, 0)
+	if err != nil {
+		t.Fatalf("Failed to open Test Group Individual dir: %v", err)
+	}
+	infos, err := f.Readdir(-1)
+	if err != nil {
+		t.Fatalf("Failed to read Test Group Individual dir: %v", err)
+	}
+	f.Close()
+
+	foundVideo := false
+	foundImage := false
+	for _, info := range infos {
+		if info.Name() == "Test_Stream.mp4" {
+			foundVideo = true
+		}
+		if info.Name() == "Test_Stream.jpg" {
+			foundImage = true
+		}
+	}
+	if !foundVideo {
+		t.Errorf("Test Group did not contain 'Test_Stream.mp4'")
+	}
+	if !foundImage {
+		t.Errorf("Test Group did not contain 'Test_Stream.jpg'")
+	}
+
+	// Test Series Listing
+	f, err = fs.OpenFile(ctx, "/"+hash+"/"+dirOnDemand+"/Series Group/"+dirSeries+"/My Series/Season 1", os.O_RDONLY, 0)
+	if err != nil {
+		t.Fatalf("Failed to open Season 1 dir: %v", err)
+	}
+	infos, err = f.Readdir(-1)
+	if err != nil {
+		t.Fatalf("Failed to read Season 1 dir: %v", err)
+	}
+	f.Close()
+
+	foundSeriesVideo := false
+	foundSeriesImage := false
+	for _, info := range infos {
+		if info.Name() == "My_Series_S01_E01.mp4" {
+			foundSeriesVideo = true
+		}
+		if info.Name() == "My_Series_S01_E01.png" {
+			foundSeriesImage = true
+		}
+	}
+	if !foundSeriesVideo {
+		t.Errorf("Series Group did not contain 'My_Series_S01_E01.mp4'")
+	}
+	if !foundSeriesImage {
+		t.Errorf("Series Group did not contain 'My_Series_S01_E01.png'")
+	}
+
+	// Test Duplicate Names
+	f, err = fs.OpenFile(ctx, "/"+hash+"/"+dirOnDemand+"/Duplicate Group/"+dirIndividual, os.O_RDONLY, 0)
+	if err != nil {
+		t.Fatalf("Failed to open Duplicate Group Individual dir: %v", err)
+	}
+	infos, err = f.Readdir(-1)
+	if err != nil {
+		t.Fatalf("Failed to read Duplicate Group Individual dir: %v", err)
+	}
+	f.Close()
+
+	foundDupVideo1 := false
+	foundDupImage1 := false
+	foundDupVideo2 := false
+	foundDupImage2 := false
+
+	for _, info := range infos {
+		// First one: Duplicate_Stream.mp4, Duplicate_Stream.jpg
+		// Second one: Duplicate_Stream_1.mp4, Duplicate_Stream_1.jpg
+
+		if info.Name() == "Duplicate_Stream.mp4" {
+			foundDupVideo1 = true
+		}
+		if info.Name() == "Duplicate_Stream.jpg" {
+			foundDupImage1 = true
+		}
+		if info.Name() == "Duplicate_Stream_1.mp4" {
+			foundDupVideo2 = true
+		}
+		if info.Name() == "Duplicate_Stream_1.jpg" {
+			foundDupImage2 = true
+		}
+	}
+
+	if !foundDupVideo1 {
+		t.Errorf("Duplicate Group missing Duplicate_Stream.mp4")
+	}
+	if !foundDupImage1 {
+		t.Errorf("Duplicate Group missing Duplicate_Stream.jpg")
+	}
+	if !foundDupVideo2 {
+		t.Errorf("Duplicate Group missing Duplicate_Stream_1.mp4")
+	}
+	if !foundDupImage2 {
+		t.Errorf("Duplicate Group missing Duplicate_Stream_1.jpg")
+	}
+}
