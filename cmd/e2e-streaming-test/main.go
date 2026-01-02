@@ -192,7 +192,7 @@ func run() error {
 		// Print xTeVe logs
 		if xteveLog != nil {
 			fmt.Println("------ xTeVe Logs (Last 100 lines) ------")
-			xteveLog.Seek(0, 0) // Read all might be too much, but let's try reading and tailing
+			_, _ = xteveLog.Seek(0, 0) // Read all might be too much, but let's try reading and tailing
 			content, _ := io.ReadAll(xteveLog)
 			lines := strings.Split(string(content), "\n")
 			start := 0
