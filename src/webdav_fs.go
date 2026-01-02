@@ -1682,28 +1682,20 @@ func getSeasonsList(hash, group, series string) []string {
 }
 
 func findIndividualStream(hash, group, filename string) (map[string]string, string, error) {
-	streams := getIndividualStreams(hash, group)
-	return findStreamInList(streams, filename)
+	files := getIndividualStreamFiles(hash, group)
+	for _, f := range files {
+		if f.Name == filename {
+			return f.Stream, f.TargetURL, nil
+		}
+	}
+	return nil, "", os.ErrNotExist
 }
 
 func findSeriesStream(hash, group, series, seasonStr, filename string) (map[string]string, string, error) {
-    parts := strings.Split(seasonStr, " ")
-    if len(parts) < 2 {
-        return nil, "", os.ErrNotExist
-    }
-    sNum, _ := strconv.Atoi(parts[1])
-
-	streams := getSeriesStreams(hash, group, series, sNum)
-	return findStreamInList(streams, filename)
-}
-
-func findStreamInList(streams []map[string]string, filename string) (map[string]string, string, error) {
-	// Re-use logic from generateFileStreamInfos by generating and searching
-	// This is less efficient than recalculating but ensures consistency with ReadDir
-	infos := generateFileStreamInfos(streams)
-	for _, info := range infos {
-		if info.Name == filename {
-			return info.Stream, info.TargetURL, nil
+	files := getSeasonFiles(hash, group, series, seasonStr)
+	for _, f := range files {
+		if f.Name == filename {
+			return f.Stream, f.TargetURL, nil
 		}
 	}
 	return nil, "", os.ErrNotExist
