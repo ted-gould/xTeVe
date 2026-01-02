@@ -1,6 +1,7 @@
 package src
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -8,6 +9,8 @@ import (
 	"time"
 
 	"github.com/koron/go-ssdp"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
 )
 
 // SSDP : SSPD / DLNA Server
@@ -17,6 +20,9 @@ func SSDP() (err error) {
 	}
 
 	showInfo(fmt.Sprintf("SSDP / DLNA:%t", Settings.SSDP))
+
+	tracer := otel.Tracer("xteve/ssdp")
+	_, span := tracer.Start(context.Background(), "SSDP Init")
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt)
@@ -29,8 +35,12 @@ func SSDP() (err error) {
 		1800)           // send as "maxAge" in "CACHE-CONTROL"
 
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		span.End()
 		return
 	}
+	span.End()
 
 	// Debug SSDP
 	if System.Flag.Debug == 3 {
@@ -43,24 +53,49 @@ func SSDP() (err error) {
 		for {
 			select {
 			case <-aliveTick.C:
+				_, spanAlive := tracer.Start(context.Background(), "SSDP Alive")
 				err = adv.Alive()
 				if err != nil {
+					spanAlive.RecordError(err)
+					spanAlive.SetStatus(codes.Error, err.Error())
 					ShowError(err, 0) // Original error from Alive()
+
+					_, spanBye := tracer.Start(context.Background(), "SSDP Bye")
 					if byeErr := adv.Bye(); byeErr != nil {
+						spanBye.RecordError(byeErr)
+						spanBye.SetStatus(codes.Error, byeErr.Error())
 						log.Printf("Error sending SSDP Bye after Alive failure: %v", byeErr)
 					}
+					spanBye.End()
+
+					_, spanClose := tracer.Start(context.Background(), "SSDP Close")
 					if closeErr := adv.Close(); closeErr != nil {
+						spanClose.RecordError(closeErr)
+						spanClose.SetStatus(codes.Error, closeErr.Error())
 						log.Printf("Error closing SSDP after Alive failure: %v", closeErr)
 					}
+					spanClose.End()
+
+					spanAlive.End()
 					break loop
 				}
+				spanAlive.End()
 			case <-quit:
+				_, spanBye := tracer.Start(context.Background(), "SSDP Bye")
 				if byeErr := adv.Bye(); byeErr != nil {
+					spanBye.RecordError(byeErr)
+					spanBye.SetStatus(codes.Error, byeErr.Error())
 					log.Printf("Error sending SSDP Bye on quit: %v", byeErr)
 				}
+				spanBye.End()
+
+				_, spanClose := tracer.Start(context.Background(), "SSDP Close")
 				if closeErr := adv.Close(); closeErr != nil {
+					spanClose.RecordError(closeErr)
+					spanClose.SetStatus(codes.Error, closeErr.Error())
 					log.Printf("Error closing SSDP on quit: %v", closeErr)
 				}
+				spanClose.End()
 				os.Exit(0) // This will terminate the program, so further error handling is moot.
 				break loop
 			}
