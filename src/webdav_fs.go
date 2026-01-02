@@ -240,6 +240,7 @@ func (fs *WebDAVFS) openOnDemandIndividualStream(ctx context.Context, hash, sub,
 		ctx:       ctx,
 		modTime:   modTime,
 		targetURL: targetURL,
+		hash:      hash,
 	}, nil
 }
 
@@ -258,6 +259,7 @@ func (fs *WebDAVFS) openOnDemandSeriesStream(ctx context.Context, hash, sub, gro
 		ctx:       ctx,
 		modTime:   modTime,
 		targetURL: targetURL,
+		hash:      hash,
 	}, nil
 }
 
@@ -394,6 +396,12 @@ func (fs *WebDAVFS) Stat(ctx context.Context, name string) (os.FileInfo, error) 
 
 func (fs *WebDAVFS) statWithMetadata(ctx context.Context, hash string, stream map[string]string, targetURL, name string, defaultModTime time.Time) (os.FileInfo, error) {
 	ctx, span := otel.Tracer("webdav").Start(ctx, "statWithMetadata")
+	defer span.End()
+	return resolveFileMetadata(ctx, hash, stream, targetURL, name, defaultModTime)
+}
+
+func resolveFileMetadata(ctx context.Context, hash string, stream map[string]string, targetURL, name string, defaultModTime time.Time) (os.FileInfo, error) {
+	ctx, span := otel.Tracer("webdav").Start(ctx, "resolveFileMetadata")
 	defer span.End()
 
 	// Use metadata
@@ -775,6 +783,8 @@ type webdavStream struct {
 	pos        int64
 	modTime    time.Time
 	targetURL  string
+	hash       string
+	size       int64
 }
 
 func (s *webdavStream) Close() error {
@@ -858,6 +868,14 @@ func (s *webdavStream) Seek(offset int64, whence int) (int64, error) {
 		attribute.Int("whence", whence),
 	)
 
+	// Ensure size is known if seeking from end
+	if whence == io.SeekEnd && s.size == 0 {
+		if info, err := resolveFileMetadata(s.ctx, s.hash, s.stream, s.targetURL, s.name, s.modTime); err == nil {
+			s.size = info.Size()
+			s.modTime = info.ModTime()
+		}
+	}
+
 	var newPos int64
 	switch whence {
 	case io.SeekStart:
@@ -865,7 +883,10 @@ func (s *webdavStream) Seek(offset int64, whence int) (int64, error) {
 	case io.SeekCurrent:
 		newPos = s.pos + offset
 	case io.SeekEnd:
-		return 0, errors.New("seeking from end not supported")
+		if s.size == 0 {
+			return 0, errors.New("seeking from end not supported (unknown size)")
+		}
+		newPos = s.size + offset
 	default:
 		return 0, errors.New("invalid whence")
 	}
@@ -957,6 +978,18 @@ func (s *webdavStream) Stat() (os.FileInfo, error) {
 	_, span := otel.Tracer("webdav").Start(s.ctx, "Stat")
 	defer span.End()
 	span.SetAttributes(attribute.String("webdav.stream_name", s.name))
+
+	if s.size > 0 {
+		return &mkFileInfo{name: s.name, size: s.size, modTime: s.modTime}, nil
+	}
+
+	// Try to resolve metadata
+	if info, err := resolveFileMetadata(s.ctx, s.hash, s.stream, s.targetURL, s.name, s.modTime); err == nil {
+		s.size = info.Size()
+		s.modTime = info.ModTime()
+		return info, nil
+	}
+
 	return &mkFileInfo{name: s.name, size: 0, modTime: s.modTime}, nil
 }
 
