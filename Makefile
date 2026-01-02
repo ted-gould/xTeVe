@@ -49,6 +49,10 @@ e2e-test: build
 	@echo "--- Running E2E tests ---"
 	$(GO) run cmd/ci-test/main.go
 
+otel-test: build
+	@echo "--- Running OTEL integration tests ---"
+	$(GO) run cmd/otel-test/main.go
+
 e2e-streaming-test: build build-streamer
 	@echo "--- Running E2E streaming tests ---"
 	$(GO) run cmd/e2e-streaming-test/main.go
