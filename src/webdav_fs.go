@@ -312,9 +312,14 @@ func (fs *WebDAVFS) Rename(ctx context.Context, oldName, newName string) error {
 }
 
 // Stat returns file info
-func (fs *WebDAVFS) Stat(ctx context.Context, name string) (os.FileInfo, error) {
+func (fs *WebDAVFS) Stat(ctx context.Context, name string) (_ os.FileInfo, err error) {
 	_, span := otel.Tracer("webdav").Start(ctx, "Stat")
 	defer span.End()
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+		}
+	}()
 	span.SetAttributes(attribute.String("webdav.path", name))
 
 	name = strings.TrimPrefix(name, "/")
@@ -484,13 +489,18 @@ type webdavDir struct {
 	ctx  context.Context
 }
 
-func (d *webdavDir) Close() error {
+func (d *webdavDir) Close() (err error) {
 	ctx := d.ctx
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	_, span := otel.Tracer("webdav").Start(ctx, "Close")
 	defer span.End()
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+		}
+	}()
 	span.SetAttributes(attribute.String("webdav.path", d.name))
 	return nil
 }
@@ -506,13 +516,18 @@ func (d *webdavDir) Read(p []byte) (n int, err error) {
 	return 0, io.EOF
 }
 
-func (d *webdavDir) Seek(offset int64, whence int) (int64, error) {
+func (d *webdavDir) Seek(offset int64, whence int) (_ int64, err error) {
 	ctx := d.ctx
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	_, span := otel.Tracer("webdav").Start(ctx, "Seek")
 	defer span.End()
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+		}
+	}()
 	span.SetAttributes(
 		attribute.String("webdav.path", d.name),
 		attribute.Int64("offset", offset),
@@ -733,7 +748,7 @@ func (d *webdavDir) readDirSeason(ctx context.Context, hash, sub, group, series,
 	return infos, nil
 }
 
-func (d *webdavDir) Stat() (os.FileInfo, error) {
+func (d *webdavDir) Stat() (_ os.FileInfo, err error) {
 	// Use stored context if available, otherwise background
 	ctx := d.ctx
 	if ctx == nil {
@@ -741,6 +756,11 @@ func (d *webdavDir) Stat() (os.FileInfo, error) {
 	}
 	_, span := otel.Tracer("webdav").Start(ctx, "Stat")
 	defer span.End()
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+		}
+	}()
 	span.SetAttributes(attribute.String("webdav.path", d.name))
 
 	name := d.name
@@ -787,9 +807,14 @@ type webdavStream struct {
 	size       int64
 }
 
-func (s *webdavStream) Close() error {
+func (s *webdavStream) Close() (err error) {
 	_, span := otel.Tracer("webdav").Start(s.ctx, "Close")
 	defer span.End()
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+		}
+	}()
 	span.SetAttributes(attribute.String("webdav.stream_name", s.name))
 
 	if s.readCloser != nil {
@@ -860,9 +885,14 @@ func (s *webdavStream) Read(p []byte) (n int, err error) {
 	return n, err
 }
 
-func (s *webdavStream) Seek(offset int64, whence int) (int64, error) {
+func (s *webdavStream) Seek(offset int64, whence int) (_ int64, err error) {
 	_, span := otel.Tracer("webdav").Start(s.ctx, "Seek")
 	defer span.End()
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+		}
+	}()
 	span.SetAttributes(
 		attribute.Int64("offset", offset),
 		attribute.Int("whence", whence),
@@ -974,9 +1004,14 @@ func (s *webdavStream) Readdir(count int) ([]os.FileInfo, error) {
 	return nil, os.ErrPermission
 }
 
-func (s *webdavStream) Stat() (os.FileInfo, error) {
+func (s *webdavStream) Stat() (_ os.FileInfo, err error) {
 	_, span := otel.Tracer("webdav").Start(s.ctx, "Stat")
 	defer span.End()
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+		}
+	}()
 	span.SetAttributes(attribute.String("webdav.stream_name", s.name))
 
 	if s.size > 0 {
