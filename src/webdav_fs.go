@@ -351,7 +351,7 @@ func (fs *WebDAVFS) Stat(ctx context.Context, name string) (os.FileInfo, error) 
 				// File in Individual
 				stream, targetURL, err := findIndividualStream(hash, parts[2], parts[4])
 				if err == nil {
-					return fs.statWithMetadata(hash, stream, targetURL, parts[4], modTime)
+					return fs.statWithMetadata(ctx, hash, stream, targetURL, parts[4], modTime)
 				}
 			} else if parts[3] == dirSeries {
 				// Series Dir
@@ -378,7 +378,7 @@ func (fs *WebDAVFS) Stat(ctx context.Context, name string) (os.FileInfo, error) 
 			// File in Series
 			stream, targetURL, err := findSeriesStream(hash, parts[2], parts[4], parts[5], parts[6])
 			if err == nil {
-				return fs.statWithMetadata(hash, stream, targetURL, parts[6], modTime)
+				return fs.statWithMetadata(ctx, hash, stream, targetURL, parts[6], modTime)
 			}
 		}
 	}
@@ -386,7 +386,10 @@ func (fs *WebDAVFS) Stat(ctx context.Context, name string) (os.FileInfo, error) 
 	return nil, os.ErrNotExist
 }
 
-func (fs *WebDAVFS) statWithMetadata(hash string, stream map[string]string, targetURL, name string, defaultModTime time.Time) (os.FileInfo, error) {
+func (fs *WebDAVFS) statWithMetadata(ctx context.Context, hash string, stream map[string]string, targetURL, name string, defaultModTime time.Time) (os.FileInfo, error) {
+	ctx, span := otel.Tracer("webdav").Start(ctx, "statWithMetadata")
+	defer span.End()
+
 	// Use metadata
 	size := int64(0)
 	mt := defaultModTime
@@ -423,7 +426,7 @@ func (fs *WebDAVFS) statWithMetadata(hash string, stream map[string]string, targ
 			}
 
 			// Remote fetch
-			if meta, err := fetchRemoteMetadata(targetURL); err == nil {
+			if meta, err := fetchRemoteMetadata(ctx, targetURL); err == nil {
 				size = meta.Size
 				if !meta.ModTime.IsZero() {
 					mt = meta.ModTime
@@ -490,7 +493,7 @@ func (d *webdavDir) Readdir(count int) ([]os.FileInfo, error) {
 	defer span.End()
 	span.SetAttributes(attribute.String("webdav.path", d.name))
 
-	infos, err := d.collectInfos()
+	infos, err := d.collectInfos(ctx)
 	if err != nil {
 		span.RecordError(err)
 		return nil, err
@@ -514,7 +517,7 @@ func (d *webdavDir) Readdir(count int) ([]os.FileInfo, error) {
 	return infos, nil
 }
 
-func (d *webdavDir) collectInfos() ([]os.FileInfo, error) {
+func (d *webdavDir) collectInfos(ctx context.Context) ([]os.FileInfo, error) {
 	if d.name == "" {
 		return d.readDirRoot()
 	}
@@ -537,14 +540,14 @@ func (d *webdavDir) collectInfos() ([]os.FileInfo, error) {
 	case 3:
 		return d.readDirOnDemandGroup(parts[0], parts[1], parts[2], modTime)
 	case 4:
-		return d.readDirOnDemandGroupSub(parts[0], parts[1], parts[2], parts[3], modTime)
+		return d.readDirOnDemandGroupSub(ctx, parts[0], parts[1], parts[2], parts[3], modTime)
 	case 5:
 		if parts[3] == dirSeries {
 			return d.readDirSeries(parts[0], parts[1], parts[2], parts[4], modTime)
 		}
 	case 6:
 		if parts[3] == dirSeries {
-			return d.readDirSeason(parts[0], parts[1], parts[2], parts[4], parts[5], modTime)
+			return d.readDirSeason(ctx, parts[0], parts[1], parts[2], parts[4], parts[5], modTime)
 		}
 	}
 	return nil, nil
@@ -606,7 +609,7 @@ func (d *webdavDir) readDirOnDemandGroup(hash, sub, group string, modTime time.T
 	return infos, nil
 }
 
-func (d *webdavDir) readDirOnDemandGroupSub(hash, sub, group, subType string, modTime time.Time) ([]os.FileInfo, error) {
+func (d *webdavDir) readDirOnDemandGroupSub(ctx context.Context, hash, sub, group, subType string, modTime time.Time) ([]os.FileInfo, error) {
 	if sub != dirOnDemand {
 		return nil, nil
 	}
@@ -616,7 +619,7 @@ func (d *webdavDir) readDirOnDemandGroupSub(hash, sub, group, subType string, mo
 		fileInfos := getIndividualStreamFiles(hash, group)
 
 		// Ensure metadata for all files (videos and logos)
-		ensureMetadataOptimized(hash, fileInfos)
+		ensureMetadataOptimized(ctx, hash, fileInfos)
 
 		webdavCacheMutex.RLock()
 		hc := webdavCache[hash]
@@ -659,7 +662,7 @@ func (d *webdavDir) readDirSeries(hash, sub, group, series string, modTime time.
 	return infos, nil
 }
 
-func (d *webdavDir) readDirSeason(hash, sub, group, series, season string, modTime time.Time) ([]os.FileInfo, error) {
+func (d *webdavDir) readDirSeason(ctx context.Context, hash, sub, group, series, season string, modTime time.Time) ([]os.FileInfo, error) {
 	if sub != dirOnDemand {
 		return nil, nil
 	}
@@ -667,7 +670,7 @@ func (d *webdavDir) readDirSeason(hash, sub, group, series, season string, modTi
 	fileInfos := getSeasonFiles(hash, group, series, season)
 
 	// Ensure metadata for all files (videos and logos)
-	ensureMetadataOptimized(hash, fileInfos)
+	ensureMetadataOptimized(ctx, hash, fileInfos)
 
 	webdavCacheMutex.RLock()
 	hc := webdavCache[hash]
@@ -990,25 +993,34 @@ func getStreamMetadata(stream map[string]string) (FileMeta, bool) {
 	return meta, found
 }
 
-func fetchRemoteMetadata(urlStr string) (FileMeta, error) {
+func fetchRemoteMetadata(ctx context.Context, urlStr string) (FileMeta, error) {
+	ctx, span := otel.Tracer("webdav").Start(ctx, "fetchRemoteMetadata")
+	defer span.End()
+	span.SetAttributes(attribute.String("http.url", urlStr))
+
 	var meta FileMeta
 	client := NewHTTPClient()
 	client.Timeout = 5 * time.Second
 
-	req, err := http.NewRequest("HEAD", urlStr, nil)
+	req, err := http.NewRequestWithContext(ctx, "HEAD", urlStr, nil)
 	if err != nil {
+		span.RecordError(err)
 		return meta, err
 	}
+
 	req.Header.Set("User-Agent", Settings.UserAgent)
 
 	resp, err := client.Do(req)
 	if err != nil {
+		span.RecordError(err)
 		return meta, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return meta, fmt.Errorf("status %d", resp.StatusCode)
+		err = fmt.Errorf("status %d", resp.StatusCode)
+		span.RecordError(err)
+		return meta, err
 	}
 
 	meta.Size = resp.ContentLength
@@ -1022,7 +1034,10 @@ func fetchRemoteMetadata(urlStr string) (FileMeta, error) {
 }
 
 // Improved ensureMetadata that checks M3U first
-func ensureMetadataOptimized(hash string, files []FileStreamInfo) {
+func ensureMetadataOptimized(ctx context.Context, hash string, files []FileStreamInfo) {
+	ctx, span := otel.Tracer("webdav").Start(ctx, "ensureMetadataOptimized")
+	defer span.End()
+
 	// Identify streams needing metadata
 	var toFetch []string
 
@@ -1085,7 +1100,7 @@ func ensureMetadataOptimized(hash string, files []FileStreamInfo) {
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
-			meta, err := fetchRemoteMetadata(u)
+			meta, err := fetchRemoteMetadata(ctx, u)
 			if err == nil {
 				resultsMutex.Lock()
 				results[u] = meta
