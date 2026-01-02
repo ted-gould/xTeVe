@@ -6,6 +6,9 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"time"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // NewHTTPClient returns a new http.Client with cookiejar and redirect limits
@@ -17,6 +20,21 @@ func NewHTTPClient() *http.Client {
 			if len(via) >= 10 {
 				return errors.New("stopped after 10 redirects")
 			}
+
+			// Add attributes and event to the current span if it exists.
+			// req.Context() inherits the context from the original request.
+			span := trace.SpanFromContext(req.Context())
+			if span.IsRecording() {
+				// Record the number of redirects encountered so far.
+				// via contains the requests that have already been made.
+				span.SetAttributes(attribute.Int("http.redirect_count", len(via)))
+
+				// Record the redirect event with the target location.
+				span.AddEvent("http.redirect", trace.WithAttributes(
+					attribute.String("http.redirect.location", req.URL.String()),
+				))
+			}
+
 			return nil
 		},
 	}
