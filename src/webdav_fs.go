@@ -305,7 +305,7 @@ func (fs *WebDAVFS) Rename(ctx context.Context, oldName, newName string) error {
 
 // Stat returns file info
 func (fs *WebDAVFS) Stat(ctx context.Context, name string) (os.FileInfo, error) {
-	ctx, span := otel.Tracer("webdav").Start(ctx, "Stat")
+	_, span := otel.Tracer("webdav").Start(ctx, "Stat")
 	defer span.End()
 	span.SetAttributes(attribute.String("webdav.path", name))
 
