@@ -17,6 +17,8 @@ import (
 	"sync"
 	"time"
 
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"golang.org/x/net/webdav"
 )
 
@@ -60,17 +62,26 @@ func (f *mkFileInfo) Sys() interface{}   { return nil }
 
 // Mkdir returns an error as the filesystem is read-only
 func (fs *WebDAVFS) Mkdir(ctx context.Context, name string, perm os.FileMode) error {
+	_, span := otel.Tracer("webdav").Start(ctx, "Mkdir")
+	defer span.End()
+	span.SetAttributes(attribute.String("webdav.path", name))
+	span.RecordError(os.ErrPermission)
 	return os.ErrPermission
 }
 
 // OpenFile opens a file or directory
 func (fs *WebDAVFS) OpenFile(ctx context.Context, name string, flag int, perm os.FileMode) (webdav.File, error) {
+	ctx, span := otel.Tracer("webdav").Start(ctx, "OpenFile")
+	defer span.End()
+
+	span.SetAttributes(attribute.String("webdav.path", name))
+
 	name = strings.TrimPrefix(name, "/")
 	name = strings.TrimSuffix(name, "/")
 
 	// Root directory
 	if name == "" {
-		return &webdavDir{name: ""}, nil
+		return &webdavDir{name: "", ctx: ctx}, nil
 	}
 
 	parts := strings.Split(name, "/")
@@ -85,23 +96,23 @@ func (fs *WebDAVFS) OpenFile(ctx context.Context, name string, flag int, perm os
 
 	switch len(parts) {
 	case 1:
-		return fs.openHashDir(hash)
+		return fs.openHashDir(ctx, hash)
 	case 2:
-		return fs.openHashSubDir(hash, parts[1])
+		return fs.openHashSubDir(ctx, hash, parts[1])
 	case 3:
-		return fs.openOnDemandGroupDir(hash, parts[1], parts[2])
+		return fs.openOnDemandGroupDir(ctx, hash, parts[1], parts[2])
 	case 4:
-		return fs.openOnDemandGroupSubDir(hash, parts[1], parts[2], parts[3])
+		return fs.openOnDemandGroupSubDir(ctx, hash, parts[1], parts[2], parts[3])
 	case 5:
 		if parts[3] == dirSeries {
-			return fs.openOnDemandSeriesDir(hash, parts[1], parts[2], parts[4])
+			return fs.openOnDemandSeriesDir(ctx, hash, parts[1], parts[2], parts[4])
 		}
 		if parts[3] == dirIndividual {
 			return fs.openOnDemandIndividualStream(ctx, hash, parts[1], parts[2], parts[4])
 		}
 	case 6:
 		if parts[3] == dirSeries {
-			return fs.openOnDemandSeasonDir(hash, parts[1], parts[2], parts[4], parts[5])
+			return fs.openOnDemandSeasonDir(ctx, hash, parts[1], parts[2], parts[4], parts[5])
 		}
 	case 7:
 		if parts[3] == dirSeries {
@@ -112,11 +123,11 @@ func (fs *WebDAVFS) OpenFile(ctx context.Context, name string, flag int, perm os
 	return nil, os.ErrNotExist
 }
 
-func (fs *WebDAVFS) openHashDir(hash string) (webdav.File, error) {
-	return &webdavDir{name: hash}, nil
+func (fs *WebDAVFS) openHashDir(ctx context.Context, hash string) (webdav.File, error) {
+	return &webdavDir{name: hash, ctx: ctx}, nil
 }
 
-func (fs *WebDAVFS) openHashSubDir(hash, sub string) (webdav.File, error) {
+func (fs *WebDAVFS) openHashSubDir(ctx context.Context, hash, sub string) (webdav.File, error) {
 	if sub == fileListing {
 		realPath := filepath.Join(System.Folder.Data, hash+".m3u")
 		f, err := os.Open(realPath)
@@ -126,7 +137,7 @@ func (fs *WebDAVFS) openHashSubDir(hash, sub string) (webdav.File, error) {
 		return f, nil
 	}
 	if sub == dirOnDemand {
-		return &webdavDir{name: path.Join(hash, sub)}, nil
+		return &webdavDir{name: path.Join(hash, sub), ctx: ctx}, nil
 	}
 	return nil, os.ErrNotExist
 }
@@ -141,17 +152,17 @@ func (fs *WebDAVFS) groupExists(hash, group string) bool {
 	return false
 }
 
-func (fs *WebDAVFS) openOnDemandGroupDir(hash, sub, group string) (webdav.File, error) {
+func (fs *WebDAVFS) openOnDemandGroupDir(ctx context.Context, hash, sub, group string) (webdav.File, error) {
 	if sub != dirOnDemand {
 		return nil, os.ErrNotExist
 	}
 	if !fs.groupExists(hash, group) {
 		return nil, os.ErrNotExist
 	}
-	return &webdavDir{name: path.Join(hash, sub, group)}, nil
+	return &webdavDir{name: path.Join(hash, sub, group), ctx: ctx}, nil
 }
 
-func (fs *WebDAVFS) openOnDemandGroupSubDir(hash, sub, group, typeDir string) (webdav.File, error) {
+func (fs *WebDAVFS) openOnDemandGroupSubDir(ctx context.Context, hash, sub, group, typeDir string) (webdav.File, error) {
 	if sub != dirOnDemand {
 		return nil, os.ErrNotExist
 	}
@@ -159,12 +170,12 @@ func (fs *WebDAVFS) openOnDemandGroupSubDir(hash, sub, group, typeDir string) (w
 		return nil, os.ErrNotExist
 	}
 	if typeDir == dirSeries || typeDir == dirIndividual {
-		return &webdavDir{name: path.Join(hash, sub, group, typeDir)}, nil
+		return &webdavDir{name: path.Join(hash, sub, group, typeDir), ctx: ctx}, nil
 	}
 	return nil, os.ErrNotExist
 }
 
-func (fs *WebDAVFS) openOnDemandSeriesDir(hash, sub, group, series string) (webdav.File, error) {
+func (fs *WebDAVFS) openOnDemandSeriesDir(ctx context.Context, hash, sub, group, series string) (webdav.File, error) {
 	if sub != dirOnDemand {
 		return nil, os.ErrNotExist
 	}
@@ -183,10 +194,10 @@ func (fs *WebDAVFS) openOnDemandSeriesDir(hash, sub, group, series string) (webd
 	if !found {
 		return nil, os.ErrNotExist
 	}
-	return &webdavDir{name: path.Join(hash, sub, group, dirSeries, series)}, nil
+	return &webdavDir{name: path.Join(hash, sub, group, dirSeries, series), ctx: ctx}, nil
 }
 
-func (fs *WebDAVFS) openOnDemandSeasonDir(hash, sub, group, series, season string) (webdav.File, error) {
+func (fs *WebDAVFS) openOnDemandSeasonDir(ctx context.Context, hash, sub, group, series, season string) (webdav.File, error) {
 	if sub != dirOnDemand {
 		return nil, os.ErrNotExist
 	}
@@ -205,7 +216,7 @@ func (fs *WebDAVFS) openOnDemandSeasonDir(hash, sub, group, series, season strin
 	if !found {
 		return nil, os.ErrNotExist
 	}
-	return &webdavDir{name: path.Join(hash, sub, group, dirSeries, series, season)}, nil
+	return &webdavDir{name: path.Join(hash, sub, group, dirSeries, series, season), ctx: ctx}, nil
 }
 
 func (fs *WebDAVFS) openOnDemandIndividualStream(ctx context.Context, hash, sub, group, filename string) (webdav.File, error) {
@@ -246,38 +257,58 @@ func (fs *WebDAVFS) openOnDemandSeriesStream(ctx context.Context, hash, sub, gro
 
 // RemoveAll returns an error as the filesystem is read-only
 func (fs *WebDAVFS) RemoveAll(ctx context.Context, name string) error {
+	ctx, span := otel.Tracer("webdav").Start(ctx, "RemoveAll")
+	defer span.End()
+	span.SetAttributes(attribute.String("webdav.path", name))
+
 	name = strings.TrimPrefix(name, "/")
 	name = strings.TrimSuffix(name, "/")
 
 	if name == "" {
+		span.RecordError(os.ErrPermission)
 		return os.ErrPermission
 	}
 
 	parts := strings.Split(name, "/")
 	if len(parts) == 0 {
+		span.RecordError(os.ErrNotExist)
 		return os.ErrNotExist
 	}
 
 	hash := parts[0]
 	if _, ok := Settings.Files.M3U[hash]; !ok {
+		span.RecordError(os.ErrNotExist)
 		return os.ErrNotExist
 	}
 
 	// Just check if it exists and return ErrPermission, otherwise ErrNotExist
 	_, err := fs.Stat(ctx, name)
 	if err != nil {
+		span.RecordError(os.ErrNotExist)
 		return os.ErrNotExist
 	}
+	span.RecordError(os.ErrPermission)
 	return os.ErrPermission
 }
 
 // Rename returns an error as the filesystem is read-only
 func (fs *WebDAVFS) Rename(ctx context.Context, oldName, newName string) error {
+	_, span := otel.Tracer("webdav").Start(ctx, "Rename")
+	defer span.End()
+	span.SetAttributes(
+		attribute.String("webdav.old_path", oldName),
+		attribute.String("webdav.new_path", newName),
+	)
+	span.RecordError(os.ErrPermission)
 	return os.ErrPermission
 }
 
 // Stat returns file info
 func (fs *WebDAVFS) Stat(ctx context.Context, name string) (os.FileInfo, error) {
+	ctx, span := otel.Tracer("webdav").Start(ctx, "Stat")
+	defer span.End()
+	span.SetAttributes(attribute.String("webdav.path", name))
+
 	name = strings.TrimPrefix(name, "/")
 	name = strings.TrimSuffix(name, "/")
 
@@ -433,6 +464,7 @@ func (fs *WebDAVFS) statHashSubDir(hash, sub string, modTime time.Time) (os.File
 type webdavDir struct {
 	name string // Full virtual path relative to root
 	pos  int
+	ctx  context.Context
 }
 
 func (d *webdavDir) Close() error {
@@ -448,8 +480,19 @@ func (d *webdavDir) Seek(offset int64, whence int) (int64, error) {
 }
 
 func (d *webdavDir) Readdir(count int) ([]os.FileInfo, error) {
+	// Use stored context if available, otherwise background
+	ctx := d.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	_, span := otel.Tracer("webdav").Start(ctx, "Readdir")
+	defer span.End()
+	span.SetAttributes(attribute.String("webdav.path", d.name))
+
 	infos, err := d.collectInfos()
 	if err != nil {
+		span.RecordError(err)
 		return nil, err
 	}
 
@@ -463,9 +506,11 @@ func (d *webdavDir) Readdir(count int) ([]os.FileInfo, error) {
 		}
 		res := infos[d.pos:end]
 		d.pos = end
+		span.SetAttributes(attribute.Int("webdav.readdir.count", len(res)))
 		return res, nil
 	}
 
+	span.SetAttributes(attribute.Int("webdav.readdir.count", len(infos)))
 	return infos, nil
 }
 
@@ -740,6 +785,13 @@ func (s *webdavStream) Read(p []byte) (n int, err error) {
 }
 
 func (s *webdavStream) Seek(offset int64, whence int) (int64, error) {
+	_, span := otel.Tracer("webdav").Start(s.ctx, "Seek")
+	defer span.End()
+	span.SetAttributes(
+		attribute.Int64("offset", offset),
+		attribute.Int("whence", whence),
+	)
+
 	var newPos int64
 	switch whence {
 	case io.SeekStart:
@@ -770,6 +822,13 @@ func (s *webdavStream) Seek(offset int64, whence int) (int64, error) {
 }
 
 func (s *webdavStream) openStream(offset int64) error {
+	ctx, span := otel.Tracer("webdav").Start(s.ctx, "openStream")
+	defer span.End()
+	span.SetAttributes(
+		attribute.Int64("offset", offset),
+		attribute.String("webdav.stream_name", s.name),
+	)
+
 	url := s.targetURL
 	if url == "" {
 		// Fallback for safety, though targetURL should be set
@@ -778,11 +837,15 @@ func (s *webdavStream) openStream(offset int64) error {
 		}
 	}
 	if url == "" {
-		return errors.New("no url in stream")
+		err := errors.New("no url in stream")
+		span.RecordError(err)
+		return err
 	}
 
-	req, err := http.NewRequestWithContext(s.ctx, "GET", url, nil)
+	// Use the context from the span to ensure propagation
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
+		span.RecordError(err)
 		return err
 	}
 
