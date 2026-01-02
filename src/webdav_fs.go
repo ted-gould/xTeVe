@@ -1724,22 +1724,31 @@ func findIndividualStream(ctx context.Context, hash, group, filename string) (ma
 	_, span := otel.Tracer("webdav").Start(ctx, "findIndividualStream")
 	defer span.End()
 
-	streams := getIndividualStreams(ctx, hash, group)
-	return findStreamInList(ctx, streams, filename)
+	// Use getIndividualStreamFiles which is cached, instead of getIndividualStreams + generateFileStreamInfos
+	// This was an optimization in upstream (origin/main) that we should preserve,
+	// but we must pass the context for tracing.
+	files := getIndividualStreamFiles(ctx, hash, group)
+	for _, f := range files {
+		if f.Name == filename {
+			return f.Stream, f.TargetURL, nil
+		}
+	}
+	return nil, "", os.ErrNotExist
 }
 
 func findSeriesStream(ctx context.Context, hash, group, series, seasonStr, filename string) (map[string]string, string, error) {
 	_, span := otel.Tracer("webdav").Start(ctx, "findSeriesStream")
 	defer span.End()
 
-    parts := strings.Split(seasonStr, " ")
-    if len(parts) < 2 {
-        return nil, "", os.ErrNotExist
-    }
-    sNum, _ := strconv.Atoi(parts[1])
-
-	streams := getSeriesStreams(ctx, hash, group, series, sNum)
-	return findStreamInList(ctx, streams, filename)
+	// Use getSeasonFiles which is cached, instead of getSeriesStreams + generateFileStreamInfos
+	// This was an optimization in upstream (origin/main)
+	files := getSeasonFiles(ctx, hash, group, series, seasonStr)
+	for _, f := range files {
+		if f.Name == filename {
+			return f.Stream, f.TargetURL, nil
+		}
+	}
+	return nil, "", os.ErrNotExist
 }
 
 func findStreamInList(ctx context.Context, streams []map[string]string, filename string) (map[string]string, string, error) {
