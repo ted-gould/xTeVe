@@ -15,7 +15,7 @@ import (
 const (
 	defaultStreamSize = 1 * 1024 * 1024 // 1 MB
 	defaultPort       = 8080
-	numStreams        = 4
+	numStreams        = 5 // Increased to 5 to include series test
 	chunkSize         = 1024 // 1 KB
 	delay             = 10 * time.Millisecond
 )
@@ -48,6 +48,10 @@ func generateTestData(size, count int) {
 
 func streamHandler(w http.ResponseWriter, r *http.Request) {
 	streamIDStr := strings.TrimPrefix(r.URL.Path, "/stream/")
+
+	// Handle .mp4 extension for VOD test
+	streamIDStr = strings.TrimSuffix(streamIDStr, ".mp4")
+
 	streamID, err := strconv.Atoi(streamIDStr)
 	if err != nil || streamID < 1 || streamID > numStreams {
 		http.NotFound(w, r)
@@ -103,10 +107,16 @@ func main() {
 	http.HandleFunc("/test.m3u", func(w http.ResponseWriter, r *http.Request) {
 		var m3uContent strings.Builder
 		m3uContent.WriteString("#EXTM3U\n")
-		for i := 1; i <= numStreams; i++ {
+		// Live streams 1-4
+		for i := 1; i <= 4; i++ {
 			m3uContent.WriteString(fmt.Sprintf("#EXTINF:-1 tvg-id=\"test.stream.%d\" tvg-name=\"Test Stream %d\" group-title=\"Test\",Test Stream %d\n", i, i, i))
 			m3uContent.WriteString(fmt.Sprintf("http://localhost:%d/stream/%d\n", port, i))
 		}
+		// VOD Series Stream 5
+		i := 5
+		// Using duration > 0 (3600) and .mp4 extension to ensure VOD detection
+		m3uContent.WriteString(fmt.Sprintf("#EXTINF:3600 tvg-id=\"test.series.%d\" tvg-name=\"Test Series - S01E01 - Episode 1\" group-title=\"Test Series\",Test Series - S01E01 - Episode 1\n", i))
+		m3uContent.WriteString(fmt.Sprintf("http://localhost:%d/stream/%d.mp4\n", port, i))
 
 		w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
 		if _, err := w.Write([]byte(m3uContent.String())); err != nil {
