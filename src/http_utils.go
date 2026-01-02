@@ -1,10 +1,13 @@
 package src
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/cookiejar"
+	"sync"
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -12,13 +15,70 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
+var (
+	xTeVeTransport *http.Transport
+	transportOnce  sync.Once
+)
+
+func getXTeVeTransport() *http.Transport {
+	transportOnce.Do(func() {
+		if t, ok := http.DefaultTransport.(*http.Transport); ok {
+			xTeVeTransport = t.Clone()
+		} else {
+			xTeVeTransport = &http.Transport{
+				Proxy: http.ProxyFromEnvironment,
+				DialContext: (&net.Dialer{
+					Timeout:   30 * time.Second,
+					KeepAlive: 30 * time.Second,
+				}).DialContext,
+				ForceAttemptHTTP2:     true,
+				MaxIdleConns:          100,
+				IdleConnTimeout:       90 * time.Second,
+				TLSHandshakeTimeout:   10 * time.Second,
+				ExpectContinueTimeout: 1 * time.Second,
+			}
+		}
+		xTeVeTransport.DialContext = dialContextWithRetry
+	})
+	return xTeVeTransport
+}
+
+func dialContextWithRetry(ctx context.Context, network, addr string) (net.Conn, error) {
+	var conn net.Conn
+	var err error
+
+	dialer := &net.Dialer{
+		Timeout:   30 * time.Second,
+		KeepAlive: 30 * time.Second,
+	}
+
+	// Retry loop for transient errors (like DNS "server misbehaving")
+	for i := 0; i < 3; i++ {
+		conn, err = dialer.DialContext(ctx, network, addr)
+		if err == nil {
+			return conn, nil
+		}
+
+		// Wait before retry
+		if i < 2 {
+			select {
+			case <-ctx.Done():
+				return nil, err
+			case <-time.After(200 * time.Millisecond):
+				continue
+			}
+		}
+	}
+	return nil, err
+}
+
 // NewHTTPClient returns a new http.Client with cookiejar and redirect limits
 func NewHTTPClient() *http.Client {
 	jar, _ := cookiejar.New(nil)
 	return &http.Client{
 		Jar: jar,
 		Transport: otelhttp.NewTransport(
-			http.DefaultTransport,
+			getXTeVeTransport(),
 		),
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) >= 10 {
