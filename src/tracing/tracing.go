@@ -17,7 +17,9 @@ import (
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/log"
 	"go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 )
 
 type ExporterType string
@@ -100,7 +102,19 @@ func newTracerProvider(ctx context.Context, exporterType ExporterType) (*trace.T
 		return nil, err
 	}
 
-	opts := []trace.TracerProviderOption{}
+	res, err := resource.New(ctx,
+		resource.WithAttributes(
+			semconv.ServiceNameKey.String("xteve"),
+		),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	opts := []trace.TracerProviderOption{
+		trace.WithResource(res),
+	}
+
 	if traceExporter != nil {
 		opts = append(opts, trace.WithBatcher(traceExporter,
 			// Default is 5s. Set to 1s for demonstrative purposes.
