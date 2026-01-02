@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"context"
 )
 
 func TestHandleHLSStream(t *testing.T) {
@@ -69,7 +70,7 @@ func TestHandleHLSStream(t *testing.T) {
 	}
 
 	// 3. Call the function
-	modifiedStream, err := handleHLSStream(resp, stream, tmpFolder, &tmpSegment, addErrorToStream, stream.URL)
+	modifiedStream, err := handleHLSStream(context.Background(), resp, stream, tmpFolder, &tmpSegment, addErrorToStream, stream.URL)
 	if err != nil {
 		t.Fatalf("handleHLSStream returned an error: %v", err)
 	}
