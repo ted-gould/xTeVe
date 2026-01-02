@@ -70,9 +70,15 @@ func (fs *WebDAVFS) Mkdir(ctx context.Context, name string, perm os.FileMode) er
 }
 
 // OpenFile opens a file or directory
-func (fs *WebDAVFS) OpenFile(ctx context.Context, name string, flag int, perm os.FileMode) (webdav.File, error) {
+func (fs *WebDAVFS) OpenFile(ctx context.Context, name string, flag int, perm os.FileMode) (f webdav.File, err error) {
 	ctx, span := otel.Tracer("webdav").Start(ctx, "OpenFile")
 	defer span.End()
+
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+		}
+	}()
 
 	span.SetAttributes(attribute.String("webdav.path", name))
 
@@ -824,9 +830,15 @@ func (s *webdavStream) Seek(offset int64, whence int) (int64, error) {
 	return newPos, nil
 }
 
-func (s *webdavStream) openStream(offset int64) error {
+func (s *webdavStream) openStream(offset int64) (err error) {
 	ctx, span := otel.Tracer("webdav").Start(s.ctx, "openStream")
 	defer span.End()
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+		}
+	}()
+
 	span.SetAttributes(
 		attribute.Int64("offset", offset),
 		attribute.String("webdav.stream_name", s.name),
@@ -840,15 +852,15 @@ func (s *webdavStream) openStream(offset int64) error {
 		}
 	}
 	if url == "" {
-		err := errors.New("no url in stream")
-		span.RecordError(err)
+		err = errors.New("no url in stream")
 		return err
 	}
+
+	span.SetAttributes(attribute.String("http.url", url))
 
 	// Use the context from the span to ensure propagation
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
-		span.RecordError(err)
 		return err
 	}
 
@@ -868,6 +880,7 @@ func (s *webdavStream) openStream(offset int64) error {
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
 		resp.Body.Close()
+		span.SetAttributes(attribute.Int("http.response.status_code", resp.StatusCode))
 		return fmt.Errorf("upstream returned status %d", resp.StatusCode)
 	}
 
