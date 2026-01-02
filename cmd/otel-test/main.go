@@ -155,7 +155,9 @@ func startXteve(collectorEndpoint, configDir string) (*exec.Cmd, error) {
 
 func stopXteve(cmd *exec.Cmd) {
 	if cmd.Process != nil {
-		cmd.Process.Kill()
+		if err := cmd.Process.Kill(); err != nil {
+			log.Printf("Failed to kill xteve process: %v", err)
+		}
 	}
 }
 
