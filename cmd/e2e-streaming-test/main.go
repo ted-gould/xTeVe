@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -36,6 +37,82 @@ type StatusResponse struct {
 	TunerActive int `json:"tuners.active"`
 }
 
+// TraceCollector listens for OTLP traces.
+type TraceCollector struct {
+	mu          sync.Mutex
+	traces      []string
+	server      *http.Server
+	port        int
+}
+
+func (tc *TraceCollector) Start() error {
+	// Listen on a random available port
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return err
+	}
+	tc.port = listener.Addr().(*net.TCPAddr).Port
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/v1/traces", tc.handleTraces)
+
+	tc.server = &http.Server{
+		Handler: mux,
+	}
+
+	go func() {
+		if err := tc.server.Serve(listener); err != nil && err != http.ErrServerClosed {
+			log.Printf("Trace collector server error: %v", err)
+		}
+	}()
+
+	return nil
+}
+
+func (tc *TraceCollector) Stop() {
+	if tc.server != nil {
+		tc.server.Close()
+	}
+}
+
+func (tc *TraceCollector) handleTraces(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Content-Type should be application/json if properly configured
+	// We read body anyway
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		log.Printf("Failed to read trace body: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	defer r.Body.Close()
+
+	tc.mu.Lock()
+	tc.traces = append(tc.traces, string(body))
+	tc.mu.Unlock()
+
+	w.WriteHeader(http.StatusOK)
+}
+
+func (tc *TraceCollector) GetTraces() []string {
+	tc.mu.Lock()
+	defer tc.mu.Unlock()
+	return append([]string(nil), tc.traces...)
+}
+
+func (tc *TraceCollector) PrintTraces() {
+	traces := tc.GetTraces()
+	fmt.Println("------ Captured Traces ------")
+	for i, trace := range traces {
+		fmt.Printf("Batch %d:\n%s\n", i+1, trace)
+	}
+	fmt.Println("-----------------------------")
+}
+
 func main() {
 	if err := run(); err != nil {
 		log.Printf("E2E test failed: %v", err)
@@ -45,10 +122,19 @@ func main() {
 }
 
 func run() error {
+	// 1. Start Trace Collector
+	collector := &TraceCollector{}
+	if err := collector.Start(); err != nil {
+		return fmt.Errorf("failed to start trace collector: %w", err)
+	}
+	defer collector.Stop()
+	collectorURL := fmt.Sprintf("http://127.0.0.1:%d", collector.port)
+	fmt.Printf("Trace collector started on %s\n", collectorURL)
+
 	if err := buildCommands(); err != nil {
 		return fmt.Errorf("failed to build commands: %w", err)
 	}
-	// 1. Start streamer
+	// 2. Start streamer
 	fmt.Println("Starting streamer...")
 	streamerCmd := exec.Command("./streamer_binary")
 	streamerCmd.Env = append(os.Environ(),
@@ -67,8 +153,8 @@ func run() error {
 		return fmt.Errorf("streamer not ready: %w", err)
 	}
 
-	// 2. Start xteve
-	xteveCmd, err := startXteve()
+	// 3. Start xteve
+	xteveCmd, xteveLog, err := startXteve(collectorURL)
 	if err != nil {
 		stopStreamer(streamerCmd)
 		return fmt.Errorf("failed to start xteve: %w", err)
@@ -81,40 +167,83 @@ func run() error {
 		return fmt.Errorf("server not ready: %w", err)
 	}
 
-	// 3. Run tests
+	// 4. Run tests
 	testErr := runTests()
 
-	// 4. Cleanup
+	// 5. Cleanup
 	stopXteve(xteveCmd)
 	stopStreamer(streamerCmd)
 
 	if err := runStatusTest(false); err != nil {
-		return fmt.Errorf("post-run status test failed: %w", err)
+		if testErr == nil {
+			testErr = fmt.Errorf("post-run status test failed: %w", err)
+		}
 	}
 
 	if err := runInactiveTest(false, false); err != nil {
-		return fmt.Errorf("post-run inactive test failed: %w", err)
+		if testErr == nil {
+			testErr = fmt.Errorf("post-run inactive test failed: %w", err)
+		}
 	}
 
 	if testErr != nil {
+		fmt.Println("Test failure detected.")
+
+		// Print xTeVe logs
+		if xteveLog != nil {
+			fmt.Println("------ xTeVe Logs (Last 100 lines) ------")
+			_, _ = xteveLog.Seek(0, 0) // Read all might be too much, but let's try reading and tailing
+			content, _ := io.ReadAll(xteveLog)
+			lines := strings.Split(string(content), "\n")
+			start := 0
+			if len(lines) > 100 {
+				start = len(lines) - 100
+			}
+			for i := start; i < len(lines); i++ {
+				fmt.Println(lines[i])
+			}
+			fmt.Println("-----------------------------------------")
+			xteveLog.Close()
+		}
+
+		fmt.Println("Printing traces:")
+		collector.PrintTraces()
 		return testErr
+	}
+
+	if xteveLog != nil {
+		xteveLog.Close()
 	}
 
 	return nil
 }
 
-func startXteve() (*exec.Cmd, error) {
+func startXteve(collectorEndpoint string) (*exec.Cmd, *os.File, error) {
 	fmt.Println("Starting xteve server...")
 	// Remove existing config to ensure a clean slate
 	os.RemoveAll(".xteve")
 
 	cmd := exec.Command("./bin/xteve", fmt.Sprintf("-port=%d", xtevePort), "-config=.xteve")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Start(); err != nil {
-		return nil, err
+
+	env := os.Environ()
+	env = append(env, "OTEL_EXPORTER_TYPE=otlp-http")
+	env = append(env, fmt.Sprintf("OTEL_EXPORTER_OTLP_ENDPOINT=%s", collectorEndpoint))
+	env = append(env, "OTEL_EXPORTER_OTLP_PROTOCOL=http/json") // Force JSON
+	cmd.Env = env
+
+	logFile, err := os.CreateTemp("", "xteve_test_log_*.txt")
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create temp log file: %w", err)
 	}
-	return cmd, nil
+
+	cmd.Stdout = logFile
+	cmd.Stderr = logFile
+
+	if err := cmd.Start(); err != nil {
+		logFile.Close()
+		return nil, nil, err
+	}
+	return cmd, logFile, nil
 }
 
 func stopXteve(cmd *exec.Cmd) {
@@ -192,13 +321,28 @@ func runTests() error {
 		"-": map[string]interface{}{
 			"name":  "TestM3U",
 			"url":   m3uURL,
-			"tuner": "4",
+			"tuner": "5", // Increased tuners
 		},
 	}
 	m3uRequest := map[string]interface{}{"cmd": "saveFilesM3U", "files": map[string]interface{}{"m3u": m3uData}}
 	if _, err := sendRequest(conn, m3uRequest); err != nil {
 		return fmt.Errorf("failed to add M3U playlist: %w", err)
 	}
+
+	// Wait for M3U update
+	time.Sleep(5 * time.Second)
+	// Force update again just in case
+	updateRequest := map[string]interface{}{"cmd": "updateFileM3U"}
+	if _, err := sendRequest(conn, updateRequest); err != nil {
+		return fmt.Errorf("failed to send M3U update request: %w", err)
+	}
+	time.Sleep(5 * time.Second)
+
+	// Run WebDAV Series Test
+	if err := runWebDAVSeriesTest(); err != nil {
+		return fmt.Errorf("WebDAV series test failed: %w", err)
+	}
+	fmt.Println("WebDAV series test passed.")
 
 	// Run with buffer enabled
 	if err := setBuffer(conn, "xteve", 1024); err != nil {
@@ -247,6 +391,139 @@ func runTests() error {
 
 	if err := runInactiveTest(false, true); err != nil {
 		return fmt.Errorf("inactive test failed after streaming: %w", err)
+	}
+
+	return nil
+}
+
+func runWebDAVSeriesTest() error {
+	fmt.Println("Running WebDAV series test...")
+
+	// 1. Find the M3U hash (we can't easily guess it, so we list /dav/)
+	davURL := fmt.Sprintf("http://localhost:%d/dav/", xtevePort)
+	resp, err := http.Get(davURL)
+	if err != nil {
+		return fmt.Errorf("failed to list /dav/: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+
+	content := string(body)
+	parts := strings.Split(content, "/dav/")
+	var hash string
+	for _, p := range parts {
+		if idx := strings.Index(p, "/"); idx > 0 {
+			candidate := p[:idx]
+			if len(candidate) == 32 { // MD5 hash length
+				hash = candidate
+				break
+			}
+		}
+	}
+
+	if hash == "" {
+		// Fallback: Check if there's a simpler way or if length isn't 32.
+		// Let's look for "href"
+		// If we can't find it, we might fail.
+		// But wait, the test setup uses "saveFilesM3U" which generates a hash.
+		// We can actually just fetch the M3U content from xTeVe via API or assume the hash.
+		// Or easier: use the file system. Since we are on same machine.
+		// .xteve/data/ should contain the m3u file.
+		files, err := os.ReadDir(".xteve/data")
+		if err == nil {
+			for _, f := range files {
+				if strings.HasSuffix(f.Name(), ".m3u") && f.Name() != "xteve.m3u" {
+					hash = strings.TrimSuffix(f.Name(), ".m3u")
+					break
+				}
+			}
+		}
+	}
+
+	if hash == "" {
+		return fmt.Errorf("could not determine M3U hash from .xteve/data or WebDAV listing. Body: %s", content)
+	}
+
+	fmt.Printf("Found M3U hash: %s\n", hash)
+
+	// 2. Construct the series path
+	// Structure: /dav/<hash>/On Demand/<Group>/Series/<Series>/Season <N>/<File>
+
+	seriesPath := fmt.Sprintf("/dav/%s/On Demand/Test Series/Series/Test Series/Season 1/", hash)
+	seriesURL := fmt.Sprintf("http://localhost:%d%s", xtevePort, strings.ReplaceAll(seriesPath, " ", "%20")) // URL encode spaces
+
+	fmt.Printf("Listing series directory: %s\n", seriesURL)
+	req, _ := http.NewRequest("PROPFIND", seriesURL, nil)
+	req.Header.Set("Depth", "1")
+	client := &http.Client{}
+	resp, err = client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to list series directory: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 207 && resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to list series directory, status: %d, body: %s", resp.StatusCode, string(body))
+	}
+
+	body, _ = io.ReadAll(resp.Body)
+	content = string(body)
+
+	// Find the .mp4 file in the response
+	// Look for href ending in .mp4
+
+	// Easier: Just look for .mp4 in the content and extract the full path.
+	idx := strings.Index(content, ".mp4")
+	if idx == -1 {
+		return fmt.Errorf("no .mp4 file found in series directory listing: %s", content)
+	}
+
+	// Find the start of the href
+	// Looking backwards for <D:href> or <href>
+	startTag := "<D:href>"
+	startIdx := strings.LastIndex(content[:idx], startTag)
+	if startIdx == -1 {
+		startTag = "<href>"
+		startIdx = strings.LastIndex(content[:idx], startTag)
+	}
+
+	if startIdx == -1 {
+		return fmt.Errorf("found .mp4 but could not find href start tag")
+	}
+
+	fileURL := content[startIdx+len(startTag) : idx+4]
+
+	// URL decode it to be safe for logging, but we need encoded for request?
+	// The PROPFIND response usually gives encoded URLs.
+
+	fmt.Printf("Found file URL: %s\n", fileURL)
+
+	// 3. Download the file
+	// fileURL is likely absolute path "/dav/..." or full URL? WebDAV usually returns absolute path.
+	downloadURL := fmt.Sprintf("http://localhost:%d%s", xtevePort, fileURL)
+
+	fmt.Printf("Downloading file from %s\n", downloadURL)
+	resp, err = http.Get(downloadURL)
+	if err != nil {
+		return fmt.Errorf("failed to download file: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("download failed with status: %d", resp.StatusCode)
+	}
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read file data: %w", err)
+	}
+
+	// 4. Verify content
+	// Use stream ID 5
+	if err := verifyStreamedData(data, 5); err != nil {
+		return fmt.Errorf("file verification failed: %w", err)
 	}
 
 	return nil
@@ -599,6 +876,7 @@ func buildCommands() error {
 	}{
 		{"xteve-status", "./cmd/xteve-status"},
 		{"xteve-inactive", "./cmd/xteve-inactive"},
+		{"streamer_binary", "./cmd/e2e-streaming-test/streamer"},
 	}
 
 	for _, cmdInfo := range commands {
