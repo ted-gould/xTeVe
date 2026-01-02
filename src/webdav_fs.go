@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/cookiejar"
 	"net/url"
 	"os"
 	"path"
@@ -854,8 +855,10 @@ func (s *webdavStream) openStream(offset int64) error {
 		req.Header.Set("Range", fmt.Sprintf("bytes=%d-", s.pos))
 	}
 
+	req.Header.Set("User-Agent", Settings.UserAgent)
+
 	// Use a default client or one from System if available
-	client := &http.Client{}
+	client := createWebDAVClient()
 	resp, err := client.Do(req)
 	if err != nil {
 		return err
@@ -990,11 +993,16 @@ func getStreamMetadata(stream map[string]string) (FileMeta, bool) {
 
 func fetchRemoteMetadata(urlStr string) (FileMeta, error) {
 	var meta FileMeta
-	client := &http.Client{
-		Timeout: 5 * time.Second,
-	}
+	client := createWebDAVClient()
+	client.Timeout = 5 * time.Second
 
-	resp, err := client.Head(urlStr)
+	req, err := http.NewRequest("HEAD", urlStr, nil)
+	if err != nil {
+		return meta, err
+	}
+	req.Header.Set("User-Agent", Settings.UserAgent)
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return meta, err
 	}
@@ -1573,4 +1581,17 @@ func isVOD(stream map[string]string) bool {
 
 	// Default to false (Live) if unsure, to be safe and comply with "only show if it ISN'T a stream"
 	return false
+}
+
+func createWebDAVClient() *http.Client {
+	jar, _ := cookiejar.New(nil)
+	return &http.Client{
+		Jar: jar,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 10 {
+				return errors.New("stopped after 10 redirects")
+			}
+			return nil
+		},
+	}
 }
