@@ -23,6 +23,7 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/net/webdav"
 )
@@ -1164,6 +1165,9 @@ func newHTTPHandler() http.Handler {
 		Logger: func(r *http.Request, err error) {
 			if err != nil {
 				log.Printf("WEBDAV ERROR: %s", err)
+				span := trace.SpanFromContext(r.Context())
+				span.RecordError(err)
+				span.SetStatus(codes.Error, err.Error())
 			}
 		},
 	}
