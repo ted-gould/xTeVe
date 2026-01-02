@@ -14,6 +14,9 @@ import (
 
 	"slices"
 
+	"context"
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/avfs/avfs/vfs/memfs"
 	"github.com/avfs/avfs/vfs/osfs"
 	"xteve/src/mpegts"
@@ -206,7 +209,10 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 
 		switch Settings.Buffer {
 		case "xteve":
-			go connectToStreamingServer(streamID, playlistID)
+			// Extract span from request context and create a detached context with it
+			span := trace.SpanFromContext(r.Context())
+			ctx := trace.ContextWithSpan(context.WithoutCancel(r.Context()), span)
+			go connectToStreamingServer(streamID, playlistID, ctx)
 		default:
 			break
 		}
@@ -437,7 +443,7 @@ func clientConnection(stream ThisStream) (status bool) {
 	return
 }
 
-func connectToStreamingServer(streamID int, playlistID string) {
+func connectToStreamingServer(streamID int, playlistID string, ctx context.Context) {
 	if p, ok := BufferInformation.Load(playlistID); ok {
 		var playlist *Playlist
 		if pl, ok := p.(*Playlist); ok {
@@ -553,7 +559,7 @@ func connectToStreamingServer(streamID int, playlistID string) {
 			var retries = 0
 			// Jump for redirect (301 <---> 308)
 		Redirect:
-			req, _ := http.NewRequest("GET", currentURL, nil)
+			req, _ := http.NewRequestWithContext(ctx, "GET", currentURL, nil)
 			req.Header.Set("User-Agent", Settings.UserAgent)
 			req.Header.Set("Connection", "close")
 			req.Header.Set("Accept", "*/*")
@@ -613,7 +619,7 @@ func connectToStreamingServer(streamID int, playlistID string) {
 			// M3U8 Playlist
 			case "application/x-mpegurl", "application/vnd.apple.mpegurl", "audio/mpegurl", "audio/x-mpegurl":
 				var err error
-				stream, err = handleHLSStream(resp, stream, tmpFolder, &tmpSegment, addErrorToStream, currentURL)
+				stream, err = handleHLSStream(ctx, resp, stream, tmpFolder, &tmpSegment, addErrorToStream, currentURL)
 				if err != nil {
 					// handleHLSStream logs and adds errors, so we just need to return
 					return
@@ -689,7 +695,7 @@ func connectToStreamingServer(streamID int, playlistID string) {
 	} // End of BufferInformation
 }
 
-func handleHLSStream(resp *http.Response, stream ThisStream, tmpFolder string, tmpSegment *int, addErrorToStream func(err error), currentURL string) (ThisStream, error) {
+func handleHLSStream(ctx context.Context, resp *http.Response, stream ThisStream, tmpFolder string, tmpSegment *int, addErrorToStream func(err error), currentURL string) (ThisStream, error) {
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		ShowError(err, 0)
@@ -712,7 +718,7 @@ func handleHLSStream(resp *http.Response, stream ThisStream, tmpFolder string, t
 		client := NewHTTPClient()
 
 		for _, segment := range stream.Segment {
-			req, _ := http.NewRequest("GET", segment.URL, nil)
+			req, _ := http.NewRequestWithContext(ctx, "GET", segment.URL, nil)
 			req.Header.Set("User-Agent", Settings.UserAgent)
 			req.Header.Set("Connection", "close")
 			req.Header.Set("Accept", "*/*")

@@ -9,6 +9,7 @@ import (
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 // NewHTTPClient returns a new http.Client with cookiejar and redirect limits
@@ -16,6 +17,9 @@ func NewHTTPClient() *http.Client {
 	jar, _ := cookiejar.New(nil)
 	return &http.Client{
 		Jar: jar,
+		Transport: otelhttp.NewTransport(
+			http.DefaultTransport,
+		),
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) >= 10 {
 				return errors.New("stopped after 10 redirects")
