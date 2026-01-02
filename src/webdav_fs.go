@@ -1751,21 +1751,6 @@ func findSeriesStream(ctx context.Context, hash, group, series, seasonStr, filen
 	return nil, "", os.ErrNotExist
 }
 
-func findStreamInList(ctx context.Context, streams []map[string]string, filename string) (map[string]string, string, error) {
-	_, span := otel.Tracer("webdav").Start(ctx, "findStreamInList")
-	defer span.End()
-
-	// Re-use logic from generateFileStreamInfos by generating and searching
-	// This is less efficient than recalculating but ensures consistency with ReadDir
-	infos := generateFileStreamInfos(ctx, streams)
-	for _, info := range infos {
-		if info.Name == filename {
-			return info.Stream, info.TargetURL, nil
-		}
-	}
-	return nil, "", os.ErrNotExist
-}
-
 func isVOD(stream map[string]string) bool {
 	// 1. Check extension first (priority over duration)
 	urlStr := stream["url"]
