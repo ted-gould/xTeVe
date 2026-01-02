@@ -225,10 +225,9 @@ func UserAuthentication(username, password string) (token string, err error) {
 				loginData["_username"] = sUsername
 				loginData["_password"] = sPassword
 
-				if errSave := saveDatabase(data); errSave != nil {
-					// If save fails, we still allow login, but log/return error?
-					// For now, allow login.
-				}
+				// Attempt to save the migrated data. If it fails, we silently ignore it
+				// and the user will remain on the legacy hash until next login.
+				_ = saveDatabase(data)
 				err = nil
 			}
 		}
