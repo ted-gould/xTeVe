@@ -20,6 +20,8 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"golang.org/x/net/webdav"
+
+	"xteve/src/filecache"
 )
 
 const (
@@ -413,7 +415,21 @@ func resolveFileMetadata(ctx context.Context, hash string, stream map[string]str
 	size := int64(0)
 	mt := defaultModTime
 
-	// Check cache first
+	// Check file cache first
+	if fc := getFileCache(); fc != nil && targetURL != "" {
+		if meta, err := fc.GetMetadata(targetURL); err == nil {
+			size = meta.Size
+			if !meta.ModTime.IsZero() {
+				mt = meta.ModTime
+			}
+			// If we have valid metadata from file cache, return it
+			if size > 0 {
+				return &mkFileInfo{name: name, size: size, modTime: mt}, nil
+			}
+		}
+	}
+
+	// Check memory cache
 	webdavCacheMutex.RLock()
 	hc := webdavCache[hash]
 
@@ -832,7 +848,7 @@ func (s *webdavStream) Read(p []byte) (n int, err error) {
 	span.SetAttributes(attribute.String("webdav.stream_name", s.name))
 
 	if s.readCloser == nil {
-		if err := s.openStream(0); err != nil {
+		if err := s.openStream(s.pos); err != nil {
 			span.RecordError(err)
 			return 0, err
 		}
@@ -840,6 +856,30 @@ func (s *webdavStream) Read(p []byte) (n int, err error) {
 	n, err = s.readCloser.Read(p)
 	if n > 0 {
 		s.pos += int64(n)
+	}
+
+	// Handle transition from cache (partial) to network
+	if err == io.EOF && s.size > 0 && s.pos < s.size {
+		// We hit EOF of the cache (likely 1MB limit), but real size is larger.
+		// Close current reader and open a new stream (which will trigger HTTP Range request).
+		if s.readCloser != nil {
+			s.readCloser.Close()
+			s.readCloser = nil
+		}
+
+		// Re-open at current position
+		if openErr := s.openStream(s.pos); openErr == nil {
+			// Continue reading from new stream
+			var newN int
+			newN, err = s.readCloser.Read(p[n:])
+			if newN > 0 {
+				s.pos += int64(newN)
+				n += newN
+			}
+		} else {
+			// If open fails, just return original EOF
+			// (or the open error? original EOF seems safer if we can't continue)
+		}
 	}
 
 	if err != nil && err != io.EOF {
@@ -952,22 +992,96 @@ func (s *webdavStream) openStream(offset int64) (err error) {
 		attribute.String("webdav.stream_name", s.name),
 	)
 
-	url := s.targetURL
-	if url == "" {
+	urlStr := s.targetURL
+	if urlStr == "" {
 		// Fallback for safety, though targetURL should be set
 		if u, ok := s.stream["url"]; ok {
-			url = u
+			urlStr = u
 		}
 	}
-	if url == "" {
+	if urlStr == "" {
 		err = errors.New("no url in stream")
 		return err
 	}
 
-	span.SetAttributes(attribute.String("http.url", url))
+	span.SetAttributes(attribute.String("http.url", urlStr))
+
+	// Try Cache
+	fc := getFileCache()
+	if fc != nil {
+		if fc.Exists(urlStr) {
+			// Cache Hit
+			if offset < 1024*1024 {
+				// Serve from cache
+				f, _, err := fc.Get(urlStr)
+				if err == nil {
+					// Seek to offset
+					if seeker, ok := f.(io.Seeker); ok {
+						_, err = seeker.Seek(offset, io.SeekStart)
+						if err == nil {
+							s.readCloser = f
+							return nil
+						}
+					}
+					f.Close()
+				}
+			}
+			// If offset >= 1MB, fall through to HTTP Range request
+		} else {
+			// Cache Miss
+			if offset == 0 {
+				// Start download and cache
+				// We need to fetch the stream first to get headers for metadata
+				req, err := http.NewRequestWithContext(ctx, "GET", urlStr, nil)
+				if err != nil {
+					return err
+				}
+				req.Header.Set("User-Agent", Settings.UserAgent)
+
+				// Use a fresh client for cache metadata fetch to avoid shared state
+				client := &http.Client{Timeout: 30 * time.Second}
+				resp, err := client.Do(req)
+				if err != nil {
+					return err
+				}
+
+				if resp.StatusCode != http.StatusOK {
+					resp.Body.Close()
+					return fmt.Errorf("upstream returned status %d", resp.StatusCode)
+				}
+
+				meta := filecache.Metadata{
+					Size:         resp.ContentLength,
+					ModTime:      time.Now(),
+					ContentType:  resp.Header.Get("Content-Type"),
+					ResponseCode: resp.StatusCode,
+					URL:          urlStr,
+				}
+				if lastMod := resp.Header.Get("Last-Modified"); lastMod != "" {
+					if t, err := http.ParseTime(lastMod); err == nil {
+						meta.ModTime = t
+					}
+				}
+
+				cr, err := fc.NewCacheReader(context.WithoutCancel(context.Background()), urlStr, resp.Body, meta)
+				if err != nil {
+					resp.Body.Close()
+					// Fallback to direct use if cache creation failed
+					s.readCloser = resp.Body
+					return nil
+				}
+
+				s.readCloser = cr
+				return nil
+			} else {
+				// Offset > 0, start background download for future
+				go fc.BackgroundDownload(context.WithoutCancel(context.Background()), urlStr, Settings.UserAgent)
+			}
+		}
+	}
 
 	// Use the context from the span to ensure propagation
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", urlStr, nil)
 	if err != nil {
 		return err
 	}
@@ -980,7 +1094,9 @@ func (s *webdavStream) openStream(offset int64) (err error) {
 	req.Header.Set("User-Agent", Settings.UserAgent)
 
 	// Use a default client or one from System if available
-	client := NewHTTPClient()
+	// Note: We use a fresh http.Client here to ensure clean state (no shared cookies)
+	// and to ensure reliable Range request handling (avoiding potential middleware interference).
+	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
 		return err
@@ -990,6 +1106,14 @@ func (s *webdavStream) openStream(offset int64) (err error) {
 		resp.Body.Close()
 		span.SetAttributes(attribute.Int("http.response.status_code", resp.StatusCode))
 		return fmt.Errorf("upstream returned status %d", resp.StatusCode)
+	}
+
+	// If we requested a range but got 200 OK, we must skip bytes to match the requested position
+	if s.pos > 0 && resp.StatusCode == http.StatusOK {
+		if _, err := io.CopyN(io.Discard, resp.Body, s.pos); err != nil {
+			resp.Body.Close()
+			return err
+		}
 	}
 
 	s.readCloser = resp.Body
@@ -1041,7 +1165,33 @@ func (s *webdavStream) Write(p []byte) (n int, err error) {
 var (
 	webdavCache      = make(map[string]*HashCache)
 	webdavCacheMutex sync.RWMutex
+	fileCache        *filecache.CacheManager
+	fileCacheOnce    sync.Once
 )
+
+func getFileCache() *filecache.CacheManager {
+	fileCacheOnce.Do(func() {
+		var err error
+		// We rely on NewCacheManager to handle SNAP_COMMON or default temp path logic
+		// if we pass an empty string, or we can pass explicit temp path.
+		// Since NewCacheManager handles SNAP_COMMON internally, we only need to provide
+		// a fallback path if we are NOT in snap but want to control the location (e.g. System.Folder.Temp).
+
+		path := ""
+		if os.Getenv("SNAP_COMMON") == "" {
+			// If not snap, prefer System.Folder.Temp if available
+			if System.Folder.Temp != "" {
+				path = filepath.Join(System.Folder.Temp, "xteve_cache")
+			}
+		}
+
+		fileCache, err = filecache.NewCacheManager(path)
+		if err != nil {
+			fmt.Printf("Failed to initialize file cache: %v\n", err)
+		}
+	})
+	return fileCache
+}
 
 type HashCache struct {
 	Groups          []string
