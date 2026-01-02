@@ -1,0 +1,22 @@
+Setting up OpenTelemetry with exporter:
+For help run: /home/jules/.cache/go-build/ca/cae0035a82d0984686ac4ba1032464f1e37ac04b84135948a41481cb1dc47756-d/xteve -h
+
+[0m2026/01/02 19:29:49 [xTeVe] Version:                3.1 Build: 0
+[0m[0m2026/01/02 19:29:49 [xTeVe] Database Version:       2.3.0
+[0m[0m2026/01/02 19:29:49 [xTeVe] System Folder:          /home/jules/.xteve/
+[0m[0m2026/01/02 19:29:49 [xTeVe] Load Settings:          /home/jules/.xteve/settings.json
+[0m[0m2026/01/02 19:29:49 [xTeVe] System IP Addresses:    IPv4: 3 | IPv6: 2
+[0m[0m2026/01/02 19:29:49 [xTeVe] Hostname:               devbox
+[0m[0m2026/01/02 19:29:49 [xTeVe] Temporary Folder:       /tmp/xteve/2026-01-TNMD-8H05ZE/
+[0m[0m2026/01/02 19:29:49 [xTeVe] SSDP / DLNA:            true
+[0m[0m2026/01/02 19:29:49 [xTeVe] UUID:                   2026-01-TNMD-8H05ZE
+[0m[0m2026/01/02 19:29:49 [xTeVe] Tuner (Plex / Emby):    1
+[0m[0m2026/01/02 19:29:49 [xTeVe] EPG Source:             PMS
+[0m[0m2026/01/02 19:29:49 [xTeVe] Plex Channel Limit:     480
+[0m[0m2026/01/02 19:29:49 [xTeVe] All streams:            0
+[0m[0m2026/01/02 19:29:49 [xTeVe] Active streams:         0
+[0m[0m2026/01/02 19:29:49 [xTeVe] Filter:                 0
+[0m[0m2026/01/02 19:29:49 [xTeVe] Web server:             Starting
+[0m[0m2026/01/02 19:29:49 [xTeVe] DVR IP:                 192.168.0.2:34400
+[0m[32m2026/01/02 19:29:49 [xTeVe] Web Interface:          http://192.168.0.2:34400/web/ | xTeVe is also available via the other 4 IP's.
+[0m{"Resource":[{"Key":"service.name","Value":{"Type":"STRING","Value":"unknown_service:xteve"}},{"Key":"telemetry.sdk.language","Value":{"Type":"STRING","Value":"go"}},{"Key":"telemetry.sdk.name","Value":{"Type":"STRING","Value":"opentelemetry"}},{"Key":"telemetry.sdk.version","Value":{"Type":"STRING","Value":"1.39.0"}}],"ScopeMetrics":[]}
