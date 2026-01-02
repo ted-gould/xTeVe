@@ -1,10 +1,26 @@
 package src
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
+	"net/http/cookiejar"
 	"time"
 )
+
+// NewHTTPClient returns a new http.Client with cookiejar and redirect limits
+func NewHTTPClient() *http.Client {
+	jar, _ := cookiejar.New(nil)
+	return &http.Client{
+		Jar: jar,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 10 {
+				return errors.New("stopped after 10 redirects")
+			}
+			return nil
+		},
+	}
+}
 
 func ConnectWithRetry(client *http.Client, req *http.Request) (*http.Response, error) {
 	var resp *http.Response

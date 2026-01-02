@@ -857,8 +857,10 @@ func (s *webdavStream) openStream(offset int64) error {
 		req.Header.Set("Range", fmt.Sprintf("bytes=%d-", s.pos))
 	}
 
+	req.Header.Set("User-Agent", Settings.UserAgent)
+
 	// Use a default client or one from System if available
-	client := &http.Client{}
+	client := NewHTTPClient()
 	resp, err := client.Do(req)
 	if err != nil {
 		return err
@@ -997,15 +999,16 @@ func fetchRemoteMetadata(ctx context.Context, urlStr string) (FileMeta, error) {
 	span.SetAttributes(attribute.String("http.url", urlStr))
 
 	var meta FileMeta
+	client := NewHTTPClient()
+	client.Timeout = 5 * time.Second
+
 	req, err := http.NewRequestWithContext(ctx, "HEAD", urlStr, nil)
 	if err != nil {
 		span.RecordError(err)
 		return meta, err
 	}
 
-	client := &http.Client{
-		Timeout: 5 * time.Second,
-	}
+	req.Header.Set("User-Agent", Settings.UserAgent)
 
 	resp, err := client.Do(req)
 	if err != nil {

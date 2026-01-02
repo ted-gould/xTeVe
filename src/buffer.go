@@ -559,7 +559,7 @@ func connectToStreamingServer(streamID int, playlistID string) {
 			req.Header.Set("Accept", "*/*")
 			debugRequest(req)
 
-			client := &http.Client{}
+			client := NewHTTPClient()
 
 			resp, err := ConnectWithRetry(client, req)
 
@@ -709,7 +709,7 @@ func handleHLSStream(resp *http.Response, stream ThisStream, tmpFolder string, t
 	}
 
 	if stream.HLS {
-		client := &http.Client{}
+		client := NewHTTPClient()
 
 		for _, segment := range stream.Segment {
 			req, _ := http.NewRequest("GET", segment.URL, nil)

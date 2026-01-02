@@ -250,7 +250,8 @@ func downloadFileFromServer(providerURL string) (filename string, body []byte, e
 
 	req.Header.Set("User-Agent", Settings.UserAgent)
 
-	resp, err := http.DefaultClient.Do(req)
+	client := NewHTTPClient()
+	resp, err := client.Do(req)
 	if err != nil {
 		return
 	}
