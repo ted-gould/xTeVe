@@ -1,17 +1,15 @@
 package authentication
 
 import (
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
-
-	"crypto/hmac"
-	"crypto/rand"
-	"crypto/sha256"
-	"encoding/base64"
-
 	"time"
 )
 
@@ -118,7 +116,21 @@ func CreateNewUser(username, password string) (userID string, err error) {
 
 		if sUsername == loginUsername {
 			err = createError(020)
+			return
 		}
+
+		// Check legacy hash to prevent duplicates during migration
+		sUsernameLegacy, errLegacy := legacySHA256(username, salt)
+		if errLegacy != nil {
+			err = errLegacy
+			return
+		}
+
+		if sUsernameLegacy == loginUsername {
+			err = createError(020)
+			return
+		}
+
 		return
 	}
 
@@ -180,6 +192,7 @@ func UserAuthentication(username, password string) (token string, err error) {
 			return errors.New("user has no password")
 		}
 
+		// Try NEW hash first
 		sUsername, errSHA := SHA256(username, salt)
 		if errSHA != nil {
 			return errSHA
@@ -191,6 +204,31 @@ func UserAuthentication(username, password string) (token string, err error) {
 
 		if sUsername == loginUsername {
 			if sPassword == loginPassword {
+				err = nil
+				return
+			}
+		}
+
+		// Try LEGACY hash
+		sUsernameLegacy, errSHA := legacySHA256(username, salt)
+		if errSHA != nil {
+			return errSHA
+		}
+		sPasswordLegacy, errSHA := legacySHA256(password, salt)
+		if errSHA != nil {
+			return errSHA
+		}
+
+		if sUsernameLegacy == loginUsername {
+			if sPasswordLegacy == loginPassword {
+				// Legacy Match! Migrate to new hash.
+				loginData["_username"] = sUsername
+				loginData["_password"] = sPassword
+
+				if errSave := saveDatabase(data); errSave != nil {
+					// If save fails, we still allow login, but log/return error?
+					// For now, allow login.
+				}
 				err = nil
 			}
 		}
@@ -524,7 +562,19 @@ func loadDatabase() (err error) {
 }
 
 // SHA256 : password + salt = sha256 string
+// Fixed to use salt.
 func SHA256(secret, salt string) (string, error) {
+	key := []byte(secret)
+	h := hmac.New(sha256.New, key)
+	_, err := h.Write([]byte(salt))
+	if err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(h.Sum(nil)), nil
+}
+
+// legacySHA256 preserves the old insecure hashing for migration purposes
+func legacySHA256(secret, salt string) (string, error) {
 	key := []byte(secret)
 	h := hmac.New(sha256.New, key)
 	_, err := h.Write([]byte("_remote_db"))
