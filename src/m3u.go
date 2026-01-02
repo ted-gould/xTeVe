@@ -215,7 +215,13 @@ func buildM3U(groups []string) (m3u string, err error) {
 	var xmltvURL = fmt.Sprintf("%s://%s/xmltv/xteve.xml", System.ServerProtocol.XML, System.Domain)
 	// Use strings.Builder to optimize memory usage during concatenation
 	var sb strings.Builder
-	fmt.Fprintf(&sb, `#EXTM3U url-tvg="%s" x-tvg-url="%s"`+"\n", xmltvURL, xmltvURL)
+
+	// Optimized M3U Header construction
+	sb.WriteString(`#EXTM3U url-tvg="`)
+	sb.WriteString(xmltvURL)
+	sb.WriteString(`" x-tvg-url="`)
+	sb.WriteString(xmltvURL)
+	sb.WriteString("\"\n")
 
 	for _, channel := range m3uChannelsForSort {
 		// Use TvgID for tvg-id if it exists, otherwise fall back to XChannelID
@@ -224,10 +230,28 @@ func buildM3U(groups []string) (m3u string, err error) {
 			tvgID = channel.XChannelID
 		}
 
-		fmt.Fprintf(&sb, `#EXTINF:0 channelID="%s" tvg-chno="%s" tvg-name="%s" tvg-id="%s" tvg-logo="%s" group-title="%s",%s`+"\n", channel.XEPG, channel.XChannelID, channel.XName, tvgID, imgc.Image.GetURL(channel.TvgLogo), channel.XGroupTitle, channel.XName)
+		// Optimized EXTINF line construction
+		// Original: fmt.Fprintf(&sb, `#EXTINF:0 channelID="%s" tvg-chno="%s" tvg-name="%s" tvg-id="%s" tvg-logo="%s" group-title="%s",%s`+"\n", ...)
+		sb.WriteString(`#EXTINF:0 channelID="`)
+		sb.WriteString(channel.XEPG)
+		sb.WriteString(`" tvg-chno="`)
+		sb.WriteString(channel.XChannelID)
+		sb.WriteString(`" tvg-name="`)
+		sb.WriteString(channel.XName)
+		sb.WriteString(`" tvg-id="`)
+		sb.WriteString(tvgID)
+		sb.WriteString(`" tvg-logo="`)
+		sb.WriteString(imgc.Image.GetURL(channel.TvgLogo))
+		sb.WriteString(`" group-title="`)
+		sb.WriteString(channel.XGroupTitle)
+		sb.WriteString(`",`)
+		sb.WriteString(channel.XName)
+		sb.WriteByte('\n')
+
 		var stream, err = createStreamingURL("M3U", channel.FileM3UID, channel.XChannelID, channel.XName, channel.URL)
 		if err == nil {
-			fmt.Fprintf(&sb, "%s\n", stream)
+			sb.WriteString(stream)
+			sb.WriteByte('\n')
 		}
 	}
 
