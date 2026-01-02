@@ -148,8 +148,8 @@ func (fs *WebDAVFS) openHashSubDir(ctx context.Context, hash, sub string) (webda
 	return nil, os.ErrNotExist
 }
 
-func (fs *WebDAVFS) groupExists(hash, group string) bool {
-	groups := getGroupsForHash(hash)
+func (fs *WebDAVFS) groupExists(ctx context.Context, hash, group string) bool {
+	groups := getGroupsForHash(ctx, hash)
 	for _, g := range groups {
 		if sanitizeGroupName(g) == group {
 			return true
@@ -162,7 +162,7 @@ func (fs *WebDAVFS) openOnDemandGroupDir(ctx context.Context, hash, sub, group s
 	if sub != dirOnDemand {
 		return nil, os.ErrNotExist
 	}
-	if !fs.groupExists(hash, group) {
+	if !fs.groupExists(ctx, hash, group) {
 		return nil, os.ErrNotExist
 	}
 	return &webdavDir{name: path.Join(hash, sub, group), ctx: ctx}, nil
@@ -172,7 +172,7 @@ func (fs *WebDAVFS) openOnDemandGroupSubDir(ctx context.Context, hash, sub, grou
 	if sub != dirOnDemand {
 		return nil, os.ErrNotExist
 	}
-	if !fs.groupExists(hash, group) {
+	if !fs.groupExists(ctx, hash, group) {
 		return nil, os.ErrNotExist
 	}
 	if typeDir == dirSeries || typeDir == dirIndividual {
@@ -185,11 +185,11 @@ func (fs *WebDAVFS) openOnDemandSeriesDir(ctx context.Context, hash, sub, group,
 	if sub != dirOnDemand {
 		return nil, os.ErrNotExist
 	}
-	if !fs.groupExists(hash, group) {
+	if !fs.groupExists(ctx, hash, group) {
 		return nil, os.ErrNotExist
 	}
 	// Check if series exists
-	seriesList := getSeriesList(hash, group)
+	seriesList := getSeriesList(ctx, hash, group)
 	found := false
 	for _, s := range seriesList {
 		if s == series {
@@ -207,11 +207,11 @@ func (fs *WebDAVFS) openOnDemandSeasonDir(ctx context.Context, hash, sub, group,
 	if sub != dirOnDemand {
 		return nil, os.ErrNotExist
 	}
-	if !fs.groupExists(hash, group) {
+	if !fs.groupExists(ctx, hash, group) {
 		return nil, os.ErrNotExist
 	}
 	// Check if season exists
-	seasons := getSeasonsList(hash, group, series)
+	seasons := getSeasonsList(ctx, hash, group, series)
 	found := false
 	for _, s := range seasons {
 		if s == season {
@@ -229,7 +229,7 @@ func (fs *WebDAVFS) openOnDemandIndividualStream(ctx context.Context, hash, sub,
 	if sub != dirOnDemand {
 		return nil, os.ErrNotExist
 	}
-	stream, targetURL, err := findIndividualStream(hash, group, filename)
+	stream, targetURL, err := findIndividualStream(ctx, hash, group, filename)
 	if err != nil {
 		return nil, os.ErrNotExist
 	}
@@ -248,7 +248,7 @@ func (fs *WebDAVFS) openOnDemandSeriesStream(ctx context.Context, hash, sub, gro
 	if sub != dirOnDemand {
 		return nil, os.ErrNotExist
 	}
-	stream, targetURL, err := findSeriesStream(hash, group, series, season, filename)
+	stream, targetURL, err := findSeriesStream(ctx, hash, group, series, season, filename)
 	if err != nil {
 		return nil, os.ErrNotExist
 	}
@@ -348,27 +348,27 @@ func (fs *WebDAVFS) Stat(ctx context.Context, name string) (_ os.FileInfo, err e
 		return fs.statHashSubDir(hash, parts[1], modTime)
 	case 3:
 		// Group dir
-		if parts[1] == dirOnDemand && fs.groupExists(hash, parts[2]) {
+		if parts[1] == dirOnDemand && fs.groupExists(ctx, hash, parts[2]) {
 			return &mkDirInfo{name: parts[2], modTime: modTime}, nil
 		}
 	case 4:
 		// Series or Individual dir
-		if parts[1] == dirOnDemand && fs.groupExists(hash, parts[2]) {
+		if parts[1] == dirOnDemand && fs.groupExists(ctx, hash, parts[2]) {
 			if parts[3] == dirSeries || parts[3] == dirIndividual {
 				return &mkDirInfo{name: parts[3], modTime: modTime}, nil
 			}
 		}
 	case 5:
-		if parts[1] == dirOnDemand && fs.groupExists(hash, parts[2]) {
+		if parts[1] == dirOnDemand && fs.groupExists(ctx, hash, parts[2]) {
 			if parts[3] == dirIndividual {
 				// File in Individual
-				stream, targetURL, err := findIndividualStream(hash, parts[2], parts[4])
+				stream, targetURL, err := findIndividualStream(ctx, hash, parts[2], parts[4])
 				if err == nil {
 					return fs.statWithMetadata(ctx, hash, stream, targetURL, parts[4], modTime)
 				}
 			} else if parts[3] == dirSeries {
 				// Series Dir
-				seriesList := getSeriesList(hash, parts[2])
+				seriesList := getSeriesList(ctx, hash, parts[2])
 				for _, s := range seriesList {
 					if s == parts[4] {
 						return &mkDirInfo{name: parts[4], modTime: modTime}, nil
@@ -377,9 +377,9 @@ func (fs *WebDAVFS) Stat(ctx context.Context, name string) (_ os.FileInfo, err e
 			}
 		}
 	case 6:
-		if parts[1] == dirOnDemand && fs.groupExists(hash, parts[2]) && parts[3] == dirSeries {
+		if parts[1] == dirOnDemand && fs.groupExists(ctx, hash, parts[2]) && parts[3] == dirSeries {
 			// Season Dir
-			seasons := getSeasonsList(hash, parts[2], parts[4])
+			seasons := getSeasonsList(ctx, hash, parts[2], parts[4])
 			for _, s := range seasons {
 				if s == parts[5] {
 					return &mkDirInfo{name: parts[5], modTime: modTime}, nil
@@ -387,9 +387,9 @@ func (fs *WebDAVFS) Stat(ctx context.Context, name string) (_ os.FileInfo, err e
 			}
 		}
 	case 7:
-		if parts[1] == dirOnDemand && fs.groupExists(hash, parts[2]) && parts[3] == dirSeries {
+		if parts[1] == dirOnDemand && fs.groupExists(ctx, hash, parts[2]) && parts[3] == dirSeries {
 			// File in Series
-			stream, targetURL, err := findSeriesStream(hash, parts[2], parts[4], parts[5], parts[6])
+			stream, targetURL, err := findSeriesStream(ctx, hash, parts[2], parts[4], parts[5], parts[6])
 			if err == nil {
 				return fs.statWithMetadata(ctx, hash, stream, targetURL, parts[6], modTime)
 			}
@@ -433,14 +433,22 @@ func resolveFileMetadata(ctx context.Context, hash string, stream map[string]str
 
 			if isVideo {
 				if meta, found := getStreamMetadata(stream); found {
-					size = meta.Size
+					// If we have a valid size, return immediately
+					if meta.Size > 0 {
+						size = meta.Size
+						if !meta.ModTime.IsZero() {
+							mt = meta.ModTime
+						}
+						webdavCacheMutex.Lock()
+						hc.FileMetadata[targetURL] = meta
+						webdavCacheMutex.Unlock()
+						return &mkFileInfo{name: name, size: size, modTime: mt}, nil
+					}
+					// If found but size is 0, we might have ModTime.
+					// We keep it but fall through to remote fetch to try getting size.
 					if !meta.ModTime.IsZero() {
 						mt = meta.ModTime
 					}
-					webdavCacheMutex.Lock()
-					hc.FileMetadata[targetURL] = meta
-					webdavCacheMutex.Unlock()
-					return &mkFileInfo{name: name, size: size, modTime: mt}, nil
 				}
 			}
 
@@ -590,14 +598,14 @@ func (d *webdavDir) collectInfos(ctx context.Context) ([]os.FileInfo, error) {
 	case 1:
 		return d.readDirHash(parts[0], modTime)
 	case 2:
-		return d.readDirOnDemand(parts[0], parts[1], modTime)
+		return d.readDirOnDemand(ctx, parts[0], parts[1], modTime)
 	case 3:
-		return d.readDirOnDemandGroup(parts[0], parts[1], parts[2], modTime)
+		return d.readDirOnDemandGroup(ctx, parts[0], parts[1], parts[2], modTime)
 	case 4:
 		return d.readDirOnDemandGroupSub(ctx, parts[0], parts[1], parts[2], parts[3], modTime)
 	case 5:
 		if parts[3] == dirSeries {
-			return d.readDirSeries(parts[0], parts[1], parts[2], parts[4], modTime)
+			return d.readDirSeries(ctx, parts[0], parts[1], parts[2], parts[4], modTime)
 		}
 	case 6:
 		if parts[3] == dirSeries {
@@ -632,31 +640,31 @@ func (d *webdavDir) readDirHash(hash string, modTime time.Time) ([]os.FileInfo, 
 	return infos, nil
 }
 
-func (d *webdavDir) readDirOnDemand(hash, sub string, modTime time.Time) ([]os.FileInfo, error) {
+func (d *webdavDir) readDirOnDemand(ctx context.Context, hash, sub string, modTime time.Time) ([]os.FileInfo, error) {
 	if sub != dirOnDemand {
 		return nil, nil
 	}
 	var infos []os.FileInfo
-	groups := getGroupsForHash(hash)
+	groups := getGroupsForHash(ctx, hash)
 	for _, g := range groups {
 		infos = append(infos, &mkDirInfo{name: sanitizeGroupName(g), modTime: modTime})
 	}
 	return infos, nil
 }
 
-func (d *webdavDir) readDirOnDemandGroup(hash, sub, group string, modTime time.Time) ([]os.FileInfo, error) {
+func (d *webdavDir) readDirOnDemandGroup(ctx context.Context, hash, sub, group string, modTime time.Time) ([]os.FileInfo, error) {
 	if sub != dirOnDemand {
 		return nil, nil
 	}
 	var infos []os.FileInfo
 
 	// Check if we have individual streams
-	if len(getIndividualStreamFiles(hash, group)) > 0 {
+	if len(getIndividualStreamFiles(ctx, hash, group)) > 0 {
 		infos = append(infos, &mkDirInfo{name: dirIndividual, modTime: modTime})
 	}
 
 	// Check if we have series
-	if len(getSeriesList(hash, group)) > 0 {
+	if len(getSeriesList(ctx, hash, group)) > 0 {
 		infos = append(infos, &mkDirInfo{name: dirSeries, modTime: modTime})
 	}
 
@@ -670,7 +678,7 @@ func (d *webdavDir) readDirOnDemandGroupSub(ctx context.Context, hash, sub, grou
 	var infos []os.FileInfo
 
 	if subType == dirIndividual {
-		fileInfos := getIndividualStreamFiles(hash, group)
+		fileInfos := getIndividualStreamFiles(ctx, hash, group)
 
 		// Ensure metadata for all files (videos and logos)
 		ensureMetadataOptimized(ctx, hash, fileInfos)
@@ -695,7 +703,7 @@ func (d *webdavDir) readDirOnDemandGroupSub(ctx context.Context, hash, sub, grou
 		}
 		webdavCacheMutex.RUnlock()
 	} else if subType == dirSeries {
-		series := getSeriesList(hash, group)
+		series := getSeriesList(ctx, hash, group)
 		for _, s := range series {
 			infos = append(infos, &mkDirInfo{name: s, modTime: modTime})
 		}
@@ -704,12 +712,12 @@ func (d *webdavDir) readDirOnDemandGroupSub(ctx context.Context, hash, sub, grou
 	return infos, nil
 }
 
-func (d *webdavDir) readDirSeries(hash, sub, group, series string, modTime time.Time) ([]os.FileInfo, error) {
+func (d *webdavDir) readDirSeries(ctx context.Context, hash, sub, group, series string, modTime time.Time) ([]os.FileInfo, error) {
 	if sub != dirOnDemand {
 		return nil, nil
 	}
 	var infos []os.FileInfo
-	seasons := getSeasonsList(hash, group, series)
+	seasons := getSeasonsList(ctx, hash, group, series)
 	for _, s := range seasons {
 		infos = append(infos, &mkDirInfo{name: s, modTime: modTime})
 	}
@@ -721,7 +729,7 @@ func (d *webdavDir) readDirSeason(ctx context.Context, hash, sub, group, series,
 		return nil, nil
 	}
 	var infos []os.FileInfo
-	fileInfos := getSeasonFiles(hash, group, series, season)
+	fileInfos := getSeasonFiles(ctx, hash, group, series, season)
 
 	// Ensure metadata for all files (videos and logos)
 	ensureMetadataOptimized(ctx, hash, fileInfos)
@@ -1327,7 +1335,10 @@ func getExtensionFromURL(urlStr string) string {
 	return path.Ext(u.Path)
 }
 
-func getStreamsForGroup(hash, group string) []map[string]string {
+func getStreamsForGroup(ctx context.Context, hash, group string) []map[string]string {
+	_, span := otel.Tracer("webdav").Start(ctx, "getStreamsForGroup")
+	defer span.End()
+
 	var results []map[string]string
 
 	for _, s := range Data.Streams.All {
@@ -1349,22 +1360,30 @@ func getStreamsForGroup(hash, group string) []map[string]string {
 			}
 		}
 	}
+	span.SetAttributes(attribute.Int("streams.count", len(results)))
 	return results
 }
 
-func getIndividualStreams(hash, group string) []map[string]string {
-	all := getStreamsForGroup(hash, group)
+func getIndividualStreams(ctx context.Context, hash, group string) []map[string]string {
+	_, span := otel.Tracer("webdav").Start(ctx, "getIndividualStreams")
+	defer span.End()
+
+	all := getStreamsForGroup(ctx, hash, group)
 	var res []map[string]string
 	for _, s := range all {
 		if _, _, isSeries := parseSeries(s["name"]); !isSeries {
 			res = append(res, s)
 		}
 	}
+	span.SetAttributes(attribute.Int("streams.count", len(res)))
 	return res
 }
 
-func getSeriesStreams(hash, group, seriesName string, season int) []map[string]string {
-	all := getStreamsForGroup(hash, group)
+func getSeriesStreams(ctx context.Context, hash, group, seriesName string, season int) []map[string]string {
+	_, span := otel.Tracer("webdav").Start(ctx, "getSeriesStreams")
+	defer span.End()
+
+	all := getStreamsForGroup(ctx, hash, group)
 	var res []map[string]string
 	for _, s := range all {
 		name, sNum, isSeries := parseSeries(s["name"])
@@ -1372,10 +1391,14 @@ func getSeriesStreams(hash, group, seriesName string, season int) []map[string]s
 			res = append(res, s)
 		}
 	}
+	span.SetAttributes(attribute.Int("streams.count", len(res)))
 	return res
 }
 
-func getGroupsForHash(hash string) []string {
+func getGroupsForHash(ctx context.Context, hash string) []string {
+	_, span := otel.Tracer("webdav").Start(ctx, "getGroupsForHash")
+	defer span.End()
+
 	webdavCacheMutex.RLock()
 	if hc, ok := webdavCache[hash]; ok {
 		if hc.Groups != nil {
@@ -1425,10 +1448,14 @@ func getGroupsForHash(hash string) []string {
 	hc.Groups = groups
 	webdavCacheMutex.Unlock()
 
+	span.SetAttributes(attribute.Int("groups.count", len(groups)))
 	return groups
 }
 
-func getIndividualStreamFiles(hash, group string) []FileStreamInfo {
+func getIndividualStreamFiles(ctx context.Context, hash, group string) []FileStreamInfo {
+	_, span := otel.Tracer("webdav").Start(ctx, "getIndividualStreamFiles")
+	defer span.End()
+
 	webdavCacheMutex.RLock()
 	if hc, ok := webdavCache[hash]; ok {
 		if list, ok := hc.IndividualFiles[group]; ok {
@@ -1438,8 +1465,8 @@ func getIndividualStreamFiles(hash, group string) []FileStreamInfo {
 	}
 	webdavCacheMutex.RUnlock()
 
-	streams := getIndividualStreams(hash, group)
-	files := generateFileStreamInfos(streams)
+	streams := getIndividualStreams(ctx, hash, group)
+	files := generateFileStreamInfos(ctx, streams)
 
 	webdavCacheMutex.Lock()
 	hc, ok := webdavCache[hash]
@@ -1462,7 +1489,10 @@ func getIndividualStreamFiles(hash, group string) []FileStreamInfo {
 	return files
 }
 
-func getSeasonFiles(hash, group, series, seasonStr string) []FileStreamInfo {
+func getSeasonFiles(ctx context.Context, hash, group, series, seasonStr string) []FileStreamInfo {
+	_, span := otel.Tracer("webdav").Start(ctx, "getSeasonFiles")
+	defer span.End()
+
 	key := seasonFileKey{Group: group, Series: series, Season: seasonStr}
 	webdavCacheMutex.RLock()
 	if hc, ok := webdavCache[hash]; ok {
@@ -1481,8 +1511,8 @@ func getSeasonFiles(hash, group, series, seasonStr string) []FileStreamInfo {
 	}
 	sNum, _ := strconv.Atoi(parts[1])
 
-	streams := getSeriesStreams(hash, group, series, sNum)
-	files := generateFileStreamInfos(streams)
+	streams := getSeriesStreams(ctx, hash, group, series, sNum)
+	files := generateFileStreamInfos(ctx, streams)
 
 	webdavCacheMutex.Lock()
 	hc, ok := webdavCache[hash]
@@ -1505,7 +1535,10 @@ func getSeasonFiles(hash, group, series, seasonStr string) []FileStreamInfo {
 	return files
 }
 
-func generateFileStreamInfos(streams []map[string]string) []FileStreamInfo {
+func generateFileStreamInfos(ctx context.Context, streams []map[string]string) []FileStreamInfo {
+	_, span := otel.Tracer("webdav").Start(ctx, "generateFileStreamInfos")
+	defer span.End()
+
 	var files []FileStreamInfo
 	// We need to track counts for base names to ensure videos and logos match
 	// Key: baseName (without extension) -> count
@@ -1583,7 +1616,10 @@ func generateFileStreamInfos(streams []map[string]string) []FileStreamInfo {
 	return files
 }
 
-func getSeriesList(hash, group string) []string {
+func getSeriesList(ctx context.Context, hash, group string) []string {
+	_, span := otel.Tracer("webdav").Start(ctx, "getSeriesList")
+	defer span.End()
+
 	webdavCacheMutex.RLock()
 	if hc, ok := webdavCache[hash]; ok {
 		if list, ok := hc.Series[group]; ok {
@@ -1593,7 +1629,7 @@ func getSeriesList(hash, group string) []string {
 	}
 	webdavCacheMutex.RUnlock()
 
-	all := getStreamsForGroup(hash, group)
+	all := getStreamsForGroup(ctx, hash, group)
 	seen := make(map[string]bool)
 	for _, s := range all {
 		name, _, isSeries := parseSeries(s["name"])
@@ -1628,7 +1664,10 @@ func getSeriesList(hash, group string) []string {
 	return res
 }
 
-func getSeasonsList(hash, group, series string) []string {
+func getSeasonsList(ctx context.Context, hash, group, series string) []string {
+	_, span := otel.Tracer("webdav").Start(ctx, "getSeasonsList")
+	defer span.End()
+
 	key := seasonKey{Group: group, Series: series}
 	webdavCacheMutex.RLock()
 	if hc, ok := webdavCache[hash]; ok {
@@ -1640,7 +1679,7 @@ func getSeasonsList(hash, group, series string) []string {
 	webdavCacheMutex.RUnlock()
 
 	// series is already sanitizedGroupName
-	all := getStreamsForGroup(hash, group)
+	all := getStreamsForGroup(ctx, hash, group)
 	seen := make(map[int]bool)
 	for _, s := range all {
 		name, sNum, isSeries := parseSeries(s["name"])
@@ -1681,8 +1720,14 @@ func getSeasonsList(hash, group, series string) []string {
 	return res
 }
 
-func findIndividualStream(hash, group, filename string) (map[string]string, string, error) {
-	files := getIndividualStreamFiles(hash, group)
+func findIndividualStream(ctx context.Context, hash, group, filename string) (map[string]string, string, error) {
+	_, span := otel.Tracer("webdav").Start(ctx, "findIndividualStream")
+	defer span.End()
+
+	// Use getIndividualStreamFiles which is cached, instead of getIndividualStreams + generateFileStreamInfos
+	// This was an optimization in upstream (origin/main) that we should preserve,
+	// but we must pass the context for tracing.
+	files := getIndividualStreamFiles(ctx, hash, group)
 	for _, f := range files {
 		if f.Name == filename {
 			return f.Stream, f.TargetURL, nil
@@ -1691,8 +1736,13 @@ func findIndividualStream(hash, group, filename string) (map[string]string, stri
 	return nil, "", os.ErrNotExist
 }
 
-func findSeriesStream(hash, group, series, seasonStr, filename string) (map[string]string, string, error) {
-	files := getSeasonFiles(hash, group, series, seasonStr)
+func findSeriesStream(ctx context.Context, hash, group, series, seasonStr, filename string) (map[string]string, string, error) {
+	_, span := otel.Tracer("webdav").Start(ctx, "findSeriesStream")
+	defer span.End()
+
+	// Use getSeasonFiles which is cached, instead of getSeriesStreams + generateFileStreamInfos
+	// This was an optimization in upstream (origin/main)
+	files := getSeasonFiles(ctx, hash, group, series, seasonStr)
 	for _, f := range files {
 		if f.Name == filename {
 			return f.Stream, f.TargetURL, nil
