@@ -89,8 +89,15 @@ func run() error {
 	collectorURL := fmt.Sprintf("http://127.0.0.1:%d", collector.port)
 	fmt.Printf("Trace collector started on %s\n", collectorURL)
 
+	// Create temp dir for config
+	tmpDir, err := os.MkdirTemp("", "xteve_otel_test_*")
+	if err != nil {
+		return fmt.Errorf("failed to create temp dir: %w", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
 	// 2. Start xTeVe with OTLP configuration
-	cmd, err := startXteve(collectorURL)
+	cmd, err := startXteve(collectorURL, tmpDir)
 	if err != nil {
 		return fmt.Errorf("failed to start xteve: %w", err)
 	}
@@ -119,7 +126,7 @@ func run() error {
 	return nil
 }
 
-func startXteve(collectorEndpoint string) (*exec.Cmd, error) {
+func startXteve(collectorEndpoint, configDir string) (*exec.Cmd, error) {
 	fmt.Println("Building and starting xteve server...")
 	// Build xteve
 	buildCmd := exec.Command("go", "build", "-o", "xteve_otel_test", "xteve.go")
@@ -127,10 +134,7 @@ func startXteve(collectorEndpoint string) (*exec.Cmd, error) {
 		return nil, fmt.Errorf("failed to build xteve: %w\n%s", err, string(out))
 	}
 
-	// Clean config
-	os.RemoveAll(".xteve_otel")
-
-	cmd := exec.Command("./xteve_otel_test", "-port=34400", "-config=.xteve_otel")
+	cmd := exec.Command("./xteve_otel_test", "-port=34400", fmt.Sprintf("-config=%s", configDir))
 
 	// Set OTLP environment variables
 	env := os.Environ()

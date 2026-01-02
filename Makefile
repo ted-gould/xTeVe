@@ -49,7 +49,7 @@ e2e-test: build
 	@echo "--- Running E2E tests ---"
 	$(GO) run cmd/ci-test/main.go
 
-otel-test:
+otel-test: build
 	@echo "--- Running OTEL integration tests ---"
 	$(GO) run cmd/otel-test/main.go
 
