@@ -59,6 +59,32 @@ func run() (err error) {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
+	// Separate Build Number from Version Number
+	var build = strings.Split(src.Version, ".")
+
+	var system = &src.System
+	system.APIVersion = APIVersion
+	// system.Branch = GitHub.Branch // Removed as GitHub global is removed
+	system.Build = build[len(build)-1:][0]
+	system.DBVersion = DBVersion
+	// system.GitHub = GitHub // Removed as GitHub global is removed
+	system.Name = Name
+	system.Version = strings.Join(build[0:len(build)-1], ".")
+
+	flag.Parse()
+
+	if *h {
+		flag.Usage()
+		return nil
+	}
+
+	if *version {
+		src.ShowSystemVersion()
+		return nil
+	}
+
+	system.Dev = *dev
+
 	// Set up OpenTelemetry.
 	if err := snap.LoadEnv("otel.env"); err != nil {
 		log.Printf("could not load otel.env from snap: %v", err)
@@ -80,18 +106,6 @@ func run() (err error) {
 	defer func() {
 		err = errors.Join(err, otelShutdown(context.Background()))
 	}()
-
-	// Separate Build Number from Version Number
-	var build = strings.Split(src.Version, ".")
-
-	var system = &src.System
-	system.APIVersion = APIVersion
-	// system.Branch = GitHub.Branch // Removed as GitHub global is removed
-	system.Build = build[len(build)-1:][0]
-	system.DBVersion = DBVersion
-	// system.GitHub = GitHub // Removed as GitHub global is removed
-	system.Name = Name
-	system.Version = strings.Join(build[0:len(build)-1], ".")
 
 	// Panic
 	defer func() {
@@ -129,20 +143,6 @@ func run() (err error) {
 		}
 
 	}()
-
-	flag.Parse()
-
-	if *h {
-		flag.Usage()
-		return nil
-	}
-
-	system.Dev = *dev
-
-	if *version {
-		src.ShowSystemVersion()
-		return nil
-	}
 
 	// Display System Information
 	// Display System Information
