@@ -1419,12 +1419,13 @@ func getM3UModTime(hash string) time.Time {
 var sanitizeRegex = regexp.MustCompile(`[^a-zA-Z0-9.\-_ ():]`)
 var seriesRegex = regexp.MustCompile(`(?i)^(.*?)[_\s]*S(\d{1,3})[_\s]*E\d{1,3}`)
 
-func parseSeries(name string) (string, int, bool) {
+func parseSeries(name string) (string, string, int, bool) {
 	matches := seriesRegex.FindStringSubmatch(name)
 	if len(matches) < 3 {
-		return "", 0, false
+		return "", "", 0, false
 	}
 	rawSeriesName := matches[1]
+	originalRaw := rawSeriesName
 	seasonStr := matches[2]
 
 	// Trim trailing separators that might have been captured
@@ -1446,7 +1447,7 @@ func parseSeries(name string) (string, int, bool) {
 	}
 
 	sNum, _ := strconv.Atoi(seasonStr)
-	return strings.TrimSpace(rawSeriesName), sNum, true
+	return strings.TrimSpace(rawSeriesName), originalRaw, sNum, true
 }
 
 func sanitizeFilename(name string) string {
@@ -1502,7 +1503,7 @@ func getIndividualStreams(ctx context.Context, hash, group string) []map[string]
 	all := getStreamsForGroup(ctx, hash, group)
 	var res []map[string]string
 	for _, s := range all {
-		if _, _, isSeries := parseSeries(s["name"]); !isSeries {
+		if _, _, _, isSeries := parseSeries(s["name"]); !isSeries {
 			res = append(res, s)
 		}
 	}
@@ -1517,7 +1518,7 @@ func getSeriesStreams(ctx context.Context, hash, group, seriesName string, seaso
 	all := getStreamsForGroup(ctx, hash, group)
 	var res []map[string]string
 	for _, s := range all {
-		name, sNum, isSeries := parseSeries(s["name"])
+		name, _, sNum, isSeries := parseSeries(s["name"])
 		if isSeries && sanitizeGroupName(name) == seriesName && sNum == season {
 			res = append(res, s)
 		}
@@ -1686,11 +1687,10 @@ func generateFileStreamInfos(ctx context.Context, streams []map[string]string) [
 		name := stream["name"]
 
 		// Series cleaning logic
-		if cleanName, _, isSeries := parseSeries(name); isSeries {
-			matches := seriesRegex.FindStringSubmatch(name)
-			if len(matches) >= 2 {
-				rawSeriesName := matches[1]
-				remainder := name[len(rawSeriesName):]
+		if cleanName, rawPrefix, _, isSeries := parseSeries(name); isSeries {
+			// Avoid redundant regex execution
+			if rawPrefix != "" {
+				remainder := name[len(rawPrefix):]
 				name = cleanName + remainder
 			}
 		}
@@ -1763,7 +1763,7 @@ func getSeriesList(ctx context.Context, hash, group string) []string {
 	all := getStreamsForGroup(ctx, hash, group)
 	seen := make(map[string]bool)
 	for _, s := range all {
-		name, _, isSeries := parseSeries(s["name"])
+		name, _, _, isSeries := parseSeries(s["name"])
 		if isSeries {
 			seen[sanitizeGroupName(name)] = true
 		}
@@ -1813,7 +1813,7 @@ func getSeasonsList(ctx context.Context, hash, group, series string) []string {
 	all := getStreamsForGroup(ctx, hash, group)
 	seen := make(map[int]bool)
 	for _, s := range all {
-		name, sNum, isSeries := parseSeries(s["name"])
+		name, _, sNum, isSeries := parseSeries(s["name"])
 		if isSeries && sanitizeGroupName(name) == series {
 			seen[sNum] = true
 		}

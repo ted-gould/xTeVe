@@ -383,7 +383,7 @@ func TestParseSeriesUserScenario(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		name, season, ok := parseSeries(tc.input)
+		name, _, season, ok := parseSeries(tc.input)
 		if ok != tc.expectedOk {
 			t.Errorf("Input: %s, Expected ok: %v, got: %v", tc.input, tc.expectedOk, ok)
 		}
