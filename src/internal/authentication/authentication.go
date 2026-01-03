@@ -501,7 +501,7 @@ func GetAllUserData() (allUserData map[string]any, err error) {
 }
 
 // CheckTheValidityOfTheTokenFromHTTPHeader : get token from HTTP header
-func CheckTheValidityOfTheTokenFromHTTPHeader(w http.ResponseWriter, r *http.Request) (writer http.ResponseWriter, newToken string, err error) {
+func CheckTheValidityOfTheTokenFromHTTPHeader(w http.ResponseWriter, r *http.Request, secure bool) (writer http.ResponseWriter, newToken string, err error) {
 	err = createError(011) // Default error if token is not found or invalid
 	for _, cookie := range r.Cookies() {
 		if cookie.Name == "Token" {
@@ -513,7 +513,7 @@ func CheckTheValidityOfTheTokenFromHTTPHeader(w http.ResponseWriter, r *http.Req
 				err = errCheck // Assign the specific error from CheckTheValidityOfTheToken
 				return writer, "", err
 			}
-			writer = SetCookieToken(w, token)
+			writer = SetCookieToken(w, token, secure)
 			newToken = token
 			err = nil // Token was valid and processed, clear default error
 			return    // Found and processed the token, no need to check other cookies
@@ -684,9 +684,16 @@ loopToken:
 }
 
 // SetCookieToken : set cookie
-func SetCookieToken(w http.ResponseWriter, token string) http.ResponseWriter {
+func SetCookieToken(w http.ResponseWriter, token string, secure bool) http.ResponseWriter {
 	expiration := time.Now().Add(time.Minute * time.Duration(tokenValidity))
-	cookie := http.Cookie{Name: "Token", Value: token, Expires: expiration}
+	cookie := http.Cookie{
+		Name:     "Token",
+		Value:    token,
+		Expires:  expiration,
+		HttpOnly: true,
+		Secure:   secure,
+		SameSite: http.SameSiteLaxMode,
+	}
 	http.SetCookie(w, &cookie)
 	return w
 }
