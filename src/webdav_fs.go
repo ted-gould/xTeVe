@@ -409,65 +409,96 @@ func resolveFileMetadata(ctx context.Context, hash string, stream map[string]str
 	ctx, span := otel.Tracer("webdav").Start(ctx, "resolveFileMetadata")
 	defer span.End()
 
-	// Use metadata
-	size := int64(0)
-	mt := defaultModTime
-
-	// Check cache first
-	webdavCacheMutex.RLock()
-	hc := webdavCache[hash]
-
-	if hc != nil && targetURL != "" {
-		if meta, ok := hc.FileMetadata[targetURL]; ok {
-			size = meta.Size
-			if !meta.ModTime.IsZero() {
-				mt = meta.ModTime
-			}
-			webdavCacheMutex.RUnlock()
-		} else {
-			webdavCacheMutex.RUnlock()
-			// Not in cache, try fetch single (or check M3U if it's the video stream)
-
-			// Only check M3U attributes if targetURL is the main stream URL
-			isVideo := targetURL == stream["url"]
-
-			if isVideo {
-				if meta, found := getStreamMetadata(stream); found {
-					// If we have a valid size, return immediately
-					if meta.Size > 0 {
-						size = meta.Size
-						if !meta.ModTime.IsZero() {
-							mt = meta.ModTime
-						}
-						webdavCacheMutex.Lock()
-						hc.FileMetadata[targetURL] = meta
-						webdavCacheMutex.Unlock()
-						return &mkFileInfo{name: name, size: size, modTime: mt}, nil
-					}
-					// If found but size is 0, we might have ModTime.
-					// We keep it but fall through to remote fetch to try getting size.
-					if !meta.ModTime.IsZero() {
-						mt = meta.ModTime
-					}
-				}
-			}
-
-			// Remote fetch
-			if meta, err := fetchRemoteMetadata(ctx, targetURL); err == nil {
-				size = meta.Size
-				if !meta.ModTime.IsZero() {
-					mt = meta.ModTime
-				}
-				webdavCacheMutex.Lock()
-				hc.FileMetadata[targetURL] = meta
-				webdavCacheMutex.Unlock()
-			}
+	// 1. Try Cache
+	if meta, found := resolveMetadataFromCache(hash, targetURL); found {
+		mt := defaultModTime
+		if !meta.ModTime.IsZero() {
+			mt = meta.ModTime
 		}
-	} else {
-		webdavCacheMutex.RUnlock()
+		return &mkFileInfo{name: name, size: meta.Size, modTime: mt}, nil
 	}
 
-	return &mkFileInfo{name: name, size: size, modTime: mt}, nil
+	// 2. Try M3U attributes (only if this is the video stream)
+	if meta, found := resolveMetadataFromM3U(hash, stream, targetURL); found {
+		mt := defaultModTime
+		if !meta.ModTime.IsZero() {
+			mt = meta.ModTime
+		}
+		if meta.Size > 0 {
+			return &mkFileInfo{name: name, size: meta.Size, modTime: mt}, nil
+		}
+		// Update defaultModTime with what we found (if it's not zero), but continue to remote fetch for size
+		if !mt.IsZero() {
+			defaultModTime = mt
+		}
+	}
+
+	// 3. Remote fetch
+	if meta, err := resolveMetadataFromRemote(ctx, hash, targetURL); err == nil {
+		mt := defaultModTime
+		if !meta.ModTime.IsZero() {
+			mt = meta.ModTime
+		}
+		return &mkFileInfo{name: name, size: meta.Size, modTime: mt}, nil
+	}
+
+	return &mkFileInfo{name: name, size: 0, modTime: defaultModTime}, nil
+}
+
+func resolveMetadataFromCache(hash, targetURL string) (FileMeta, bool) {
+	webdavCacheMutex.RLock()
+	defer webdavCacheMutex.RUnlock()
+
+	hc := webdavCache[hash]
+	if hc != nil && targetURL != "" {
+		if meta, ok := hc.FileMetadata[targetURL]; ok {
+			return meta, true
+		}
+	}
+	return FileMeta{}, false
+}
+
+func resolveMetadataFromM3U(hash string, stream map[string]string, targetURL string) (FileMeta, bool) {
+	// Only check M3U attributes if targetURL is the main stream URL
+	isVideo := targetURL == stream["url"]
+	if !isVideo {
+		return FileMeta{}, false
+	}
+
+	meta, found := getStreamMetadata(stream)
+	if found && meta.Size > 0 {
+		updateMetadataCache(hash, targetURL, meta)
+	}
+	return meta, found
+}
+
+func resolveMetadataFromRemote(ctx context.Context, hash, targetURL string) (FileMeta, error) {
+	meta, err := fetchRemoteMetadata(ctx, targetURL)
+	if err == nil {
+		updateMetadataCache(hash, targetURL, meta)
+	}
+	return meta, err
+}
+
+func updateMetadataCache(hash, targetURL string, meta FileMeta) {
+	webdavCacheMutex.Lock()
+	defer webdavCacheMutex.Unlock()
+
+	hc, ok := webdavCache[hash]
+	if !ok {
+		hc = &HashCache{
+			Series:          make(map[string][]string),
+			Seasons:         make(map[seasonKey][]string),
+			SeasonFiles:     make(map[seasonFileKey][]FileStreamInfo),
+			IndividualFiles: make(map[string][]FileStreamInfo),
+			FileMetadata:    make(map[string]FileMeta),
+		}
+		webdavCache[hash] = hc
+	}
+	if hc.FileMetadata == nil {
+		hc.FileMetadata = make(map[string]FileMeta)
+	}
+	hc.FileMetadata[targetURL] = meta
 }
 
 func (fs *WebDAVFS) statHashDir(hash string, modTime time.Time) (os.FileInfo, error) {
