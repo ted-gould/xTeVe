@@ -1140,6 +1140,32 @@ func withRouteTag(next http.Handler) http.Handler {
 	})
 }
 
+func panicMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if err := recover(); err != nil {
+				span := trace.SpanFromContext(r.Context())
+
+				var panicErr error
+				switch x := err.(type) {
+				case string:
+					panicErr = errors.New(x)
+				case error:
+					panicErr = x
+				default:
+					panicErr = fmt.Errorf("panic: %v", x)
+				}
+
+				span.RecordError(panicErr)
+				span.SetStatus(codes.Error, panicErr.Error())
+
+				panic(err)
+			}
+		}()
+		next.ServeHTTP(w, r)
+	})
+}
+
 func newHTTPHandler() http.Handler {
 	mux := http.NewServeMux()
 
@@ -1173,7 +1199,8 @@ func newHTTPHandler() http.Handler {
 	}
 	mux.Handle("/dav/", withRouteTag(davHandler))
 
-	handler := otelhttp.NewHandler(mux, "/")
+	handler := panicMiddleware(mux)
+	handler = otelhttp.NewHandler(handler, "/")
 	return handler
 }
 
