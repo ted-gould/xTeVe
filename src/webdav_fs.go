@@ -876,9 +876,6 @@ func (s *webdavStream) Read(p []byte) (n int, err error) {
 				s.pos += int64(newN)
 				n += newN
 			}
-		} else {
-			// If open fails, just return original EOF
-			// (or the open error? original EOF seems safer if we can't continue)
 		}
 	}
 

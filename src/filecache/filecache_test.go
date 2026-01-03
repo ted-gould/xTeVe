@@ -78,10 +78,12 @@ func TestCacheManager_Eviction(t *testing.T) {
 
 		// Create metadata
 		meta := Metadata{Size: 4, URL: url, ModTime: time.Now().Add(time.Duration(i) * time.Second)}
-		cm.writeMetadata(url, meta)
+		err = cm.writeMetadata(url, meta)
+		require.NoError(t, err)
 
 		// Set ModTime explicitly to ensure order
-		os.Chtimes(path, meta.ModTime, meta.ModTime)
+		err = os.Chtimes(path, meta.ModTime, meta.ModTime)
+		require.NoError(t, err)
 	}
 
 	// Trigger Eviction

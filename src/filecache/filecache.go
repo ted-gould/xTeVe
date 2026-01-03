@@ -62,7 +62,7 @@ func NewCacheManager(cacheDir string) (*CacheManager, error) {
 
 func (cm *CacheManager) hashURL(url string) string {
 	h := md5.New()
-	io.WriteString(h, url)
+	_, _ = io.WriteString(h, url) // hasher writes never fail
 	return hex.EncodeToString(h.Sum(nil))
 }
 
@@ -101,7 +101,7 @@ func (cm *CacheManager) GetMetadata(url string) (Metadata, error) {
 	// Update access time for LRU
 	if err == nil {
 		now := time.Now()
-		os.Chtimes(path, now, now)
+		_ = os.Chtimes(path, now, now) // Best effort
 	}
 	return meta, err
 }
@@ -131,8 +131,6 @@ type CacheReader struct {
 	upstream     io.ReadCloser
 	cacheFile    *os.File
 	teeReader    io.Reader
-	bytesWritten int64
-	done         bool
 	metadata     Metadata
 	url          string
 	cm           *CacheManager
@@ -231,7 +229,7 @@ func (cr *CacheReader) Close() error {
 				remaining := lw.limit - lw.written
 				if remaining > 0 {
 					// We just read into discard, the TeeReader will write to the file
-					io.CopyN(io.Discard, cr.teeReader, remaining)
+					_, _ = io.CopyN(io.Discard, cr.teeReader, remaining) // Best effort background download
 				}
 				cr.cacheFile.Close()
 				cr.upstream.Close()
@@ -370,5 +368,5 @@ func (cm *CacheManager) BackgroundDownload(ctx context.Context, url string, user
 	}
 
 	// Read up to MaxCacheSize
-	io.CopyN(f, resp.Body, MaxCacheSize)
+	_, _ = io.CopyN(f, resp.Body, MaxCacheSize) // Best effort to fill cache
 }
