@@ -1,6 +1,7 @@
 package src
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"runtime"
@@ -216,17 +217,17 @@ func StartSystem(updateProviderFiles bool) (err error) {
 			// Even if backup fails, attempt to get provider data
 		}
 
-		if err = getProviderData("m3u", ""); err != nil {
+		if err = getProviderData(context.Background(), "m3u", ""); err != nil {
 			ShowError(err, 0) // Pass error and an int code
 			// Decide if this is fatal for StartSystem. For now, log and continue.
 		}
-		if err = getProviderData("hdhr", ""); err != nil {
+		if err = getProviderData(context.Background(), "hdhr", ""); err != nil {
 			ShowError(err, 0) // Pass error and an int code
 			// Log and continue.
 		}
 
 		if Settings.EpgSource == "XEPG" {
-			if err = getProviderData("xmltv", ""); err != nil {
+			if err = getProviderData(context.Background(), "xmltv", ""); err != nil {
 				ShowError(err, 0) // Pass error and an int code
 				// Log and continue.
 			}

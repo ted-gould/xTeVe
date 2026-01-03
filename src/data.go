@@ -1,6 +1,7 @@
 package src
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -286,7 +287,7 @@ func saveFiles(request RequestStruct, fileType string) (err error) {
 			// New Provider File
 			if _, ok := dMap["new"]; ok {
 				reloadData = true
-				err = getProviderData(fileType, dataID)
+				err = getProviderData(context.Background(), fileType, dataID)
 				delete(dMap, "new")
 
 				if err != nil {
@@ -336,7 +337,7 @@ func updateFile(request RequestStruct, fileType string) (err error) {
 	}
 
 	for dataID := range updateData {
-		err = getProviderData(fileType, dataID)
+		err = getProviderData(context.Background(), fileType, dataID)
 		if err == nil {
 			err = buildDatabaseDVR()
 			if err != nil { // Check error from buildDatabaseDVR before calling buildXEPG
@@ -671,7 +672,7 @@ func saveWizard(request RequestStruct) (nextStep int, err error) {
 				Settings.Files.M3U = filesMap
 				nextStep = 3
 
-				err = getProviderData(key, dataID)
+				err = getProviderData(context.Background(), key, dataID)
 
 				if err != nil {
 					ShowError(err, 000)
@@ -693,7 +694,7 @@ func saveWizard(request RequestStruct) (nextStep int, err error) {
 				Settings.Files.XMLTV = filesMap
 				nextStep = 10
 
-				err = getProviderData(key, dataID)
+				err = getProviderData(context.Background(), key, dataID)
 
 				if err != nil {
 					ShowError(err, 000)
