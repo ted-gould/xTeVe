@@ -1023,7 +1023,7 @@ func API(w http.ResponseWriter, r *http.Request) {
 		})
 		log.Printf("API Status: Found %d active tuners.", response.TunerActive)
 	case "update.m3u":
-		err = getProviderData("m3u", "")
+		err = getProviderData(context.WithoutCancel(r.Context()), "m3u", "")
 		if err != nil {
 			break
 		}
@@ -1032,7 +1032,7 @@ func API(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 	case "update.hdhr":
-		err = getProviderData("hdhr", "")
+		err = getProviderData(context.WithoutCancel(r.Context()), "hdhr", "")
 		if err != nil {
 			break
 		}
@@ -1041,7 +1041,7 @@ func API(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 	case "update.xmltv":
-		err = getProviderData("xmltv", "")
+		err = getProviderData(context.WithoutCancel(r.Context()), "xmltv", "")
 		if err != nil {
 			break
 		}

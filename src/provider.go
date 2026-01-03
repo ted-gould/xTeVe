@@ -1,6 +1,7 @@
 package src
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -12,7 +13,7 @@ import (
 )
 
 // fileType: Which File Type should be updated (m3u, hdhr, xml) | fileID: Update a specific File (Provider ID)
-func getProviderData(fileType, fileID string) (err error) {
+func getProviderData(ctx context.Context, fileType, fileID string) (err error) {
 	var fileExtension, serverFileName string
 	var body = make([]byte, 0)
 	// var newProvider = false // Removed: Ineffectual assignment
@@ -148,12 +149,12 @@ func getProviderData(fileType, fileID string) (err error) {
 			// Load from the HDHomeRun Tuner
 			showInfo("Tuner:" + fileSource)
 			var tunerURL = "http://" + fileSource + "/lineup.json"
-			serverFileName, body, err = downloadFileFromServer(tunerURL)
+			serverFileName, body, err = downloadFileFromServer(ctx, tunerURL)
 		default:
 			if strings.Contains(fileSource, "http://") || strings.Contains(fileSource, "https://") {
 				// Load from the Remote Server
 				showInfo("Download:" + fileSource)
-				serverFileName, body, err = downloadFileFromServer(fileSource)
+				serverFileName, body, err = downloadFileFromServer(ctx, fileSource)
 			} else {
 				// Load a local File
 				showInfo("Open:" + fileSource)
@@ -237,13 +238,13 @@ func getProviderData(fileType, fileID string) (err error) {
 	return
 }
 
-func downloadFileFromServer(providerURL string) (filename string, body []byte, err error) {
+func downloadFileFromServer(ctx context.Context, providerURL string) (filename string, body []byte, err error) {
 	_, err = url.ParseRequestURI(providerURL)
 	if err != nil {
 		return
 	}
 
-	req, err := http.NewRequest("GET", providerURL, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", providerURL, nil)
 	if err != nil {
 		return
 	}

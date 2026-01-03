@@ -1,6 +1,7 @@
 package src
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"time"
@@ -31,15 +32,15 @@ func maintenance() {
 					}
 
 					// Update Playlist and XMLTV Files
-					if err := getProviderData("m3u", ""); err != nil {
+					if err := getProviderData(context.Background(), "m3u", ""); err != nil {
 						ShowError(err, 0)
 					}
-					if err := getProviderData("hdhr", ""); err != nil {
+					if err := getProviderData(context.Background(), "hdhr", ""); err != nil {
 						ShowError(err, 0)
 					}
 
 					if Settings.EpgSource == "XEPG" {
-						if err := getProviderData("xmltv", ""); err != nil {
+						if err := getProviderData(context.Background(), "xmltv", ""); err != nil {
 							ShowError(err, 0)
 						}
 					}
