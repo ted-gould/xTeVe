@@ -771,7 +771,7 @@ func Web(w http.ResponseWriter, r *http.Request) {
 						return
 					}
 					// Redirect so that the Data is deleted from the Browser.
-					w = authentication.SetCookieToken(w, token)
+					w = authentication.SetCookieToken(w, token, Settings.TLSMode)
 					http.Redirect(w, r, "/web", http.StatusMovedPermanently)
 					return
 				}
@@ -784,16 +784,16 @@ func Web(w http.ResponseWriter, r *http.Request) {
 						lang["authenticationErr"] = language.Login.Failed
 						break
 					}
-					w = authentication.SetCookieToken(w, token)
+					w = authentication.SetCookieToken(w, token, Settings.TLSMode)
 					http.Redirect(w, r, "/web", http.StatusMovedPermanently) // Redirect so that the Data is deleted from the Browser.
 				} else {
-					w = authentication.SetCookieToken(w, "-")
+					w = authentication.SetCookieToken(w, "-", Settings.TLSMode)
 					http.Redirect(w, r, "/web", http.StatusMovedPermanently) // Redirect so that the Data is deleted from the Browser.
 				}
 				return
 			case "GET":
 				lang["authenticationErr"] = ""
-				_, token, err := authentication.CheckTheValidityOfTheTokenFromHTTPHeader(w, r)
+				_, token, err := authentication.CheckTheValidityOfTheTokenFromHTTPHeader(w, r, Settings.TLSMode)
 
 				if err != nil {
 					file = requestFile + "login.html"
