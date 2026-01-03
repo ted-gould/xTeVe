@@ -191,21 +191,14 @@ func (c *FileCache) download(urlStr, hash string, client *http.Client, userAgent
 	// Read up to MaxFileSize
 	_, err = io.CopyN(tmpFile, resp.Body, MaxFileSize)
 	complete := false
-	if err == io.EOF {
+	if err == nil {
+		// Copied exactly MaxFileSize. Assumed incomplete.
+	} else if err == io.EOF {
 		complete = true
 		err = nil
-	} else if err != nil {
-		// If err is not EOF, it might be that we reached MaxFileSize limit (CopyN returns EOF only if src is exhausted).
-		// Wait, io.CopyN returns EOF if it hits the limit? No, CopyN returns nil error if it copies N bytes.
-		// It returns EOF if underlying src has less than N bytes.
-		// So if err == nil, we copied exactly MaxFileSize bytes (and there might be more).
-		// If err == io.EOF, we copied < MaxFileSize bytes (and that was all of it).
 	} else {
-		// err == nil, meaning we copied exactly MaxFileSize.
-		// We don't know if it's complete or not without checking ContentLength or trying to read one more byte.
-		// But for our purpose, if we hit the limit, it's not "complete" in the sense that we have the WHOLE file
-		// UNLESS the file was exactly MaxFileSize.
-		// Let's assume incomplete if we hit the limit.
+		tmpFile.Close()
+		return
 	}
 
 	tmpFile.Close()
@@ -298,7 +291,7 @@ func (c *FileCache) CleanNow() {
 func (c *FileCache) RemoveAll() {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
-	os.RemoveAll(c.dir)
-	os.MkdirAll(c.dir, 0755)
+	_ = os.RemoveAll(c.dir)
+	_ = os.MkdirAll(c.dir, 0755)
 	c.items = make(map[string]*CacheItem)
 }

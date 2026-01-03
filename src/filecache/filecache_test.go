@@ -29,8 +29,12 @@ func TestFileCacheLRU(t *testing.T) {
 		path := filepath.Join(fc.dir, hash)
 		metaPath := path + ".json"
 
-		os.WriteFile(path, []byte("data"), 0644)
-		os.WriteFile(metaPath, []byte(`{}`), 0644)
+		if err := os.WriteFile(path, []byte("data"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(metaPath, []byte(`{}`), 0644); err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	// Reload cache to populate items map

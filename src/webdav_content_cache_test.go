@@ -154,6 +154,9 @@ func TestWebDAVContentCache(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Read 2 failed: %v", err)
 	}
+	if n != 100 {
+		t.Errorf("Expected 100 bytes, got %d", n)
+	}
 	if !bytes.Equal(buf2, fileContent[500*1024:500*1024+100]) {
 		t.Errorf("Read 2 content mismatch")
 	}
@@ -167,6 +170,9 @@ func TestWebDAVContentCache(t *testing.T) {
 	n, err = f2.Read(buf3)
 	if err != nil {
 		t.Fatalf("Read outside cache failed: %v", err)
+	}
+	if n != 100 {
+		t.Errorf("Expected 100 bytes, got %d", n)
 	}
 	if !bytes.Equal(buf3, fileContent[1500*1024:1500*1024+100]) {
 		t.Errorf("Read outside cache content mismatch")
