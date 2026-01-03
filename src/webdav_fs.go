@@ -20,7 +20,26 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"golang.org/x/net/webdav"
+
+	"xteve/src/filecache"
 )
+
+var (
+	globalFileCache     *filecache.FileCache
+	globalFileCacheOnce sync.Once
+)
+
+func getFileCache() *filecache.FileCache {
+	globalFileCacheOnce.Do(func() {
+		dir := System.Folder.Cache
+		if dir == "" {
+			dir = System.Folder.Temp
+		}
+		c, _ := filecache.GetInstance(dir)
+		globalFileCache = c
+	})
+	return globalFileCache
+}
 
 const (
 	dirOnDemand   = "On Demand"
@@ -844,6 +863,9 @@ type webdavStream struct {
 	targetURL  string
 	hash       string
 	size       int64
+
+	usingCache    bool
+	cacheComplete bool
 }
 
 func (s *webdavStream) Close() (err error) {
@@ -879,6 +901,35 @@ func (s *webdavStream) Read(p []byte) (n int, err error) {
 	n, err = s.readCloser.Read(p)
 	if n > 0 {
 		s.pos += int64(n)
+	}
+
+	if s.usingCache {
+		// If we hit EOF on cache, and it's not complete, switch to upstream
+		if err == io.EOF && !s.cacheComplete {
+			s.readCloser.Close()
+			s.readCloser = nil
+			s.usingCache = false
+
+			// Open upstream at current pos
+			if openErr := s.openStream(s.pos); openErr != nil {
+				span.RecordError(openErr)
+				return n, openErr
+			}
+
+			// If we didn't read anything yet, read from upstream
+			if n == 0 {
+				var newN int
+				var newErr error
+				newN, newErr = s.readCloser.Read(p)
+				if newN > 0 {
+					s.pos += int64(newN)
+				}
+				return newN, newErr
+			}
+
+			// If we did read something, return it and let next Read call upstream
+			return n, nil
+		}
 	}
 
 	if err != nil && err != io.EOF {
@@ -1003,6 +1054,34 @@ func (s *webdavStream) openStream(offset int64) (err error) {
 		return err
 	}
 
+	// Cache Logic
+	fc := getFileCache()
+	path, meta, exists := fc.Get(url)
+
+	// If request is within cache range (1MB) and we have it
+	if exists && offset < filecache.MaxFileSize {
+		f, err := os.Open(path)
+		if err == nil {
+			// Seek
+			if _, err := f.Seek(offset, io.SeekStart); err == nil {
+				s.readCloser = f
+				s.usingCache = true
+				s.cacheComplete = meta.Complete
+				span.SetAttributes(attribute.Bool("webdav.cache_hit", true))
+				return nil
+			} else {
+				f.Close()
+			}
+		}
+	}
+
+	if !exists {
+		// Trigger cache download
+		client := NewHTTPClient()
+		fc.StartCaching(url, client, Settings.UserAgent)
+	}
+
+	span.SetAttributes(attribute.Bool("webdav.cache_hit", false))
 	span.SetAttributes(attribute.String("http.url", url))
 
 	// Use the context from the span to ensure propagation
