@@ -408,9 +408,14 @@ func (fs *WebDAVFS) statWithMetadata(ctx context.Context, hash string, stream ma
 func resolveFileMetadata(ctx context.Context, hash string, stream map[string]string, targetURL, name string, defaultModTime time.Time) (os.FileInfo, error) {
 	ctx, span := otel.Tracer("webdav").Start(ctx, "resolveFileMetadata")
 	defer span.End()
+	span.SetAttributes(attribute.String("target_url", targetURL))
 
 	// 1. Try Cache
 	if meta, found := resolveMetadataFromCache(hash, targetURL); found {
+		span.SetAttributes(
+			attribute.String("metadata.source", "cache"),
+			attribute.Int64("file.size", meta.Size),
+		)
 		mt := defaultModTime
 		if !meta.ModTime.IsZero() {
 			mt = meta.ModTime
@@ -425,6 +430,10 @@ func resolveFileMetadata(ctx context.Context, hash string, stream map[string]str
 			mt = meta.ModTime
 		}
 		if meta.Size > 0 {
+			span.SetAttributes(
+				attribute.String("metadata.source", "m3u"),
+				attribute.Int64("file.size", meta.Size),
+			)
 			return &mkFileInfo{name: name, size: meta.Size, modTime: mt}, nil
 		}
 		// Update defaultModTime with what we found (if it's not zero), but continue to remote fetch for size
@@ -435,6 +444,10 @@ func resolveFileMetadata(ctx context.Context, hash string, stream map[string]str
 
 	// 3. Remote fetch
 	if meta, err := resolveMetadataFromRemote(ctx, hash, targetURL); err == nil {
+		span.SetAttributes(
+			attribute.String("metadata.source", "remote"),
+			attribute.Int64("file.size", meta.Size),
+		)
 		mt := defaultModTime
 		if !meta.ModTime.IsZero() {
 			mt = meta.ModTime
@@ -442,6 +455,10 @@ func resolveFileMetadata(ctx context.Context, hash string, stream map[string]str
 		return &mkFileInfo{name: name, size: meta.Size, modTime: mt}, nil
 	}
 
+	span.SetAttributes(
+		attribute.String("metadata.source", "none"),
+		attribute.Int64("file.size", 0),
+	)
 	return &mkFileInfo{name: name, size: 0, modTime: defaultModTime}, nil
 }
 
@@ -935,6 +952,8 @@ func (s *webdavStream) Seek(offset int64, whence int) (_ int64, err error) {
 	span.SetAttributes(
 		attribute.Int64("offset", offset),
 		attribute.Int("whence", whence),
+		attribute.Int64("file.size", s.size),
+		attribute.String("target_url", s.targetURL),
 	)
 
 	// Ensure size is known if seeking from end
@@ -1210,6 +1229,8 @@ func fetchRemoteMetadata(ctx context.Context, urlStr string) (FileMeta, error) {
 		span.RecordError(err)
 		return meta, err
 	}
+
+	span.SetAttributes(attribute.Int64("http.response.content_length", resp.ContentLength))
 
 	meta.Size = resp.ContentLength
 	if lastMod := resp.Header.Get("Last-Modified"); lastMod != "" {
