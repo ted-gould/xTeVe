@@ -195,7 +195,6 @@ func (c *FileCache) download(urlStr, hash string, client *http.Client, userAgent
 		// Copied exactly MaxFileSize. Assumed incomplete.
 	} else if err == io.EOF {
 		complete = true
-		err = nil
 	} else {
 		tmpFile.Close()
 		return
