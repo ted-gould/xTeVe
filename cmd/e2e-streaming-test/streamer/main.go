@@ -15,7 +15,7 @@ import (
 const (
 	defaultStreamSize = 1 * 1024 * 1024 // 1 MB
 	defaultPort       = 8080
-	numStreams        = 6 // Increased to 6 to include redirect test
+	numStreams        = 7 // Increased to 7 to include no-metadata test
 	chunkSize         = 1024 // 1 KB
 	delay             = 10 * time.Millisecond
 )
@@ -63,7 +63,11 @@ func streamHandler(w http.ResponseWriter, r *http.Request) {
 	defer atomic.AddInt64(&activeStreams, -1)
 
 	w.Header().Set("Content-Type", "video/mpeg")
-	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(testData[streamIndex])))
+
+	// For stream 7 (index 6), suppress Content-Length
+	if streamID != 7 {
+		w.Header().Set("Content-Length", fmt.Sprintf("%d", len(testData[streamIndex])))
+	}
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
@@ -130,6 +134,12 @@ func main() {
 		i = 6
 		m3uContent.WriteString(fmt.Sprintf("#EXTINF:-1 tvg-id=\"test.redirect.%d\" tvg-name=\"Test Redirect Stream %d\" group-title=\"Test\",Test Redirect Stream %d\n", i, i, i))
 		m3uContent.WriteString(fmt.Sprintf("http://localhost:%d/redirect-stream/%d\n", port, i))
+
+		// No Metadata Stream 7 (VOD)
+		i = 7
+		// We use .mp4 to ensure it is detected as VOD by webdav
+		m3uContent.WriteString(fmt.Sprintf("#EXTINF:3600 tvg-id=\"test.nometa.%d\" tvg-name=\"Test NoMeta Stream %d\" group-title=\"Test\",Test NoMeta Stream %d\n", i, i, i))
+		m3uContent.WriteString(fmt.Sprintf("http://localhost:%d/stream/%d.mp4\n", port, i))
 
 		w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
 		if _, err := w.Write([]byte(m3uContent.String())); err != nil {
