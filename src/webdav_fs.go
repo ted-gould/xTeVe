@@ -911,7 +911,7 @@ func (s *webdavStream) Read(p []byte) (n int, err error) {
 	span.SetAttributes(attribute.String("webdav.stream_name", s.name))
 
 	if s.readCloser == nil {
-		if err := s.openStream(0); err != nil {
+		if err := s.openStream(s.pos); err != nil {
 			span.RecordError(err)
 			return 0, err
 		}
@@ -1024,9 +1024,14 @@ func (s *webdavStream) Seek(offset int64, whence int) (_ int64, err error) {
 		newPos = s.pos + offset
 	case io.SeekEnd:
 		if s.size == 0 {
-			return 0, errors.New("seeking from end not supported (unknown size)")
+			// If size is unknown, we assume a very large size to allow streaming via ServeContent.
+			// This allows GET requests to succeed even if Content-Length is missing upstream.
+			// We use a safe large value (1TB) to ensure almost any content fits.
+			const fakeSize = 1 << 40
+			newPos = fakeSize + offset
+		} else {
+			newPos = s.size + offset
 		}
-		newPos = s.size + offset
 	default:
 		return 0, errors.New("invalid whence")
 	}
@@ -1328,6 +1333,9 @@ func fetchRemoteMetadata(ctx context.Context, urlStr string) (FileMeta, error) {
 	span.SetAttributes(attribute.Int64("http.response.content_length", resp.ContentLength))
 
 	meta.Size = resp.ContentLength
+	if meta.Size < 0 {
+		meta.Size = 0
+	}
 	if lastMod := resp.Header.Get("Last-Modified"); lastMod != "" {
 		if t, err := http.ParseTime(lastMod); err == nil {
 			meta.ModTime = t
