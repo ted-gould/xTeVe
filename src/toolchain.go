@@ -394,7 +394,6 @@ func parseTemplate(content string, tmpMap map[string]any) (result string) {
 func getMD5(str string) (string, error) {
 	md5Hasher := md5.New()
 	if _, err := md5Hasher.Write([]byte(str)); err != nil {
-		log.Printf("Error writing to md5 hasher: %v", err)
 		return "", err
 	}
 	return hex.EncodeToString(md5Hasher.Sum(nil)), nil
