@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"compress/gzip"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -93,8 +94,23 @@ func extractZIP(archive, target string) (err error) {
 		return err
 	}
 
+	// Ensure target path is absolute for reliable prefix checking
+	target, err = filepath.Abs(target)
+	if err != nil {
+		return err
+	}
+
 	for _, file := range reader.File {
+		// Join path and normalize it
 		path := filepath.Join(target, file.Name)
+
+		// Check for Zip Slip Vulnerability
+		// Verify that the absolute path of the destination file starts with the absolute path of the target directory
+		// filepath.Join calls Clean, but we check again for safety.
+		if !strings.HasPrefix(path, filepath.Clean(target)+string(os.PathSeparator)) {
+			return fmt.Errorf("illegal file path: %s", path)
+		}
+
 		if file.FileInfo().IsDir() {
 			if err := os.MkdirAll(path, file.Mode()); err != nil {
 				ShowError(err, 0)
