@@ -369,7 +369,6 @@ func randomString(n int) (string, error) {
 	var bytes = make([]byte, n)
 
 	if _, err := rand.Read(bytes); err != nil {
-		log.Printf("Error reading random bytes for randomString: %v", err)
 		return "", err
 	}
 
