@@ -19,6 +19,7 @@ import (
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/net/webdav"
 
 	"xteve/src/filecache"
@@ -1127,6 +1128,21 @@ func (s *webdavStream) openStream(offset int64) (err error) {
 		resp.Body.Close()
 		span.SetAttributes(attribute.Int("http.response.status_code", resp.StatusCode))
 		return fmt.Errorf("upstream returned status %d", resp.StatusCode)
+	}
+
+	// Robustness: If we requested a range (s.pos > 0) but got 200 OK, the server
+	// ignored the Range header (or dropped it on redirect). We must manually skip bytes.
+	if s.pos > 0 && resp.StatusCode == http.StatusOK {
+		span.AddEvent("webdav.range_ignored_by_upstream", trace.WithAttributes(
+			attribute.Int64("bytes_to_skip", s.pos),
+		))
+		// Discard the prefix we didn't want
+		_, err := io.CopyN(io.Discard, resp.Body, s.pos)
+		if err != nil {
+			resp.Body.Close()
+			span.RecordError(err)
+			return fmt.Errorf("failed to skip %d bytes: %w", s.pos, err)
+		}
 	}
 
 	s.readCloser = resp.Body

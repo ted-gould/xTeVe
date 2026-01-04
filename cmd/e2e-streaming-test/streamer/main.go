@@ -15,7 +15,7 @@ import (
 const (
 	defaultStreamSize = 1 * 1024 * 1024 // 1 MB
 	defaultPort       = 8080
-	numStreams        = 5 // Increased to 5 to include series test
+	numStreams        = 6 // Increased to 6 to include redirect test
 	chunkSize         = 1024 // 1 KB
 	delay             = 10 * time.Millisecond
 )
@@ -104,6 +104,14 @@ func main() {
 
 	fmt.Printf("Starting streaming server on port %d...\n", port)
 	http.HandleFunc("/stream/", streamHandler)
+
+	// Redirect Handler
+	http.HandleFunc("/redirect-stream/", func(w http.ResponseWriter, r *http.Request) {
+		streamIDStr := strings.TrimPrefix(r.URL.Path, "/redirect-stream/")
+		target := fmt.Sprintf("http://localhost:%d/stream/%s", port, streamIDStr)
+		http.Redirect(w, r, target, http.StatusFound)
+	})
+
 	http.HandleFunc("/test.m3u", func(w http.ResponseWriter, r *http.Request) {
 		var m3uContent strings.Builder
 		m3uContent.WriteString("#EXTM3U\n")
@@ -117,6 +125,11 @@ func main() {
 		// Using duration > 0 (3600) and .mp4 extension to ensure VOD detection
 		m3uContent.WriteString(fmt.Sprintf("#EXTINF:3600 tvg-id=\"test.series.%d\" tvg-name=\"Test Series - S01E01 - Episode 1\" group-title=\"Test Series\",Test Series - S01E01 - Episode 1\n", i))
 		m3uContent.WriteString(fmt.Sprintf("http://localhost:%d/stream/%d.mp4\n", port, i))
+
+		// Redirect Stream 6
+		i = 6
+		m3uContent.WriteString(fmt.Sprintf("#EXTINF:-1 tvg-id=\"test.redirect.%d\" tvg-name=\"Test Redirect Stream %d\" group-title=\"Test\",Test Redirect Stream %d\n", i, i, i))
+		m3uContent.WriteString(fmt.Sprintf("http://localhost:%d/redirect-stream/%d\n", port, i))
 
 		w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
 		if _, err := w.Write([]byte(m3uContent.String())); err != nil {

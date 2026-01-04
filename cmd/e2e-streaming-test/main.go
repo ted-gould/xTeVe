@@ -344,6 +344,12 @@ func runTests() error {
 	}
 	fmt.Println("WebDAV series test passed.")
 
+	// Run Redirect Stream Test
+	if err := runRedirectStreamTest(); err != nil {
+		return fmt.Errorf("Redirect stream test failed: %w", err)
+	}
+	fmt.Println("Redirect stream test passed.")
+
 	// Run with buffer enabled
 	if err := setBuffer(conn, "xteve", 1024); err != nil {
 		return err
@@ -396,14 +402,12 @@ func runTests() error {
 	return nil
 }
 
-func runWebDAVSeriesTest() error {
-	fmt.Println("Running WebDAV series test...")
-
+func getM3UHash() (string, error) {
 	// 1. Find the M3U hash (we can't easily guess it, so we list /dav/)
 	davURL := fmt.Sprintf("http://localhost:%d/dav/", xtevePort)
 	resp, err := http.Get(davURL)
 	if err != nil {
-		return fmt.Errorf("failed to list /dav/: %w", err)
+		return "", fmt.Errorf("failed to list /dav/: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -442,7 +446,17 @@ func runWebDAVSeriesTest() error {
 	}
 
 	if hash == "" {
-		return fmt.Errorf("could not determine M3U hash from .xteve/data or WebDAV listing. Body: %s", content)
+		return "", fmt.Errorf("could not determine M3U hash from .xteve/data or WebDAV listing. Body: %s", content)
+	}
+	return hash, nil
+}
+
+func runWebDAVSeriesTest() error {
+	fmt.Println("Running WebDAV series test...")
+
+	hash, err := getM3UHash()
+	if err != nil {
+		return err
 	}
 
 	fmt.Printf("Found M3U hash: %s\n", hash)
@@ -457,7 +471,7 @@ func runWebDAVSeriesTest() error {
 	req, _ := http.NewRequest("PROPFIND", seriesURL, nil)
 	req.Header.Set("Depth", "1")
 	client := &http.Client{}
-	resp, err = client.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to list series directory: %w", err)
 	}
@@ -468,8 +482,8 @@ func runWebDAVSeriesTest() error {
 		return fmt.Errorf("failed to list series directory, status: %d, body: %s", resp.StatusCode, string(body))
 	}
 
-	body, _ = io.ReadAll(resp.Body)
-	content = string(body)
+	body, _ := io.ReadAll(resp.Body)
+	content := string(body)
 
 	// Find the .mp4 file in the response
 	// Look for href ending in .mp4
@@ -524,6 +538,90 @@ func runWebDAVSeriesTest() error {
 	// Use stream ID 5
 	if err := verifyStreamedData(data, 5); err != nil {
 		return fmt.Errorf("file verification failed: %w", err)
+	}
+
+	return nil
+}
+
+func runRedirectStreamTest() error {
+	fmt.Println("Running Redirect Stream Test...")
+
+	_, err := getM3UHash()
+	if err != nil {
+		return err
+	}
+
+	// The redirect stream should be under "On Demand" -> "Test" -> "Individual" -> "Test Redirect Stream 6.mp4" (since we default to .mp4)
+	// Or maybe it's treated as live because duration is -1.
+	// In the M3U: #EXTINF:-1 ...
+	// So it should be treated as Live unless forced VOD.
+	// Wait, the "On Demand" folder only shows VOD?
+	// Let's check `isVOD` in `src/webdav_fs.go`.
+	// It checks extension. The URL ends in `/redirect-stream/6`.
+	// `getExtensionFromURL` will return empty or ".6" (if that counts).
+	// `isVOD` returns false for unknown extension if duration <= 0.
+	// So it will NOT appear in "On Demand" folder.
+
+	// However, we can stream it via xTeVe's streaming URL (buffer/proxy).
+	// But the user asked to verify handling of redirects.
+	// If it's a Live stream, xTeVe proxies it via `buffer.go`.
+	// If it's VOD, it's via `webdav_fs.go`.
+
+	// The `wget` example was `series/.../1295320.mkv`. That implies VOD via WebDAV or just a file download.
+	// The user asked "make sure HTTP stack in xteve can handle all this".
+
+	// If I want to test WebDAV VOD redirect handling, I need to make the stream appear as VOD.
+	// I'll assume I should access it via the streaming URL (which uses the HTTP client) OR make it VOD.
+	// Let's test the streaming URL first (Live TV simulation), as that definitely uses the HTTP client to fetch data.
+
+	// Wait, `runMultiStreamTest` uses the `xteve.m3u` which contains the streaming URLs.
+	// I should verify that I can stream the 6th stream.
+
+	// But `runMultiStreamTest` only tested 4 streams (1, 2, 4).
+	// I want to explicitly test stream 6.
+
+	// Let's fetch the xteve.m3u and find the URL for "Test Redirect Stream 6".
+	resp, err := http.Get(fmt.Sprintf("http://localhost:%d/m3u/xteve.m3u", xtevePort))
+	if err != nil {
+		return fmt.Errorf("failed to get M3U: %w", err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	m3u := string(body)
+
+	lines := strings.Split(m3u, "\n")
+	var streamURL string
+	for i, line := range lines {
+		if strings.Contains(line, "Test Redirect Stream 6") {
+			if i+1 < len(lines) {
+				streamURL = lines[i+1]
+			}
+			break
+		}
+	}
+
+	if streamURL == "" {
+		return fmt.Errorf("could not find Test Redirect Stream 6 in M3U")
+	}
+
+	fmt.Printf("Streaming redirect stream from %s\n", streamURL)
+	resp, err = http.Get(streamURL)
+	if err != nil {
+		return fmt.Errorf("failed to start redirect stream: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("redirect stream returned status %d", resp.StatusCode)
+	}
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read redirect stream data: %w", err)
+	}
+
+	if err := verifyStreamedData(data, 6); err != nil {
+		return fmt.Errorf("redirect stream verification failed: %w", err)
 	}
 
 	return nil
