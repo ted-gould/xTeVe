@@ -771,6 +771,22 @@ func createFilterRules() (err error) {
 				dataFilter.CompiledExclude = strings.ToLower(dataFilter.CompiledExclude)
 			}
 
+			// Pre-parse include conditions
+			if len(dataFilter.CompiledInclude) > 0 {
+				inc := dataFilter.CompiledInclude
+				inc = strings.Replace(inc, ", ", ",", -1)
+				inc = strings.Replace(inc, " ,", ",", -1)
+				dataFilter.PreparsedInclude = strings.Split(inc, ",")
+			}
+
+			// Pre-parse exclude conditions
+			if len(dataFilter.CompiledExclude) > 0 {
+				exc := dataFilter.CompiledExclude
+				exc = strings.Replace(exc, ", ", ",", -1)
+				exc = strings.Replace(exc, " ,", ",", -1)
+				dataFilter.PreparsedExclude = strings.Split(exc, ",")
+			}
+
 			Data.Filter = append(Data.Filter, dataFilter)
 		}
 	}

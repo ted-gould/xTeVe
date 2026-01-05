@@ -164,6 +164,9 @@ type Filter struct {
 	CompiledRule    string `json:"-"`
 	CompiledInclude string `json:"-"`
 	CompiledExclude string `json:"-"`
+
+	PreparsedInclude []string `json:"-"`
+	PreparsedExclude []string `json:"-"`
 }
 
 // XEPGChannelStruct : XEPG Structure
