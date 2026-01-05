@@ -1318,30 +1318,84 @@ func fetchRemoteMetadata(ctx context.Context, urlStr string) (FileMeta, error) {
 	req.Header.Set("User-Agent", Settings.UserAgent)
 
 	resp, err := client.Do(req)
+
+	// Check if HEAD succeeded
+	if err == nil && resp.StatusCode == http.StatusOK {
+		defer resp.Body.Close()
+		span.SetAttributes(attribute.Int64("http.response.content_length", resp.ContentLength))
+
+		meta.Size = resp.ContentLength
+		if meta.Size < 0 {
+			meta.Size = 0
+		}
+		if lastMod := resp.Header.Get("Last-Modified"); lastMod != "" {
+			if t, err := http.ParseTime(lastMod); err == nil {
+				meta.ModTime = t
+			}
+		}
+		return meta, nil
+	}
+
+	// HEAD failed, clean up and try fallback
 	if err != nil {
 		span.RecordError(err)
-		return meta, err
+	} else {
+		resp.Body.Close()
+		span.RecordError(fmt.Errorf("status %d", resp.StatusCode))
+	}
+
+	// Fallback: Use cache logic and GET first MB
+	// 1. Trigger cache
+	fc := getFileCache()
+	fc.StartCaching(urlStr, NewHTTPClient(), Settings.UserAgent)
+
+	// 2. GET request with Range
+	req, err = http.NewRequestWithContext(ctx, "GET", urlStr, nil)
+	if err != nil {
+		meta.Size = 1 << 40 // 1TB
+		return meta, nil
+	}
+
+	req.Header.Set("User-Agent", Settings.UserAgent)
+	req.Header.Set("Range", fmt.Sprintf("bytes=0-%d", filecache.MaxFileSize-1))
+
+	resp, err = client.Do(req)
+	if err != nil {
+		meta.Size = 1 << 40 // 1TB
+		return meta, nil
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		err = fmt.Errorf("status %d", resp.StatusCode)
-		span.RecordError(err)
-		return meta, err
+	// 3. Check response
+	if resp.StatusCode == http.StatusOK {
+		meta.Size = resp.ContentLength
+	} else if resp.StatusCode == http.StatusPartialContent {
+		// Parse Content-Range: bytes start-end/total
+		cr := resp.Header.Get("Content-Range")
+		parts := strings.Split(cr, "/")
+		if len(parts) == 2 {
+			if total, err := strconv.ParseInt(parts[1], 10, 64); err == nil {
+				meta.Size = total
+			}
+		}
 	}
 
-	span.SetAttributes(attribute.Int64("http.response.content_length", resp.ContentLength))
-
-	meta.Size = resp.ContentLength
-	if meta.Size < 0 {
-		meta.Size = 0
+	// If size is still 0 (unknown or failed parsing), default to 1TB
+	if meta.Size <= 0 {
+		meta.Size = 1 << 40 // 1TB
 	}
+
+	// Try to get ModTime from GET response
 	if lastMod := resp.Header.Get("Last-Modified"); lastMod != "" {
 		if t, err := http.ParseTime(lastMod); err == nil {
 			meta.ModTime = t
 		}
 	}
 
+	span.SetAttributes(
+		attribute.Int64("http.response.content_length", meta.Size),
+		attribute.String("metadata.fallback", "true"),
+	)
 	return meta, nil
 }
 
