@@ -1325,8 +1325,8 @@ func fetchRemoteMetadata(ctx context.Context, urlStr string) (FileMeta, error) {
 		span.SetAttributes(attribute.Int64("http.response.content_length", resp.ContentLength))
 
 		meta.Size = resp.ContentLength
-		if meta.Size < 0 {
-			meta.Size = 0
+		if meta.Size <= 0 {
+			meta.Size = 1 << 40 // 1TB
 		}
 		if lastMod := resp.Header.Get("Last-Modified"); lastMod != "" {
 			if t, err := http.ParseTime(lastMod); err == nil {
