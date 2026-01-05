@@ -90,12 +90,12 @@ func FilterThisStream(s any) (status bool) {
 			// If matched, check exclude/include conditions
 			// `searchTarget` is already correctly cased. CompiledInclude/Exclude are also pre-cased if needed.
 			if len(filter.CompiledExclude) > 0 {
-				if !checkConditions(searchTarget, filter.CompiledExclude, "exclude") {
+				if !checkConditions(searchTarget, filter.PreparsedExclude, "exclude") {
 					return false // Fails exclude condition
 				}
 			}
 			if len(filter.CompiledInclude) > 0 {
-				if !checkConditions(searchTarget, filter.CompiledInclude, "include") {
+				if !checkConditions(searchTarget, filter.PreparsedInclude, "include") {
 					return false // Fails include condition
 				}
 			}
@@ -106,7 +106,7 @@ func FilterThisStream(s any) (status bool) {
 }
 
 // Conditions for the Filter
-func checkConditions(streamValues, conditions, coType string) (status bool) {
+func checkConditions(streamValues string, conditions []string, coType string) (status bool) {
 	switch coType {
 	case "exclude":
 		status = true
@@ -114,16 +114,11 @@ func checkConditions(streamValues, conditions, coType string) (status bool) {
 		status = false
 	}
 
-	conditions = strings.Replace(conditions, ", ", ",", -1)
-	conditions = strings.Replace(conditions, " ,", ",", -1)
-
-	var keys = strings.Split(conditions, ",")
-
 	// Pad streamValues to handle matches at the beginning or end of the string.
 	// This ensures that we are matching whole words or phrases.
 	paddedStreamValues := " " + streamValues + " "
 
-	for _, key := range keys {
+	for _, key := range conditions {
 		if key == "" {
 			continue
 		}

@@ -24,11 +24,12 @@ func TestFilterThisStream_GroupTitle_Bug(t *testing.T) {
 
 	// Setup: Create a filter
 	filter := Filter{
-		Type:            "group-title",
-		Rule:            "News {News}",
-		CaseSensitive:   false,
-		CompiledRule:    "news",
-		CompiledInclude: "news",
+		Type:             "group-title",
+		Rule:             "News {News}",
+		CaseSensitive:    false,
+		CompiledRule:     "news",
+		CompiledInclude:  "news",
+		PreparsedInclude: []string{"news"},
 	}
 
 	// Setup: Reset and populate Data.Filter
@@ -167,11 +168,12 @@ func TestFilterThisStream_ExcludeExactPhrase(t *testing.T) {
 
 	// Setup: Create a filter to exclude "CSPAN 2" from the "News" group
 	filter := Filter{
-		Type:            "group-title",
-		Rule:            "News !{CSPAN 2}",
-		CaseSensitive:   false,
-		CompiledRule:    "news",
-		CompiledExclude: "cspan 2",
+		Type:             "group-title",
+		Rule:             "News !{CSPAN 2}",
+		CaseSensitive:    false,
+		CompiledRule:     "news",
+		CompiledExclude:  "cspan 2",
+		PreparsedExclude: []string{"cspan 2"},
 	}
 	Data.Filter = []Filter{filter}
 
