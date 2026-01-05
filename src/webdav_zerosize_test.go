@@ -39,7 +39,7 @@ func TestWebDAVFS_ZeroSize(t *testing.T) {
 		}
 		if r.Method == "GET" {
 			// Serve dummy content
-			w.Write([]byte("data"))
+			_, _ = w.Write([]byte("data"))
 		}
 	}))
 	defer ts.Close()
