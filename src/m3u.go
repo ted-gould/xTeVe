@@ -118,13 +118,8 @@ func checkConditions(streamValues string, conditions []string, coType string) (s
 	// This ensures that we are matching whole words or phrases.
 	paddedStreamValues := " " + streamValues + " "
 
-	for _, key := range conditions {
-		if key == "" {
-			continue
-		}
-
-		// Pad the key to ensure we match the exact phrase surrounded by spaces.
-		paddedKey := " " + key + " "
+	// Key is already pre-padded in createFilterRules to avoid allocation in this loop
+	for _, paddedKey := range conditions {
 		if strings.Contains(paddedStreamValues, paddedKey) {
 			switch coType {
 			case "exclude":
