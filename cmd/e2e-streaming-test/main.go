@@ -597,6 +597,14 @@ func runWebDAVNoMetadataTest() error {
 
 	fmt.Printf("PROPFIND Response: %s\n", content)
 
+	// Ensure size is NOT 0 in the PROPFIND response
+	// We expect the fallback size (1TB) if the upstream size is unknown or 0.
+	// 1TB = 1099511627776
+	if strings.Contains(content, "<D:getcontentlength>0</D:getcontentlength>") ||
+		strings.Contains(content, "<getcontentlength>0</getcontentlength>") {
+		return fmt.Errorf("PROPFIND returned size 0, expected fallback size")
+	}
+
 	// 2. Download the file (Sequential Read)
 	fmt.Printf("Downloading file (sequential read)...\n")
 	resp, err = http.Get(fileURL)
