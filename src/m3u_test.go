@@ -9,10 +9,11 @@ import (
 )
 
 func TestFilterThisStream_GroupTitle_Bug(t *testing.T) {
-	// This test demonstrates the bug.
+	// This test ensures that the bug where include conditions were checked against the stream name
+	// instead of the group title is fixed.
 	// A stream with group-title="News" and name="National Report"
 	// should be matched by a filter on group-title="News" with an include condition of "{News}".
-	// The bug causes this to fail because the include condition is checked against the stream name instead of the group title.
+	// The bug would cause this to fail if the include condition was checked against the stream name ("National Report").
 
 	// Setup: Create a stream
 	stream := map[string]string{
@@ -36,8 +37,38 @@ func TestFilterThisStream_GroupTitle_Bug(t *testing.T) {
 	// Execute
 	result := FilterThisStream(stream)
 
-	// Assert: This will fail before the fix
+	// Assert: This confirms that we are correctly matching within the Group Title
 	assert.True(t, result, "Stream should be matched by the filter")
+}
+
+func TestFilterThisStream_GroupTitle_Isolation(t *testing.T) {
+	// This test verifies that group-title filters ONLY check the group-title, not the name.
+	// If we search for a word present in the name but NOT in the group-title, it should NOT match.
+
+	// Setup: Create a stream
+	stream := map[string]string{
+		"name":        "National Report",
+		"group-title": "News",
+		"_values":     "National Report News",
+	}
+
+	// Setup: Create a filter looking for "Report" (which is in Name, but not Group)
+	filter := Filter{
+		Type:            "group-title",
+		Rule:            "News {Report}",
+		CaseSensitive:   false,
+		CompiledRule:    "news",
+		CompiledInclude: "report",
+	}
+
+	// Setup: Reset and populate Data.Filter
+	Data.Filter = []Filter{filter}
+
+	// Execute
+	result := FilterThisStream(stream)
+
+	// Assert: Should be False because we check against Group Title ("News"), which does not contain "Report".
+	assert.False(t, result, "Stream should NOT be matched because 'Report' is not in group-title")
 }
 
 func TestFilterThisStream_CustomFilter(t *testing.T) {
