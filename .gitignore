@@ -24,3 +24,7 @@ e2e-streaming-test
 xteve-status
 xteve-inactive
 output.log
+test.log
+test_output.txt
+test_runner
+xteve_otel_test
