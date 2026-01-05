@@ -127,36 +127,21 @@ func TestZipAndExtract_Directory(t *testing.T) {
 		t.Errorf("extractZIP failed: %v", err)
 	}
 
-	// The current zipFiles implementation logic for directories seems to strip the prefix System.Folder.Config
-	// or base dir of System.Folder.Data depending on conditions.
-	// For this unit test, since we aren't mocking System.Folder, the baseDir logic in zipFiles:
-	// "if info.IsDir() { baseDir = filepath.Base(System.Folder.Data) }" might be empty or irrelevant if strictly unit testing.
-	// However, the walk loop: "header.Name = filepath.Join(strings.TrimPrefix(path, System.Folder.Config))"
-	// This relies on System.Folder.Config being set if we want relative paths stripped correctly, OR if it's empty strings.TrimPrefix does nothing.
-	// If System.Folder.Config is empty (default in test), header.Name will be full absolute path if we passed absolute path.
-	// This might cause issues.
-
-	// Let's verify what actually happened.
-	// If zipFiles stored full absolute paths (because System.Folder.Config is empty), extractZIP (with our fix)
-	// should REJECT them if they don't resolve to inside targetDir (which they won't if they are absolute paths elsewhere).
-	// OR if they are absolute paths but inside extractDir? No, absolute paths in zip are usually rejected or treated relative.
-	// Standard zip behavior strips leading slashes.
-
-	// Wait, if zipFiles relies on global System state, we should probably mock it or expect behavior based on it.
-	// But let's see if we can just verify the file existence.
-	// If zipFiles creates archive with "tmp/xteve_zip_dir_source/root.txt", extractZIP might create "extractDir/tmp/xteve_zip_dir_source/root.txt".
-
-	// To make this test robust without depending on global state complexity, we check if files exist *somewhere* under extractDir.
-
 	foundRoot := false
 	foundChild := false
 
-	filepath.Walk(extractDir, func(path string, info os.FileInfo, err error) error {
+	err = filepath.Walk(extractDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
 		if info.IsDir() { return nil }
 		if filepath.Base(path) == "root.txt" { foundRoot = true }
 		if filepath.Base(path) == "child.txt" { foundChild = true }
 		return nil
 	})
+	if err != nil {
+		t.Errorf("filepath.Walk failed: %v", err)
+	}
 
 	if !foundRoot {
 		t.Errorf("Failed to find extracted root.txt")
