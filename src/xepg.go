@@ -224,9 +224,9 @@ func createXEPGMapping() {
 func createXEPGDatabase() (err error) {
 	var allChannelNumbers = make([]float64, 0)
 	Data.Cache.Streams.Active = make([]string, 0)
-	Data.XEPG.Channels = make(map[string]any)
+	Data.XEPG.Channels = make(map[string]XEPGChannelStruct)
 
-	Data.XEPG.Channels, err = loadJSONFileToMap(System.File.XEPG)
+	Data.XEPG.Channels, err = loadXEPGChannels(System.File.XEPG)
 	if err != nil {
 		ShowError(err, 1004)
 		return err
@@ -235,13 +235,7 @@ func createXEPGDatabase() (err error) {
 	showInfo("XEPG:" + "Update database")
 
 	// Delete Channel with missing Channel Numbers.
-	for id, dxc := range Data.XEPG.Channels {
-		var xepgChannel XEPGChannelStruct
-		err = bindToStruct(dxc, &xepgChannel)
-		if err != nil {
-			return
-		}
-
+	for id, xepgChannel := range Data.XEPG.Channels {
 		if len(xepgChannel.XChannelID) == 0 {
 			delete(Data.XEPG.Channels, id)
 		}
@@ -253,13 +247,7 @@ func createXEPGDatabase() (err error) {
 
 	// Make a map of the db channels based on their previously downloaded attributes -- filename, group, title, etc
 	var xepgChannelsValuesMap = make(map[string]XEPGChannelStruct)
-	for _, v := range Data.XEPG.Channels {
-		var channel XEPGChannelStruct
-		err = bindToStruct(v, &channel)
-		if err != nil {
-			return
-		}
-
+	for _, channel := range Data.XEPG.Channels {
 		if len(channel.UpdateChannelNameRegex) > 0 {
 			channel.CompiledNameRegex, err = regexp.Compile(channel.UpdateChannelNameRegex)
 			if err != nil {
@@ -417,11 +405,7 @@ func generateChannelHash(m3uID, name, groupTitle, tvgID, tvgName, uuidKey, uuidV
 
 // processExistingXEPGChannel updates an existing channel in the XEPG database.
 func processExistingXEPGChannel(m3uChannel M3UChannelStructXEPG, currentXEPGID string, channelHasUUID bool) (err error) {
-	var xepgChannel XEPGChannelStruct
-	err = bindToStruct(Data.XEPG.Channels[currentXEPGID], &xepgChannel)
-	if err != nil {
-		return
-	}
+	var xepgChannel = Data.XEPG.Channels[currentXEPGID]
 
 	// Update Streaming URL
 	xepgChannel.URL = m3uChannel.URL
@@ -500,13 +484,7 @@ func processNewXEPGChannel(m3uChannel M3UChannelStructXEPG, allChannelNumbers *[
 func mapping() (err error) {
 	showInfo("XEPG:" + "Map channels")
 
-	for xepgID, dxc := range Data.XEPG.Channels {
-		var xepgChannel XEPGChannelStruct
-		err = bindToStruct(dxc, &xepgChannel)
-		if err != nil {
-			return
-		}
-
+	for xepgID, xepgChannel := range Data.XEPG.Channels {
 		xepgChannel, _ = performAutomaticChannelMapping(xepgChannel, xepgID)
 
 		if Settings.EnableMappedChannels && (xepgChannel.XmltvFile != "-" || xepgChannel.XMapping != "-") {
@@ -728,7 +706,7 @@ func createXMLTVFile() (err error) {
 	}
 
 	if len(Data.XMLTV.Files) == 0 && len(Data.Streams.Active) == 0 {
-		Data.XEPG.Channels = make(map[string]any)
+		Data.XEPG.Channels = make(map[string]XEPGChannelStruct)
 		return
 	}
 
@@ -739,26 +717,20 @@ func createXMLTVFile() (err error) {
 
 	xepgXML.Source = fmt.Sprintf("%s - %s.%s", System.Name, System.Version, System.Build)
 
-	for _, dxc := range Data.XEPG.Channels {
-		var xepgChannel XEPGChannelStruct
-		jsonErr := bindToStruct(dxc, &xepgChannel) // Renamed err to jsonErr
-		if jsonErr == nil {
-			if xepgChannel.XActive {
-				// Create Channel Element
-				channelElement := createChannelElements(xepgChannel, imgc) // Pass the whole imgc *imgcache.Cache
-				xepgXML.Channel = append(xepgXML.Channel, channelElement)
+	for _, xepgChannel := range Data.XEPG.Channels {
+		if xepgChannel.XActive {
+			// Create Channel Element
+			channelElement := createChannelElements(xepgChannel, imgc) // Pass the whole imgc *imgcache.Cache
+			xepgXML.Channel = append(xepgXML.Channel, channelElement)
 
-				// Create Program Elements
-				programElements, progErr := createProgramElements(xepgChannel) // Renamed err to progErr
-				if progErr == nil {
-					xepgXML.Program = append(xepgXML.Program, programElements...)
-				} else {
-					// Handle error from createProgramElements if necessary, e.g., log it
-					ShowError(fmt.Errorf("error creating program elements for channel %s: %v", xepgChannel.XName, progErr), 0)
-				}
+			// Create Program Elements
+			programElements, progErr := createProgramElements(xepgChannel) // Renamed err to progErr
+			if progErr == nil {
+				xepgXML.Program = append(xepgXML.Program, programElements...)
+			} else {
+				// Handle error from createProgramElements if necessary, e.g., log it
+				ShowError(fmt.Errorf("error creating program elements for channel %s: %v", xepgChannel.XName, progErr), 0)
 			}
-		} else {
-			ShowError(fmt.Errorf("error unmarshalling XEPG channel data: %v", jsonErr), 0)
 		}
 	}
 
@@ -1046,12 +1018,7 @@ func cleanupXEPG() {
 	showInfo("XEPG:" + "Cleanup database")
 	Data.XEPG.XEPGCount = 0
 
-	for id, dxc := range Data.XEPG.Channels {
-		var xepgChannel XEPGChannelStruct
-		err := bindToStruct(dxc, &xepgChannel)
-		if err != nil {
-			continue
-		}
+	for id, xepgChannel := range Data.XEPG.Channels {
 		if !slices.Contains(Data.Cache.Streams.Active, xepgChannel.Name+xepgChannel.FileM3UID) {
 			delete(Data.XEPG.Channels, id)
 			continue

@@ -88,10 +88,10 @@ func setupXMLTVTestGlobals() func() {
 
 	Data = DataStruct{
 		XEPG: struct {
-			Channels  map[string]any
+			Channels  map[string]XEPGChannelStruct
 			XEPGCount int64
 		}{
-			Channels: make(map[string]any),
+			Channels: make(map[string]XEPGChannelStruct),
 		},
 		Cache: struct {
 			Images        *imgcache.Cache

@@ -469,24 +469,26 @@ func saveFilter(request RequestStruct) (settings SettingsStruct, err error) {
 
 // Save XEPG Mapping
 func saveXEpgMapping(request RequestStruct) (err error) {
-	var tmp = Data.XEPG
-
 	Data.Cache.Images, err = imgcache.New(System.Folder.ImagesCache, fmt.Sprintf("%s://%s/images/", System.ServerProtocol.WEB, System.Domain), Settings.CacheImages)
 	if err != nil {
 		ShowError(err, 0)
 	}
 
-	err = bindToStruct(request.EpgMapping, &tmp)
+	// request.EpgMapping comes as map[string]any from JSON unmarshal.
+	// We need to convert it to map[string]XEPGChannelStruct.
+	var newChannels = make(map[string]XEPGChannelStruct)
+	err = bindToStruct(request.EpgMapping, &newChannels)
 	if err != nil {
 		return
 	}
 
-	err = saveMapToJSONFile(System.File.XEPG, request.EpgMapping)
+	// Save to file (saveMapToJSONFile handles any, so passing the struct map is fine)
+	err = saveMapToJSONFile(System.File.XEPG, newChannels)
 	if err != nil {
 		return err
 	}
 
-	Data.XEPG.Channels = request.EpgMapping
+	Data.XEPG.Channels = newChannels
 
 	if System.ScanInProgress == 0 {
 		System.ScanInProgress = 1

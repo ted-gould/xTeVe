@@ -137,12 +137,7 @@ func getLineup() (jsonContent []byte, err error) {
 			}
 		}
 	case "XEPG":
-		for _, dxc := range Data.XEPG.Channels {
-			var xepgChannel XEPGChannelStruct
-			err = bindToStruct(dxc, &xepgChannel)
-			if err != nil {
-				return
-			}
+		for _, xepgChannel := range Data.XEPG.Channels {
 
 			if xepgChannel.XActive {
 				var stream LineupStream
