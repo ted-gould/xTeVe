@@ -1320,14 +1320,11 @@ func fetchRemoteMetadata(ctx context.Context, urlStr string) (FileMeta, error) {
 	resp, err := client.Do(req)
 
 	// Check if HEAD succeeded
-	if err == nil && resp.StatusCode == http.StatusOK {
+	if err == nil && resp.StatusCode == http.StatusOK && resp.ContentLength > 0 {
 		defer resp.Body.Close()
 		span.SetAttributes(attribute.Int64("http.response.content_length", resp.ContentLength))
 
 		meta.Size = resp.ContentLength
-		if meta.Size <= 0 {
-			meta.Size = 1 << 40 // 1TB
-		}
 		if lastMod := resp.Header.Get("Last-Modified"); lastMod != "" {
 			if t, err := http.ParseTime(lastMod); err == nil {
 				meta.ModTime = t
@@ -1336,11 +1333,14 @@ func fetchRemoteMetadata(ctx context.Context, urlStr string) (FileMeta, error) {
 		return meta, nil
 	}
 
-	// HEAD failed, clean up and try fallback
+	// HEAD failed or returned no content length, clean up and try fallback
+	if err == nil {
+		resp.Body.Close()
+	}
+
 	if err != nil {
 		span.RecordError(err)
-	} else {
-		resp.Body.Close()
+	} else if resp.StatusCode != http.StatusOK {
 		span.RecordError(fmt.Errorf("status %d", resp.StatusCode))
 	}
 
@@ -1374,8 +1374,35 @@ func fetchRemoteMetadata(ctx context.Context, urlStr string) (FileMeta, error) {
 		cr := resp.Header.Get("Content-Range")
 		parts := strings.Split(cr, "/")
 		if len(parts) == 2 {
-			if total, err := strconv.ParseInt(parts[1], 10, 64); err == nil {
+			totalStr := strings.TrimSpace(parts[1])
+			if total, err := strconv.ParseInt(totalStr, 10, 64); err == nil {
 				meta.Size = total
+			}
+		}
+	}
+
+	// If size is still 0 (unknown or failed parsing), try requesting the last few bytes.
+	// Some servers might not return total size for the first range but might for a suffix range.
+	if meta.Size <= 0 {
+		req, err = http.NewRequestWithContext(ctx, "GET", urlStr, nil)
+		if err == nil {
+			req.Header.Set("User-Agent", Settings.UserAgent)
+			req.Header.Set("Range", "bytes=-1024") // Request last 1KB
+
+			resp, err = client.Do(req)
+			if err == nil {
+				defer resp.Body.Close()
+				if resp.StatusCode == http.StatusPartialContent {
+					cr := resp.Header.Get("Content-Range")
+					parts := strings.Split(cr, "/")
+					if len(parts) == 2 {
+						// Clean up parts[1] (remove spaces, etc)
+						totalStr := strings.TrimSpace(parts[1])
+						if total, err := strconv.ParseInt(totalStr, 10, 64); err == nil {
+							meta.Size = total
+						}
+					}
+				}
 			}
 		}
 	}
