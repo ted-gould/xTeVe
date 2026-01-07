@@ -271,9 +271,16 @@ func createXEPGDatabase() (err error) {
 		var currentXEPGID string   // Current Database ID (XEPG) Used to update the Channel in the Database with the Stream of the M3U
 
 		var m3uChannel M3UChannelStructXEPG
-		err = bindToStruct(dsa, &m3uChannel)
-		if err != nil {
-			return
+
+		// Optimization: Manual assignment for map[string]string avoids JSON overhead
+		if streamMap, ok := dsa.(map[string]string); ok {
+			bindMapToM3UChannelStruct(streamMap, &m3uChannel)
+		} else {
+			// Fallback for other types
+			err = bindToStruct(dsa, &m3uChannel)
+			if err != nil {
+				return
+			}
 		}
 
 		Data.Cache.Streams.Active = append(Data.Cache.Streams.Active, m3uChannel.Name+m3uChannel.FileM3UID)
@@ -1049,4 +1056,54 @@ func cleanupXEPG() {
 func clearXMLTVCache() {
 	Data.Cache.XMLTV = make(map[string]XMLTV)
 	runtime.GC()
+}
+
+// bindMapToM3UChannelStruct manually assigns fields from map[string]string to M3UChannelStructXEPG.
+// This is significantly faster than using bindToStruct (JSON marshal/unmarshal).
+func bindMapToM3UChannelStruct(data map[string]string, target *M3UChannelStructXEPG) {
+	if val, ok := data["_file.m3u.id"]; ok {
+		target.FileM3UID = val
+	}
+	if val, ok := data["_file.m3u.name"]; ok {
+		target.FileM3UName = val
+	}
+	if val, ok := data["_file.m3u.path"]; ok {
+		target.FileM3UPath = val
+	}
+	if val, ok := data["group-title"]; ok {
+		target.GroupTitle = val
+	}
+	if val, ok := data["name"]; ok {
+		target.Name = val
+	}
+	if val, ok := data["tvg-id"]; ok {
+		target.TvgID = val
+	}
+	if val, ok := data["tvg-logo"]; ok {
+		target.TvgLogo = val
+	}
+	if val, ok := data["tvg-name"]; ok {
+		target.TvgName = val
+	}
+	if val, ok := data["tvg-shift"]; ok {
+		target.TvgShift = val
+	}
+	if val, ok := data["url"]; ok {
+		target.URL = val
+	}
+	if val, ok := data["_uuid.key"]; ok {
+		target.UUIDKey = val
+	}
+	if val, ok := data["_uuid.value"]; ok {
+		target.UUIDValue = val
+	}
+	if val, ok := data["_values"]; ok {
+		target.Values = val
+	}
+	if val, ok := data["_preserve-mapping"]; ok {
+		target.PreserveMapping = val
+	}
+	if val, ok := data["_starting-channel"]; ok {
+		target.StartingChannel = val
+	}
 }
