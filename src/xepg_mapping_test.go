@@ -60,10 +60,10 @@ func setupMappingTestGlobals() func() {
 			Mapping: make(map[string]any),
 		},
 		XEPG: struct {
-			Channels  map[string]any
+			Channels  map[string]XEPGChannelStruct
 			XEPGCount int64
 		}{
-			Channels: make(map[string]any),
+			Channels: make(map[string]XEPGChannelStruct),
 		},
 		// Initialize other Data fields if necessary for the functions under test
 	}

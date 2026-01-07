@@ -149,7 +149,7 @@ type DataStruct struct {
 	}
 
 	XEPG struct {
-		Channels  map[string]any
+		Channels  map[string]XEPGChannelStruct
 		XEPGCount int64
 	}
 }

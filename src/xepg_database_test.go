@@ -56,7 +56,7 @@ func setupGlobalStateForTest() func() {
 
 	// Initialize Data with a fresh DataStruct structure for each test.
 	var freshData DataStruct
-	freshData.XEPG.Channels = make(map[string]any)
+	freshData.XEPG.Channels = make(map[string]XEPGChannelStruct)
 	// The following map initializations are important if the functions under test
 	// (or helpers they call like loadJSONFileToMap) expect non-nil maps.
 	// loadJSONFileToMap in the original code initializes Data.Cache.XMLTV if it's nil,
@@ -86,7 +86,7 @@ func TestGenerateNewXEPGID(t *testing.T) {
 	defer teardown()
 
 	// Test sequence by explicitly adding to Data.XEPG.Channels
-	Data.XEPG.Channels = make(map[string]any) // Ensure clean start for this test
+	Data.XEPG.Channels = make(map[string]XEPGChannelStruct) // Ensure clean start for this test
 	expectedIDs := []string{"x-ID.0", "x-ID.1", "x-ID.2"}
 	for _, expectedID := range expectedIDs {
 		id := generateNewXEPGID()
@@ -378,7 +378,7 @@ func TestProcessNewXEPGChannel(t *testing.T) {
 	}
 
 	// Test Case 1: PreserveMapping = "true"
-	Data.XEPG.Channels = make(map[string]any)
+	Data.XEPG.Channels = make(map[string]XEPGChannelStruct)
 	processNewXEPGChannel(m3uChannel, &allChannelNumbers)
 
 	if len(Data.XEPG.Channels) != 1 {
@@ -438,7 +438,7 @@ func TestProcessNewXEPGChannel(t *testing.T) {
 		PreserveMapping: "false",
 		TvgShift:        "",
 	}
-	Data.XEPG.Channels = make(map[string]any)
+	Data.XEPG.Channels = make(map[string]XEPGChannelStruct)
 	allChannelNumbers = []float64{}
 	processNewXEPGChannel(m3uChannel2, &allChannelNumbers)
 
@@ -485,7 +485,7 @@ func TestProcessNewXEPGChannel(t *testing.T) {
 		Name:            "Test Channel 3",
 		PreserveMapping: "false",
 	}
-	Data.XEPG.Channels = make(map[string]any)
+	Data.XEPG.Channels = make(map[string]XEPGChannelStruct)
 	allChannelNumbers = []float64{}
 	Settings.MappingFirstChannel = 3000
 	processNewXEPGChannel(m3uChannel3, &allChannelNumbers)

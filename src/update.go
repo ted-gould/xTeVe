@@ -78,7 +78,7 @@ checkVersion:
 			// Database verison <= 2.1.1 has broken XEPG mapping
 
 			// Clear XEPG mapping
-			Data.XEPG.Channels = make(map[string]any)
+			Data.XEPG.Channels = make(map[string]XEPGChannelStruct)
 			Data.XEPG.XEPGCount = 0
 			Data.Cache.Streams = struct{ Active []string }{}
 
