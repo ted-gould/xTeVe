@@ -1374,7 +1374,8 @@ func fetchRemoteMetadata(ctx context.Context, urlStr string) (FileMeta, error) {
 		cr := resp.Header.Get("Content-Range")
 		parts := strings.Split(cr, "/")
 		if len(parts) == 2 {
-			if total, err := strconv.ParseInt(parts[1], 10, 64); err == nil {
+			totalStr := strings.TrimSpace(parts[1])
+			if total, err := strconv.ParseInt(totalStr, 10, 64); err == nil {
 				meta.Size = total
 			}
 		}
@@ -1395,7 +1396,9 @@ func fetchRemoteMetadata(ctx context.Context, urlStr string) (FileMeta, error) {
 					cr := resp.Header.Get("Content-Range")
 					parts := strings.Split(cr, "/")
 					if len(parts) == 2 {
-						if total, err := strconv.ParseInt(parts[1], 10, 64); err == nil {
+						// Clean up parts[1] (remove spaces, etc)
+						totalStr := strings.TrimSpace(parts[1])
+						if total, err := strconv.ParseInt(totalStr, 10, 64); err == nil {
 							meta.Size = total
 						}
 					}
