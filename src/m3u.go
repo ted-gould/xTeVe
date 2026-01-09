@@ -46,6 +46,12 @@ func FilterThisStream(s any) (status bool) {
 		rawStreamValues = strings.Replace(rawStreamValues, "\r", "", -1)
 	}
 
+	// Lazy initialization vars
+	var lowerStreamGroup string
+	var lowerStreamValues string
+	var lowerStreamGroupInit bool
+	var lowerStreamValuesInit bool
+
 	for _, filter := range Data.Filter {
 		if filter.Rule == "" {
 			continue
@@ -61,10 +67,18 @@ func FilterThisStream(s any) (status bool) {
 		// Apply case insensitivity if needed
 		if !filter.CaseSensitive {
 			if streamGroupOK {
-				effectiveStreamGroup = strings.ToLower(rawStreamGroup)
+				if !lowerStreamGroupInit {
+					lowerStreamGroup = strings.ToLower(rawStreamGroup)
+					lowerStreamGroupInit = true
+				}
+				effectiveStreamGroup = lowerStreamGroup
 			}
 			if streamValuesOK {
-				effectiveStreamValues = strings.ToLower(rawStreamValues)
+				if !lowerStreamValuesInit {
+					lowerStreamValues = strings.ToLower(rawStreamValues)
+					lowerStreamValuesInit = true
+				}
+				effectiveStreamValues = lowerStreamValues
 			}
 		}
 
