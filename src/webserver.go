@@ -14,6 +14,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"xteve/src/internal/authentication"
@@ -373,6 +374,57 @@ func DataImages(w http.ResponseWriter, r *http.Request) {
 	if _, writeErr := w.Write(content); writeErr != nil {
 		log.Printf("Error writing image response in DataImages handler: %v", writeErr)
 	}
+}
+
+// Rate Limiter for Login
+var loginRateLimiter = struct {
+	sync.Mutex
+	attempts map[string]int
+	lastSeen map[string]time.Time
+}{
+	attempts: make(map[string]int),
+	lastSeen: make(map[string]time.Time),
+}
+
+// checkLoginRateLimit implements a simple sliding window rate limiter.
+// Note: It relies on IP address. If xTeVe is behind a reverse proxy, all users might appear
+// as the same IP (the proxy) unless the proxy transparency is handled elsewhere (not currently in xTeVe).
+func checkLoginRateLimit(ip string) bool {
+	loginRateLimiter.Lock()
+	defer loginRateLimiter.Unlock()
+
+	// Prevent memory leak: if map gets too big, clear old entries
+	if len(loginRateLimiter.attempts) > 1000 {
+		for k, t := range loginRateLimiter.lastSeen {
+			if time.Since(t) > 10*time.Minute {
+				delete(loginRateLimiter.attempts, k)
+				delete(loginRateLimiter.lastSeen, k)
+			}
+		}
+		// Hard limit fallback
+		if len(loginRateLimiter.attempts) > 2000 {
+			loginRateLimiter.attempts = make(map[string]int)
+			loginRateLimiter.lastSeen = make(map[string]time.Time)
+		}
+	}
+
+	// Simple heuristic: reset count if last attempt was > 5 mins ago
+	if time.Since(loginRateLimiter.lastSeen[ip]) > 5*time.Minute {
+		loginRateLimiter.attempts[ip] = 0
+	}
+
+	loginRateLimiter.lastSeen[ip] = time.Now()
+	loginRateLimiter.attempts[ip]++
+
+	return loginRateLimiter.attempts[ip] <= 10
+}
+
+func getClientIP(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
 }
 
 // WS : Web Sockets /ws/
@@ -754,6 +806,11 @@ func Web(w http.ResponseWriter, r *http.Request) {
 			var username, password, confirm string
 			switch r.Method {
 			case "POST":
+				if !checkLoginRateLimit(getClientIP(r)) {
+					httpStatusError(w, r, http.StatusTooManyRequests)
+					return
+				}
+
 				var allUsers, _ = authentication.GetAllUserData()
 
 				username = r.FormValue("username")
@@ -970,6 +1027,10 @@ func API(w http.ResponseWriter, r *http.Request) {
 		switch len(request.Token) {
 		case 0:
 			if request.Cmd == "login" {
+				if !checkLoginRateLimit(getClientIP(r)) {
+					responseAPIError(errors.New("too many login attempts"))
+					return
+				}
 				token, err = authentication.UserAuthentication(request.Username, request.Password)
 				if err != nil {
 					responseAPIError(err)
