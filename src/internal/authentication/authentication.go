@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 )
 
@@ -22,13 +23,19 @@ var database string
 
 var databaseFile = "authentication.json"
 
-var data = make(map[string]any)
-var tokens = make(map[string]any)
+var (
+	data   = make(map[string]any)
+	tokens = make(map[string]any)
+	mu     sync.RWMutex // Protects data and tokens
+)
 
 var initAuthentication = false
 
 // Init : databasePath = Path to authentication.json
 func Init(databasePath string, validity int) (err error) {
+	mu.Lock()
+	defer mu.Unlock()
+
 	database = filepath.Dir(databasePath) + string(os.PathSeparator) + databaseFile
 
 	// Check if the database already exists
@@ -55,6 +62,9 @@ func Init(databasePath string, validity int) (err error) {
 
 // CreateDefaultUser = created efault user
 func CreateDefaultUser(username, password string) (err error) {
+	mu.Lock()
+	defer mu.Unlock()
+
 	err = checkInit()
 	if err != nil {
 		return
@@ -88,6 +98,9 @@ func CreateDefaultUser(username, password string) (err error) {
 
 // CreateNewUser : create new user
 func CreateNewUser(username, password string) (userID string, err error) {
+	mu.Lock()
+	defer mu.Unlock()
+
 	err = checkInit()
 	if err != nil {
 		return
@@ -164,6 +177,9 @@ func CreateNewUser(username, password string) (userID string, err error) {
 
 // UserAuthentication : user authentication
 func UserAuthentication(username, password string) (token string, err error) {
+	mu.Lock()
+	defer mu.Unlock()
+
 	err = checkInit()
 	if err != nil {
 		return
@@ -251,6 +267,9 @@ func UserAuthentication(username, password string) (token string, err error) {
 
 // CheckTheValidityOfTheToken : check token
 func CheckTheValidityOfTheToken(token string) (newToken string, err error) {
+	mu.Lock()
+	defer mu.Unlock()
+
 	err = checkInit()
 	if err != nil {
 		return
@@ -291,6 +310,9 @@ func CheckTheValidityOfTheToken(token string) (newToken string, err error) {
 
 // GetUserID : get user ID
 func GetUserID(token string) (userID string, err error) {
+	mu.RLock()
+	defer mu.RUnlock()
+
 	err = checkInit()
 	if err != nil {
 		return
@@ -324,6 +346,9 @@ func GetUserID(token string) (userID string, err error) {
 
 // WriteUserData : save user date
 func WriteUserData(userID string, userData map[string]any) (err error) {
+	mu.Lock()
+	defer mu.Unlock()
+
 	err = checkInit()
 	if err != nil {
 		return
@@ -342,6 +367,9 @@ func WriteUserData(userID string, userData map[string]any) (err error) {
 
 // ReadUserData : load user date
 func ReadUserData(userID string) (userData map[string]any, err error) {
+	mu.RLock()
+	defer mu.RUnlock()
+
 	err = checkInit()
 	if err != nil {
 		return
@@ -362,6 +390,9 @@ func ReadUserData(userID string) (userData map[string]any, err error) {
 
 // RemoveUser : remove user
 func RemoveUser(userID string) (err error) {
+	mu.Lock()
+	defer mu.Unlock()
+
 	err = checkInit()
 	if err != nil {
 		return
@@ -383,6 +414,11 @@ func RemoveUser(userID string) (err error) {
 
 // SetDefaultUserData : set default user data
 func SetDefaultUserData(defaults map[string]any) (err error) {
+	// WARNING: This function calls other functions that acquire locks.
+	// Since standard sync.Mutex is not reentrant, we need to be careful.
+	// GetAllUserData and WriteUserData both acquire locks.
+	// We should NOT acquire lock here if we call those.
+
 	allUserData, err := GetAllUserData()
 	if err != nil {
 		return err // Propagate error from GetAllUserData
@@ -411,6 +447,7 @@ func SetDefaultUserData(defaults map[string]any) (err error) {
 				userDataMap[k] = v
 			}
 		}
+		// WriteUserData acquires Lock, so this is safe to call from here (as we don't hold lock)
 		err = WriteUserData(userID, userDataMap)
 		if err != nil {
 			return err // Propagate error from WriteUserData
@@ -421,6 +458,9 @@ func SetDefaultUserData(defaults map[string]any) (err error) {
 
 // ChangeCredentials : change credentials
 func ChangeCredentials(userID, username, password string) (err error) {
+	mu.Lock()
+	defer mu.Unlock()
+
 	err = checkInit()
 	if err != nil {
 		return
@@ -474,6 +514,9 @@ func ChangeCredentials(userID, username, password string) (err error) {
 
 // GetAllUserData : get all user data
 func GetAllUserData() (allUserData map[string]any, err error) {
+	mu.Lock() // Using Lock because we might write to data if len(data) == 0
+	defer mu.Unlock()
+
 	err = checkInit()
 	if err != nil {
 		return
@@ -502,6 +545,9 @@ func GetAllUserData() (allUserData map[string]any, err error) {
 
 // CheckTheValidityOfTheTokenFromHTTPHeader : get token from HTTP header
 func CheckTheValidityOfTheTokenFromHTTPHeader(w http.ResponseWriter, r *http.Request, secure bool) (writer http.ResponseWriter, newToken string, err error) {
+	// This function calls CheckTheValidityOfTheToken which acquires a Lock.
+	// It doesn't access shared state directly itself, so no lock needed here.
+
 	err = createError(011) // Default error if token is not found or invalid
 	for _, cookie := range r.Cookies() {
 		if cookie.Name == "Token" {
@@ -533,6 +579,7 @@ func checkInit() (err error) {
 	return
 }
 
+// saveDatabase must be called with lock held
 func saveDatabase(tmpMap any) (err error) {
 	jsonString, err := json.MarshalIndent(tmpMap, "", "  ")
 
@@ -547,6 +594,7 @@ func saveDatabase(tmpMap any) (err error) {
 	return
 }
 
+// loadDatabase must be called with lock held
 func loadDatabase() (err error) {
 	jsonString, err := os.ReadFile(database)
 	if err != nil {
@@ -664,6 +712,7 @@ func defaultsForNewUser(username, password string) (map[string]any, error) {
 	return defaults, nil
 }
 
+// setToken must be called with lock held
 func setToken(id, oldToken string) (newToken string, err error) {
 	delete(tokens, oldToken)
 loopToken:
