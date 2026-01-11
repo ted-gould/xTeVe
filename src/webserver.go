@@ -1075,6 +1075,7 @@ func API(w http.ResponseWriter, r *http.Request) {
 		response.OtelExporterType = os.Getenv("OTEL_EXPORTER_TYPE")
 		response.OtelExporterEndpoint = os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
 
+		Lock.RLock()
 		BufferInformation.Range(func(k, v any) bool {
 			if playlist, ok := v.(*Playlist); ok {
 				response.TunerActive += int64(len(playlist.Streams))
@@ -1082,6 +1083,7 @@ func API(w http.ResponseWriter, r *http.Request) {
 			}
 			return true
 		})
+		Lock.RUnlock()
 		log.Printf("API Status: Found %d active tuners.", response.TunerActive)
 	case "update.m3u":
 		err = getProviderData(context.WithoutCancel(r.Context()), "m3u", "")
