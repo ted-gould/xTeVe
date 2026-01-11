@@ -199,17 +199,36 @@ func buildM3U(groups []string) (m3u string, err error) {
 	}
 
 	// Sort channels by numeric channel ID
-	slices.SortFunc(m3uChannelsForSort, func(a, b XEPGChannelStruct) int {
-		numA, _ := strconv.ParseFloat(a.XChannelID, 64)
-		numB, _ := strconv.ParseFloat(b.XChannelID, 64)
-		if numA < numB {
+	// Optimize: Pre-parse channel numbers to avoid repeated parsing during sort (O(n) vs O(n log n) parsing)
+	type channelWithNum struct {
+		channel *XEPGChannelStruct
+		num     float64
+	}
+
+	tempChannels := make([]channelWithNum, 0, len(m3uChannelsForSort))
+	for i := range m3uChannelsForSort {
+		num, _ := strconv.ParseFloat(m3uChannelsForSort[i].XChannelID, 64)
+		tempChannels = append(tempChannels, channelWithNum{
+			channel: &m3uChannelsForSort[i],
+			num:     num,
+		})
+	}
+
+	slices.SortFunc(tempChannels, func(a, b channelWithNum) int {
+		if a.num < b.num {
 			return -1
 		}
-		if numA > numB {
+		if a.num > b.num {
 			return 1
 		}
 		return 0
 	})
+
+	// Rebuild m3uChannelsForSort from sorted tempChannels
+	m3uChannelsForSort = make([]XEPGChannelStruct, len(tempChannels))
+	for i, tc := range tempChannels {
+		m3uChannelsForSort[i] = *tc.channel
+	}
 
 	// Create M3U Content
 	var xmltvURL = fmt.Sprintf("%s://%s/xmltv/xteve.xml", System.ServerProtocol.XML, System.Domain)
