@@ -39,7 +39,7 @@ func init() {
 }
 
 // StartWebserver : Start the Webserver
-func StartWebserver() (err error) {
+func StartWebserver(startupSpan trace.Span) (err error) {
 	for {
 		showInfo("Web server:" + "Starting")
 
@@ -58,6 +58,9 @@ func StartWebserver() (err error) {
 		var port = Settings.Port
 		server := http.Server{Addr: ":" + port, Handler: newHTTPHandler()}
 
+		currentSpan := startupSpan
+		startupSpan = nil
+
 		go func() {
 			var err error
 
@@ -68,12 +71,20 @@ func StartWebserver() (err error) {
 					}
 				}
 
+				if currentSpan != nil {
+					currentSpan.End()
+				}
+
 				err = server.ListenAndServeTLS(System.File.ServerCert, System.File.ServerCertPrivKey)
 				if err != nil && err != http.ErrServerClosed {
 					ShowError(err, 1017)
 					err = server.ListenAndServe()
 				}
 			} else {
+				if currentSpan != nil {
+					currentSpan.End()
+				}
+
 				err = server.ListenAndServe()
 			}
 
