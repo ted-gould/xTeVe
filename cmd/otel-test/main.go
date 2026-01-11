@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -13,10 +15,11 @@ import (
 
 // TraceCollector listens for OTLP traces.
 type TraceCollector struct {
-	mu          sync.Mutex
-	traceCount  int
-	server      *http.Server
-	port        int
+	mu                   sync.Mutex
+	traceCount           int
+	startupTraceReceived bool
+	server               *http.Server
+	port                 int
 }
 
 func (tc *TraceCollector) Start() error {
@@ -55,8 +58,21 @@ func (tc *TraceCollector) handleTraces(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	r.Body.Close()
+
+	// Crude check for "startup" trace name in the protobuf/json payload
+	if bytes.Contains(body, []byte("startup")) {
+		tc.mu.Lock()
+		tc.startupTraceReceived = true
+		tc.mu.Unlock()
+	}
+
 	// Simply count the request as a received trace batch
-	// In a real scenario, we might parse the JSON to verify content
 	tc.mu.Lock()
 	tc.traceCount++
 	tc.mu.Unlock()
@@ -177,12 +193,16 @@ func waitForServerReady(url string) error {
 func waitForTraces(collector *TraceCollector) error {
 	// Wait up to 10 seconds for traces
 	for i := 0; i < 20; i++ {
-		count := collector.GetTraceCount()
-		if count > 0 {
-			fmt.Printf("Received %d traces.\n", count)
+		collector.mu.Lock()
+		received := collector.startupTraceReceived
+		count := collector.traceCount
+		collector.mu.Unlock()
+
+		if received {
+			fmt.Printf("Received %d traces, including startup trace.\n", count)
 			return nil
 		}
 		time.Sleep(500 * time.Millisecond)
 	}
-	return fmt.Errorf("no traces received after timeout")
+	return fmt.Errorf("startup trace not received after timeout")
 }

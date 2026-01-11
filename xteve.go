@@ -21,6 +21,8 @@ import (
 	"xteve/src"
 	"xteve/src/snap"
 	"xteve/src/tracing"
+
+	"go.opentelemetry.io/otel"
 )
 
 // Name : Program Name
@@ -106,6 +108,8 @@ func run() (err error) {
 	defer func() {
 		err = errors.Join(err, otelShutdown(context.Background()))
 	}()
+
+	ctx, startupSpan := otel.Tracer("xteve").Start(ctx, "startup")
 
 	// Panic
 	defer func() {
@@ -215,7 +219,7 @@ func run() (err error) {
 	}
 
 	go func() {
-		if err := src.StartWebserver(); err != nil {
+		if err := src.StartWebserver(startupSpan); err != nil {
 			src.ShowError(err, 0)
 			os.Exit(0)
 		}
