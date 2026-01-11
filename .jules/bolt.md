@@ -1,3 +1,3 @@
-# Bolt's Journal
-
-This journal tracks critical performance learnings, anti-patterns, and insights specific to the xTeVe codebase.
+## 2026-01-11 - In-place Sorting with Pointers
+**Learning:** When sorting a slice using a temporary helper structure with pointers to the original elements, NEVER rebuild the original slice in-place by dereferencing those pointers. If you overwrite the original slice while reading from it (via pointers), you will corrupt the data because the pointers refer to memory locations that are being modified.
+**Action:** Always allocate a new slice for the result when rebuilding from a temporary sorted structure that points to the original data, or use indices carefully if you must do it in-place (though swapping large structs is expensive anyway).
