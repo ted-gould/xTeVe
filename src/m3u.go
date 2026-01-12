@@ -128,13 +128,9 @@ func checkConditions(streamValues string, conditions []string, coType string) (s
 		status = false
 	}
 
-	// Pad streamValues to handle matches at the beginning or end of the string.
-	// This ensures that we are matching whole words or phrases.
-	paddedStreamValues := " " + streamValues + " "
-
-	// Key is already pre-padded in createFilterRules to avoid allocation in this loop
-	for _, paddedKey := range conditions {
-		if strings.Contains(paddedStreamValues, paddedKey) {
+	// Iterate over conditions and check for whole word matches without allocation
+	for _, key := range conditions {
+		if containsWholeWord(streamValues, key) {
 			switch coType {
 			case "exclude":
 				return false // Exclude if the exact phrase is found
@@ -145,6 +141,36 @@ func checkConditions(streamValues string, conditions []string, coType string) (s
 	}
 
 	return
+}
+
+// containsWholeWord checks if substr exists in s as a whole word (surrounded by spaces or boundaries)
+// This implementation avoids memory allocation (no string concatenation)
+func containsWholeWord(s, substr string) bool {
+	if substr == "" {
+		return false
+	}
+
+	start := 0
+	for {
+		idx := strings.Index(s[start:], substr)
+		if idx == -1 {
+			return false
+		}
+		actualIdx := start + idx
+
+		// Check boundary before
+		isStartOK := actualIdx == 0 || s[actualIdx-1] == ' '
+
+		// Check boundary after
+		endIdx := actualIdx + len(substr)
+		isEndOK := endIdx == len(s) || s[endIdx] == ' '
+
+		if isStartOK && isEndOK {
+			return true
+		}
+
+		start = actualIdx + 1
+	}
 }
 
 // Create xTeVe M3U file
