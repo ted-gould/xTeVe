@@ -779,11 +779,11 @@ func createFilterRules() (err error) {
 				inc = strings.Replace(inc, ", ", ",", -1)
 				inc = strings.Replace(inc, " ,", ",", -1)
 				rawParts := strings.Split(inc, ",")
-				// Pre-pad keywords to avoid allocation in hot loops
+				// Pre-parse keywords to avoid allocation in hot loops
 				dataFilter.PreparsedInclude = make([]string, 0, len(rawParts))
 				for _, p := range rawParts {
 					if p != "" {
-						dataFilter.PreparsedInclude = append(dataFilter.PreparsedInclude, " "+p+" ")
+						dataFilter.PreparsedInclude = append(dataFilter.PreparsedInclude, p)
 					}
 				}
 			}
@@ -794,11 +794,11 @@ func createFilterRules() (err error) {
 				exc = strings.Replace(exc, ", ", ",", -1)
 				exc = strings.Replace(exc, " ,", ",", -1)
 				rawParts := strings.Split(exc, ",")
-				// Pre-pad keywords to avoid allocation in hot loops
+				// Pre-parse keywords to avoid allocation in hot loops
 				dataFilter.PreparsedExclude = make([]string, 0, len(rawParts))
 				for _, p := range rawParts {
 					if p != "" {
-						dataFilter.PreparsedExclude = append(dataFilter.PreparsedExclude, " "+p+" ")
+						dataFilter.PreparsedExclude = append(dataFilter.PreparsedExclude, p)
 					}
 				}
 			}
