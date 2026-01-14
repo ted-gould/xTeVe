@@ -18,6 +18,17 @@ func uploadLogo(input, filename string) (logoURL string, err error) {
 
 	// Sanitize filename to prevent path traversal
 	filename = filepath.Base(filename)
+
+	// Security: Validate file extension
+	ext := strings.ToLower(filepath.Ext(filename))
+	switch ext {
+	case ".jpg", ".jpeg", ".png", ".gif", ".svg", ".ico":
+		// Allowed
+	default:
+		err = fmt.Errorf("invalid file extension: %s", ext)
+		return
+	}
+
 	var file = fmt.Sprintf("%s%s", System.Folder.ImagesUpload, filename)
 
 	err = writeByteToFile(file, sDec)
