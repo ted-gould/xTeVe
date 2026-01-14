@@ -29,7 +29,7 @@ func TestFilterThisStream_GroupTitle_Bug(t *testing.T) {
 		CaseSensitive:    false,
 		CompiledRule:     "news",
 		CompiledInclude:  "news",
-		PreparsedInclude: []string{" news "},
+		PreparsedInclude: []string{"news"},
 	}
 
 	// Setup: Reset and populate Data.Filter
@@ -173,7 +173,7 @@ func TestFilterThisStream_ExcludeExactPhrase(t *testing.T) {
 		CaseSensitive:    false,
 		CompiledRule:     "news",
 		CompiledExclude:  "cspan 2",
-		PreparsedExclude: []string{" cspan 2 "},
+		PreparsedExclude: []string{"cspan 2"},
 	}
 	Data.Filter = []Filter{filter}
 
