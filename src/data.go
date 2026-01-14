@@ -783,7 +783,7 @@ func createFilterRules() (err error) {
 				dataFilter.PreparsedInclude = make([]string, 0, len(rawParts))
 				for _, p := range rawParts {
 					if p != "" {
-						dataFilter.PreparsedInclude = append(dataFilter.PreparsedInclude, " "+p+" ")
+						dataFilter.PreparsedInclude = append(dataFilter.PreparsedInclude, p)
 					}
 				}
 			}
@@ -798,7 +798,7 @@ func createFilterRules() (err error) {
 				dataFilter.PreparsedExclude = make([]string, 0, len(rawParts))
 				for _, p := range rawParts {
 					if p != "" {
-						dataFilter.PreparsedExclude = append(dataFilter.PreparsedExclude, " "+p+" ")
+						dataFilter.PreparsedExclude = append(dataFilter.PreparsedExclude, p)
 					}
 				}
 			}

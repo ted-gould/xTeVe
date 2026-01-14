@@ -128,13 +128,12 @@ func checkConditions(streamValues string, conditions []string, coType string) (s
 		status = false
 	}
 
-	// Pad streamValues to handle matches at the beginning or end of the string.
-	// This ensures that we are matching whole words or phrases.
-	paddedStreamValues := " " + streamValues + " "
+	// We used to pad streamValues with spaces to perform whole-word matching via strings.Contains.
+	// This was causing memory allocations in the hot loop.
+	// Now we use containsWholeWord to check for the key with word boundaries without allocation.
 
-	// Key is already pre-padded in createFilterRules to avoid allocation in this loop
-	for _, paddedKey := range conditions {
-		if strings.Contains(paddedStreamValues, paddedKey) {
+	for _, key := range conditions {
+		if containsWholeWord(streamValues, key) {
 			switch coType {
 			case "exclude":
 				return false // Exclude if the exact phrase is found
@@ -145,6 +144,42 @@ func checkConditions(streamValues string, conditions []string, coType string) (s
 	}
 
 	return
+}
+
+// containsWholeWord checks if substr exists in s as a whole word.
+// A whole word is defined as being surrounded by spaces or string boundaries.
+// This function avoids allocating new strings.
+func containsWholeWord(s, substr string) bool {
+	if substr == "" {
+		return false
+	}
+
+	start := 0
+	for {
+		idx := strings.Index(s[start:], substr)
+		if idx == -1 {
+			return false
+		}
+		idx += start // Adjust index to original string
+
+		// Check boundaries
+		// Start boundary: Start of string OR preceding character is a space
+		isStartBound := idx == 0 || s[idx-1] == ' '
+		// End boundary: End of string OR following character is a space
+		isEndBound := idx+len(substr) == len(s) || s[idx+len(substr)] == ' '
+
+		if isStartBound && isEndBound {
+			return true
+		}
+
+		// Move start forward to continue searching
+		// We can advance by 1.
+		// Optimization: We could advance by idx + 1
+		start = idx + 1
+		if start >= len(s) {
+			return false
+		}
+	}
 }
 
 // Create xTeVe M3U file
