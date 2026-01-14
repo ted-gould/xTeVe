@@ -27,7 +27,7 @@ func TestUploadLogoPathTraversal(t *testing.T) {
 	System.Domain = "localhost:34400"
 
 	// Define the target file outside the upload directory
-	targetFilename := "traversal_test.txt"
+	targetFilename := "traversal_test.png" // Changed to .png to satisfy extension check
 	targetPath := filepath.Join(tempDir, targetFilename)
 
 	// Construct a filename that uses path traversal to reach targetPath
