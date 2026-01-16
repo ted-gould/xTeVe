@@ -141,17 +141,15 @@ func urlAuth(r *http.Request, requestType string) (err error) {
 }
 
 func checkAuthorizationLevel(token, level string) (err error) {
-	var authenticationErr = func(err error) {
-		if err != nil {
-			return
-		}
+	userID, err := authentication.GetUserID(token)
+	if err != nil {
+		return err
 	}
 
-	userID, err := authentication.GetUserID(token)
-	authenticationErr(err)
-
 	userData, err := authentication.ReadUserData(userID)
-	authenticationErr(err)
+	if err != nil {
+		return err
+	}
 
 	if len(userData) > 0 {
 		if v, ok := userData[level].(bool); ok {

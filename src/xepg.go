@@ -858,6 +858,11 @@ func getProgramData(xepgChannel XEPGChannelStruct) (xepgXML XMLTV, err error) {
 		}
 	}
 
+	// Pre-calculate uppercase channel name to avoid repeated calls in getVideo
+	// and extract other fields to avoid passing the whole struct
+	upperChannelName := strings.ToUpper(xepgChannel.XName)
+	xCategory := xepgChannel.XCategory
+
 	for _, xmltvProgram := range programs {
 		// No need to check channelID match again, index guarantees it
 		var program = &Program{}
@@ -894,7 +899,7 @@ func getProgramData(xepgChannel XEPGChannelStruct) (xepgXML XMLTV, err error) {
 		program.Desc = xmltvProgram.Desc
 
 		// Category
-		getCategory(program, xmltvProgram, xepgChannel)
+		getCategory(program, xmltvProgram, xCategory)
 
 		// Credits
 		program.Credits = xmltvProgram.Credits
@@ -915,10 +920,10 @@ func getProgramData(xepgChannel XEPGChannelStruct) (xepgXML XMLTV, err error) {
 		program.Language = xmltvProgram.Language
 
 		// Episodes numbers
-		getEpisodeNum(program, xmltvProgram, xepgChannel)
+		getEpisodeNum(program, xmltvProgram, xCategory)
 
 		// Video
-		getVideo(program, xmltvProgram, xepgChannel)
+		getVideo(program, xmltvProgram, upperChannelName)
 
 		// Date
 		program.Date = xmltvProgram.Date
@@ -994,7 +999,7 @@ func createDummyProgram(xepgChannel XEPGChannelStruct) (dummyXMLTV XMLTV) {
 }
 
 // Expand Categories (createXMLTVFile)
-func getCategory(program *Program, xmltvProgram *Program, xepgChannel XEPGChannelStruct) {
+func getCategory(program *Program, xmltvProgram *Program, xCategory string) {
 	for _, i := range xmltvProgram.Category {
 		category := &Category{}
 		category.Value = i.Value
@@ -1002,9 +1007,9 @@ func getCategory(program *Program, xmltvProgram *Program, xepgChannel XEPGChanne
 		program.Category = append(program.Category, category)
 	}
 
-	if len(xepgChannel.XCategory) > 0 {
+	if len(xCategory) > 0 {
 		category := &Category{}
-		category.Value = xepgChannel.XCategory
+		category.Value = xCategory
 		category.Lang = "en"
 		program.Category = append(program.Category, category)
 	}
@@ -1029,10 +1034,10 @@ func getPoster(program *Program, xmltvProgram *Program) {
 }
 
 // Apply Episode system, if none is available and a Category has been set in the mapping, an Episode is created
-func getEpisodeNum(program *Program, xmltvProgram *Program, xepgChannel XEPGChannelStruct) {
+func getEpisodeNum(program *Program, xmltvProgram *Program, xCategory string) {
 	program.EpisodeNum = xmltvProgram.EpisodeNum
 
-	if len(xepgChannel.XCategory) > 0 && xepgChannel.XCategory != "Movie" {
+	if len(xCategory) > 0 && xCategory != "Movie" {
 		if len(xmltvProgram.EpisodeNum) == 0 {
 			var timeLayout = "20060102150405"
 			t, err := time.Parse(timeLayout, strings.Split(xmltvProgram.Start, " ")[0])
@@ -1046,7 +1051,7 @@ func getEpisodeNum(program *Program, xmltvProgram *Program, xepgChannel XEPGChan
 }
 
 // Create Video Parameters (createXMLTVFile)
-func getVideo(program *Program, xmltvProgram *Program, xepgChannel XEPGChannelStruct) {
+func getVideo(program *Program, xmltvProgram *Program, channelNameUpper string) {
 	var video Video
 	video.Present = xmltvProgram.Video.Present
 	video.Colour = xmltvProgram.Video.Colour
@@ -1054,10 +1059,10 @@ func getVideo(program *Program, xmltvProgram *Program, xepgChannel XEPGChannelSt
 	video.Quality = xmltvProgram.Video.Quality
 
 	if len(xmltvProgram.Video.Quality) == 0 {
-		if strings.Contains(strings.ToUpper(xepgChannel.XName), " HD") || strings.Contains(strings.ToUpper(xepgChannel.XName), " FHD") {
+		if strings.Contains(channelNameUpper, " HD") || strings.Contains(channelNameUpper, " FHD") {
 			video.Quality = "HDTV"
 		}
-		if strings.Contains(strings.ToUpper(xepgChannel.XName), " UHD") || strings.Contains(strings.ToUpper(xepgChannel.XName), " 4K") {
+		if strings.Contains(channelNameUpper, " UHD") || strings.Contains(channelNameUpper, " 4K") {
 			video.Quality = "UHDTV"
 		}
 	}
