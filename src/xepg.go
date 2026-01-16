@@ -14,9 +14,17 @@ import (
 	"encoding/hex"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"xteve/src/internal/imgcache"
+)
+
+var (
+	// xmltvProgramIndices caches the mapping from ChannelID to Programs for each XMLTV file.
+	// Map: XMLTV Filename -> ChannelID -> Slice of Program pointers
+	xmltvProgramIndices = make(map[string]map[string][]*Program)
+	xmltvProgramMutex   sync.RWMutex
 )
 
 // Check provider XMLTV File
@@ -814,83 +822,120 @@ func getProgramData(xepgChannel XEPGChannelStruct) (xepgXML XMLTV, err error) {
 	var channelID = xepgChannel.XMapping
 	var xmltv XMLTV
 
+	var programs []*Program
+
 	if xmltvFile == System.Folder.Data+"xTeVe Dummy" {
 		xmltv = createDummyProgram(xepgChannel)
+		programs = xmltv.Program
 	} else {
 		err = getLocalXMLTV(xmltvFile, &xmltv)
 		if err != nil {
 			return
 		}
+
+		// Use index to find programs efficiently
+		xmltvProgramMutex.RLock()
+		fileIndex, exists := xmltvProgramIndices[xmltvFile]
+		xmltvProgramMutex.RUnlock()
+
+		if !exists {
+			// Build index for this file
+			xmltvProgramMutex.Lock()
+			// Double check locking
+			if _, ok := xmltvProgramIndices[xmltvFile]; !ok {
+				newIndex := make(map[string][]*Program)
+				for _, p := range xmltv.Program {
+					newIndex[p.Channel] = append(newIndex[p.Channel], p)
+				}
+				xmltvProgramIndices[xmltvFile] = newIndex
+			}
+			fileIndex = xmltvProgramIndices[xmltvFile]
+			xmltvProgramMutex.Unlock()
+		}
+
+		if pList, ok := fileIndex[channelID]; ok {
+			programs = pList
+		}
 	}
 
-	for _, xmltvProgram := range xmltv.Program {
-		if xmltvProgram.Channel == channelID {
-			var program = &Program{}
-			// Channel ID
-			program.Channel = xepgChannel.XChannelID
-			timeshift, _ := strconv.Atoi(xepgChannel.XTimeshift)
-			progStart := strings.Split(xmltvProgram.Start, " ")
-			progStop := strings.Split(xmltvProgram.Stop, " ")
+	for _, xmltvProgram := range programs {
+		// No need to check channelID match again, index guarantees it
+		var program = &Program{}
+		// Channel ID
+		program.Channel = xepgChannel.XChannelID
+		timeshift, _ := strconv.Atoi(xepgChannel.XTimeshift)
+		progStart := strings.Split(xmltvProgram.Start, " ")
+		progStop := strings.Split(xmltvProgram.Stop, " ")
+
+		// Safety check for start/stop format
+		if len(progStart) > 1 {
 			tzStart, _ := strconv.Atoi(progStart[1])
-			tzStop, _ := strconv.Atoi(progStop[1])
 			progStart[1] = fmt.Sprintf("%+05d", tzStart+timeshift*100)
-			progStop[1] = fmt.Sprintf("%+05d", tzStop+timeshift*100)
 			program.Start = strings.Join(progStart, " ")
-			program.Stop = strings.Join(progStop, " ")
-
-			// Title
-			program.Title = xmltvProgram.Title
-
-			// Subtitle
-			program.SubTitle = xmltvProgram.SubTitle
-
-			// Description
-			program.Desc = xmltvProgram.Desc
-
-			// Category
-			getCategory(program, xmltvProgram, xepgChannel)
-
-			// Credits
-			program.Credits = xmltvProgram.Credits
-
-			// Rating
-			program.Rating = xmltvProgram.Rating
-
-			// StarRating
-			program.StarRating = xmltvProgram.StarRating
-
-			// Country
-			program.Country = xmltvProgram.Country
-
-			// Program icon
-			getPoster(program, xmltvProgram)
-
-			// Language
-			program.Language = xmltvProgram.Language
-
-			// Episodes numbers
-			getEpisodeNum(program, xmltvProgram, xepgChannel)
-
-			// Video
-			getVideo(program, xmltvProgram, xepgChannel)
-
-			// Date
-			program.Date = xmltvProgram.Date
-
-			// Previously shown
-			program.PreviouslyShown = xmltvProgram.PreviouslyShown
-
-			// New
-			program.New = xmltvProgram.New
-
-			// Live
-			program.Live = xmltvProgram.Live
-
-			// Premiere
-			program.Premiere = xmltvProgram.Premiere
-
-			xepgXML.Program = append(xepgXML.Program, program)
+		} else {
+			program.Start = xmltvProgram.Start
 		}
+
+		if len(progStop) > 1 {
+			tzStop, _ := strconv.Atoi(progStop[1])
+			progStop[1] = fmt.Sprintf("%+05d", tzStop+timeshift*100)
+			program.Stop = strings.Join(progStop, " ")
+		} else {
+			program.Stop = xmltvProgram.Stop
+		}
+
+		// Title
+		program.Title = xmltvProgram.Title
+
+		// Subtitle
+		program.SubTitle = xmltvProgram.SubTitle
+
+		// Description
+		program.Desc = xmltvProgram.Desc
+
+		// Category
+		getCategory(program, xmltvProgram, xepgChannel)
+
+		// Credits
+		program.Credits = xmltvProgram.Credits
+
+		// Rating
+		program.Rating = xmltvProgram.Rating
+
+		// StarRating
+		program.StarRating = xmltvProgram.StarRating
+
+		// Country
+		program.Country = xmltvProgram.Country
+
+		// Program icon
+		getPoster(program, xmltvProgram)
+
+		// Language
+		program.Language = xmltvProgram.Language
+
+		// Episodes numbers
+		getEpisodeNum(program, xmltvProgram, xepgChannel)
+
+		// Video
+		getVideo(program, xmltvProgram, xepgChannel)
+
+		// Date
+		program.Date = xmltvProgram.Date
+
+		// Previously shown
+		program.PreviouslyShown = xmltvProgram.PreviouslyShown
+
+		// New
+		program.New = xmltvProgram.New
+
+		// Live
+		program.Live = xmltvProgram.Live
+
+		// Premiere
+		program.Premiere = xmltvProgram.Premiere
+
+		xepgXML.Program = append(xepgXML.Program, program)
 	}
 	return
 }
@@ -1108,6 +1153,11 @@ func cleanupXEPG() {
 // clearXMLTVCache empties XMLTV cache and runs a garbage collector
 func clearXMLTVCache() {
 	Data.Cache.XMLTV = make(map[string]XMLTV)
+
+	xmltvProgramMutex.Lock()
+	xmltvProgramIndices = make(map[string]map[string][]*Program)
+	xmltvProgramMutex.Unlock()
+
 	runtime.GC()
 }
 
