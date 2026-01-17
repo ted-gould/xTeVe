@@ -67,7 +67,14 @@ func runLogic(cmdHost, cmdPort string, outWriter io.Writer, errWriter io.Writer)
 		}
 	}
 
-	return int(apiresp.TunerActive)
+	// ActiveHTTPConnections includes the current request, so we subtract 1.
+	// If the user has other connections (WebDAV, Web UI, etc.), the count will be > 1.
+	// We use max(0, ...) for safety, though it should be >= 1.
+	httpActive := apiresp.ActiveHTTPConnections
+	if httpActive > 0 {
+		httpActive--
+	}
+	return int(apiresp.TunerActive) + int(httpActive)
 }
 
 func main() {

@@ -142,6 +142,7 @@ type APIResponseStruct struct {
 	OtelExporterEndpoint string `json:"otel.exporter.endpoint,omitempty"`
 	OtelExporterType     string `json:"otel.exporter.type,omitempty"`
 	Status               bool   `json:"status"`
+	ActiveHTTPConnections int64  `json:"active.http.connections"`
 	StreamsActive        int64  `json:"streams.active,omitempty"`
 	StreamsAll    int64  `json:"streams.all,omitempty"`
 	StreamsXepg   int64  `json:"streams.xepg,omitempty"`
