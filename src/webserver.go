@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"xteve/src/internal/authentication"
@@ -32,6 +33,18 @@ import (
 // webAlerts channel to send to client
 var webAlerts = make(chan string, 3)
 var restartWebserver = make(chan bool, 1)
+
+// Active HTTP connections counter
+var activeHTTPConnections int64
+
+func connState(c net.Conn, state http.ConnState) {
+	switch state {
+	case http.StateNew:
+		atomic.AddInt64(&activeHTTPConnections, 1)
+	case http.StateClosed:
+		atomic.AddInt64(&activeHTTPConnections, -1)
+	}
+}
 
 func init() {
 	// Fix for MIME type issue with .js files
@@ -56,7 +69,11 @@ func StartWebserver(startupSpan trace.Span) (err error) {
 		}
 
 		var port = Settings.Port
-		server := http.Server{Addr: ":" + port, Handler: newHTTPHandler()}
+		server := http.Server{
+			Addr:      ":" + port,
+			Handler:   newHTTPHandler(),
+			ConnState: connState,
+		}
 
 		currentSpan := startupSpan
 		startupSpan = nil
@@ -455,6 +472,9 @@ func WS(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Could not open websocket connection", http.StatusBadRequest)
 		return
 	}
+	// The connection has been hijacked. ConnState will receive StateHijacked and will NOT receive StateClosed.
+	// We must manually decrement the counter when this handler exits.
+	defer atomic.AddInt64(&activeHTTPConnections, -1)
 	defer conn.Close()
 
 	setGlobalDomain(r.Host)
@@ -1075,6 +1095,7 @@ func API(w http.ResponseWriter, r *http.Request) {
 	case "status":
 		response.VersionXteve = System.Version
 		response.VersionAPI = System.APIVersion
+		response.ActiveHTTPConnections = atomic.LoadInt64(&activeHTTPConnections)
 		response.StreamsActive = int64(len(Data.Streams.Active))
 		response.StreamsAll = int64(len(Data.Streams.All))
 		response.StreamsXepg = int64(Data.XEPG.XEPGCount)
