@@ -10,6 +10,9 @@ import (
 )
 
 func TestWebDAVFS_ZeroSize(t *testing.T) {
+	os.Setenv("XTEVE_ALLOW_LOOPBACK", "true")
+	defer os.Unsetenv("XTEVE_ALLOW_LOOPBACK")
+
 	// Setup
 	tempDir, err := os.MkdirTemp("", "xteve_webdav_zerosize_test")
 	if err != nil {

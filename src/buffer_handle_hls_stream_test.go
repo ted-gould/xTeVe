@@ -2,16 +2,19 @@ package src
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
-	"context"
 )
 
 func TestHandleHLSStream(t *testing.T) {
+	os.Setenv("XTEVE_ALLOW_LOOPBACK", "true")
+	defer os.Unsetenv("XTEVE_ALLOW_LOOPBACK")
+
 	// 1. Setup mock server
 	tsContent := "some ts segment data"
 	m3u8Playlist := "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:10\n#EXTINF:10.0,\nsegment1.ts\n#EXT-X-ENDLIST"

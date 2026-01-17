@@ -15,6 +15,9 @@ import (
 )
 
 func TestWebDAVContentCache(t *testing.T) {
+	os.Setenv("XTEVE_ALLOW_LOOPBACK", "true")
+	defer os.Unsetenv("XTEVE_ALLOW_LOOPBACK")
+
 	// 1. Setup Mock Server
 	// Serve a file larger than 1MB (e.g. 2MB)
 	fileContent := make([]byte, 2*1024*1024)

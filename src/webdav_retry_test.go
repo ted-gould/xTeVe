@@ -14,6 +14,9 @@ import (
 )
 
 func TestWebDAVRetryLogic(t *testing.T) {
+	os.Setenv("XTEVE_ALLOW_LOOPBACK", "true")
+	defer os.Unsetenv("XTEVE_ALLOW_LOOPBACK")
+
 	// Setup a test server that simulates a dropped connection
 	fullContent := "0123456789"
 	failedOnce := false
