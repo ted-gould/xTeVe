@@ -7,12 +7,14 @@ import (
 	"net"
 	"net/http"
 	"net/http/cookiejar"
+	"os"
 	"sync"
+	"syscall"
 	"time"
 
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
-	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 var (
@@ -50,6 +52,29 @@ func dialContextWithRetry(ctx context.Context, network, addr string) (net.Conn, 
 	dialer := &net.Dialer{
 		Timeout:   30 * time.Second,
 		KeepAlive: 30 * time.Second,
+		Control: func(network, address string, c syscall.RawConn) error {
+			if os.Getenv("XTEVE_ALLOW_LOOPBACK") == "true" || os.Getenv("XTEVE_ALLOW_LOOPBACK") == "1" {
+				return nil
+			}
+			host, _, err := net.SplitHostPort(address)
+			if err != nil {
+				return err
+			}
+			ip := net.ParseIP(host)
+			if ip == nil {
+				return fmt.Errorf("invalid IP: %s", host)
+			}
+			if ip.IsLoopback() {
+				return fmt.Errorf("access to loopback address %s is denied", host)
+			}
+			if ip.IsLinkLocalUnicast() {
+				return fmt.Errorf("access to link-local address %s is denied", host)
+			}
+			if ip.IsUnspecified() {
+				return fmt.Errorf("access to unspecified address %s is denied", host)
+			}
+			return nil
+		},
 	}
 
 	// Retry loop for transient errors (like DNS "server misbehaving")

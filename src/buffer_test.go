@@ -13,6 +13,9 @@ import (
 )
 
 func TestConnectWithRetry(t *testing.T) {
+	os.Setenv("XTEVE_ALLOW_LOOPBACK", "true")
+	defer os.Unsetenv("XTEVE_ALLOW_LOOPBACK")
+
 	t.Run("Follows Redirects", func(t *testing.T) {
 		// Create a mock server
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -97,6 +100,9 @@ func TestConnectWithRetry(t *testing.T) {
 }
 
 func TestConnectToStreamingServer_Buffering(t *testing.T) {
+	os.Setenv("XTEVE_ALLOW_LOOPBACK", "true")
+	defer os.Unsetenv("XTEVE_ALLOW_LOOPBACK")
+
 	// 1. Setup mock server
 	// Create 10MB of valid MPEG-TS data
 	numPackets := (10 * 1024 * 1024) / mpegts.PacketSize
@@ -228,6 +234,9 @@ func TestConnectToStreamingServer_Buffering(t *testing.T) {
 }
 
 func TestBufferingStream_NewStreamClientRegistration(t *testing.T) {
+	os.Setenv("XTEVE_ALLOW_LOOPBACK", "true")
+	defer os.Unsetenv("XTEVE_ALLOW_LOOPBACK")
+
 	// This test verifies that for a completely new stream, the client is registered
 	// correctly before the connectToStreamingServer goroutine can terminate the stream.
 	// This specifically tests the fix for the "instant disconnect" race condition.
@@ -327,6 +336,9 @@ func TestBufferingStream_NewStreamClientRegistration(t *testing.T) {
 }
 
 func TestRaceCondition_KillAndStreamEOF(t *testing.T) {
+	os.Setenv("XTEVE_ALLOW_LOOPBACK", "true")
+	defer os.Unsetenv("XTEVE_ALLOW_LOOPBACK")
+
 	// Channel to control the mock server's response
 	unblockRead := make(chan bool)
 
@@ -489,6 +501,9 @@ func TestTunerCountOnDisconnect(t *testing.T) {
 }
 
 func TestBufferingStream_ClosesOnStreamEnd(t *testing.T) {
+	os.Setenv("XTEVE_ALLOW_LOOPBACK", "true")
+	defer os.Unsetenv("XTEVE_ALLOW_LOOPBACK")
+
 	// 1. Setup mock server that serves a small amount of data and then closes
 	numPackets := 10
 	content := make([]byte, numPackets*mpegts.PacketSize)
