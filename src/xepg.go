@@ -175,13 +175,12 @@ func createXEPGMapping() {
 	if len(Data.XMLTV.Files) > 0 {
 		for i := len(Data.XMLTV.Files) - 1; i >= 0; i-- {
 			var file = Data.XMLTV.Files[i]
-			var err error
 			var fileID = strings.TrimSuffix(getFilenameFromPath(file), path.Ext(getFilenameFromPath(file)))
 			showInfo("XEPG:" + "Parse XMLTV file: " + getProviderParameter(fileID, "xmltv", "name"))
 
 			var xmltv XMLTV
 
-			err = getLocalXMLTV(file, &xmltv)
+			err := getLocalXMLTV(file, &xmltv)
 			if err != nil {
 				Data.XMLTV.Files = slices.Delete(Data.XMLTV.Files, i, i+1)
 				var errMsg = err.Error()
