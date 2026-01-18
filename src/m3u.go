@@ -2,13 +2,13 @@ package src
 
 import (
 	"fmt"
+	"io"
 	"path"
 	"slices"
 	"strconv"
 	"strings"
 
 	m3u "xteve/src/internal/m3u-parser"
-
 )
 
 // Parse Playlists
@@ -184,8 +184,37 @@ func containsWholeWord(s, substr string) bool {
 
 // Create xTeVe M3U file
 func buildM3U(groups []string) (m3u string, err error) {
+	var sb strings.Builder
+	err = buildM3UToWriter(&sb, groups)
+	if err != nil {
+		return "", err
+	}
+	m3u = sb.String()
+
+	if len(groups) == 0 {
+		var filename = System.Folder.Data + "xteve.m3u"
+		err = writeByteToFile(filename, []byte(m3u))
+	}
+	return
+}
+
+// buildM3UToWriter writes M3U content to the provided io.Writer.
+// This allows streaming output to avoid large memory allocations.
+func buildM3UToWriter(w io.Writer, groups []string) (err error) {
 	var imgc = Data.Cache.Images
-	var m3uChannelsForSort []XEPGChannelStruct
+
+	// Collect channels to sort
+	type channelWithNum struct {
+		channel XEPGChannelStruct
+		num     float64
+	}
+
+	capacityEstimate := len(Data.XEPG.Channels)
+	if Settings.EpgSource == "PMS" {
+		capacityEstimate = len(Data.Streams.Active)
+	}
+
+	tempChannels := make([]channelWithNum, 0, capacityEstimate)
 
 	switch Settings.EpgSource {
 	case "PMS":
@@ -217,7 +246,11 @@ func buildM3U(groups []string) (m3u string, err error) {
 				}
 			}
 
-			m3uChannelsForSort = append(m3uChannelsForSort, channel)
+			num, _ := strconv.ParseFloat(channel.XChannelID, 64)
+			tempChannels = append(tempChannels, channelWithNum{
+				channel: channel,
+				num:     num,
+			})
 		}
 
 	case "XEPG":
@@ -228,25 +261,14 @@ func buildM3U(groups []string) (m3u string, err error) {
 						continue // Not goto
 					}
 				}
-				m3uChannelsForSort = append(m3uChannelsForSort, xepgChannel)
+
+				num, _ := strconv.ParseFloat(xepgChannel.XChannelID, 64)
+				tempChannels = append(tempChannels, channelWithNum{
+					channel: xepgChannel,
+					num:     num,
+				})
 			}
 		}
-	}
-
-	// Sort channels by numeric channel ID
-	// Optimize: Pre-parse channel numbers to avoid repeated parsing during sort (O(n) vs O(n log n) parsing)
-	type channelWithNum struct {
-		channel *XEPGChannelStruct
-		num     float64
-	}
-
-	tempChannels := make([]channelWithNum, 0, len(m3uChannelsForSort))
-	for i := range m3uChannelsForSort {
-		num, _ := strconv.ParseFloat(m3uChannelsForSort[i].XChannelID, 64)
-		tempChannels = append(tempChannels, channelWithNum{
-			channel: &m3uChannelsForSort[i],
-			num:     num,
-		})
 	}
 
 	slices.SortFunc(tempChannels, func(a, b channelWithNum) int {
@@ -259,25 +281,31 @@ func buildM3U(groups []string) (m3u string, err error) {
 		return 0
 	})
 
-	// Rebuild m3uChannelsForSort from sorted tempChannels
-	m3uChannelsForSort = make([]XEPGChannelStruct, len(tempChannels))
-	for i, tc := range tempChannels {
-		m3uChannelsForSort[i] = *tc.channel
-	}
-
 	// Create M3U Content
 	var xmltvURL = fmt.Sprintf("%s://%s/xmltv/xteve.xml", System.ServerProtocol.XML, System.Domain)
-	// Use strings.Builder to optimize memory usage during concatenation
-	var sb strings.Builder
 
 	// Optimized M3U Header construction
-	sb.WriteString(`#EXTM3U url-tvg="`)
-	sb.WriteString(xmltvURL)
-	sb.WriteString(`" x-tvg-url="`)
-	sb.WriteString(xmltvURL)
-	sb.WriteString("\"\n")
+	// Helper to handle write errors
+	write := func(s string) {
+		if err != nil {
+			return
+		}
+		_, err = io.WriteString(w, s)
+	}
 
-	for _, channel := range m3uChannelsForSort {
+	write(`#EXTM3U url-tvg="`)
+	write(xmltvURL)
+	write(`" x-tvg-url="`)
+	write(xmltvURL)
+	write("\"\n")
+
+	for _, tc := range tempChannels {
+		if err != nil {
+			return err
+		}
+
+		channel := tc.channel
+
 		// Use TvgID for tvg-id if it exists, otherwise fall back to XChannelID
 		tvgID := channel.TvgID
 		if len(tvgID) == 0 {
@@ -285,35 +313,30 @@ func buildM3U(groups []string) (m3u string, err error) {
 		}
 
 		// Optimized EXTINF line construction
-		// Original: fmt.Fprintf(&sb, `#EXTINF:0 channelID="%s" tvg-chno="%s" tvg-name="%s" tvg-id="%s" tvg-logo="%s" group-title="%s",%s`+"\n", ...)
-		sb.WriteString(`#EXTINF:0 channelID="`)
-		sb.WriteString(channel.XEPG)
-		sb.WriteString(`" tvg-chno="`)
-		sb.WriteString(channel.XChannelID)
-		sb.WriteString(`" tvg-name="`)
-		sb.WriteString(channel.XName)
-		sb.WriteString(`" tvg-id="`)
-		sb.WriteString(tvgID)
-		sb.WriteString(`" tvg-logo="`)
-		sb.WriteString(imgc.Image.GetURL(channel.TvgLogo))
-		sb.WriteString(`" group-title="`)
-		sb.WriteString(channel.XGroupTitle)
-		sb.WriteString(`",`)
-		sb.WriteString(channel.XName)
-		sb.WriteByte('\n')
+		write(`#EXTINF:0 channelID="`)
+		write(channel.XEPG)
+		write(`" tvg-chno="`)
+		write(channel.XChannelID)
+		write(`" tvg-name="`)
+		write(channel.XName)
+		write(`" tvg-id="`)
+		write(tvgID)
+		write(`" tvg-logo="`)
+		write(imgc.Image.GetURL(channel.TvgLogo))
+		write(`" group-title="`)
+		write(channel.XGroupTitle)
+		write(`",`)
+		write(channel.XName)
+		write("\n")
 
-		var stream, err = createStreamingURL("M3U", channel.FileM3UID, channel.XChannelID, channel.XName, channel.URL)
-		if err == nil {
-			sb.WriteString(stream)
-			sb.WriteByte('\n')
+		var stream string
+		var streamErr error
+		stream, streamErr = createStreamingURL("M3U", channel.FileM3UID, channel.XChannelID, channel.XName, channel.URL)
+		if streamErr == nil {
+			write(stream)
+			write("\n")
 		}
 	}
 
-	m3u = sb.String()
-
-	if len(groups) == 0 {
-		var filename = System.Folder.Data + "xteve.m3u"
-		err = writeByteToFile(filename, []byte(m3u))
-	}
-	return
+	return err
 }

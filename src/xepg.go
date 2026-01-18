@@ -1,6 +1,7 @@
 package src
 
 import (
+	"bufio"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -1126,11 +1127,26 @@ func getLocalXMLTV(file string, xmltv *XMLTV) (err error) {
 // Create M3U File
 func createM3UFile() error { // Added error return type
 	showInfo("XEPG:" + fmt.Sprintf("Create M3U file (%s)", System.File.M3U))
-	_, err := buildM3U([]string{})
+
+	var filename = getPlatformFile(System.File.M3U)
+	f, err := os.Create(filename)
 	if err != nil {
 		ShowError(err, 000)
-		return err // Propagate error
+		return err
 	}
+	defer f.Close()
+
+	bw := bufio.NewWriter(f)
+	err = buildM3UToWriter(bw, []string{})
+	if err != nil {
+		ShowError(err, 000)
+		return err
+	}
+	if err = bw.Flush(); err != nil {
+		ShowError(err, 000)
+		return err
+	}
+
 	err = saveMapToJSONFile(System.File.URLS, Data.Cache.StreamingURLS)
 	if err != nil {
 		ShowError(err, 000) // Show error, but also return it
