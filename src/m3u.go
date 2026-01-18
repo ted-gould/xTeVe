@@ -32,6 +32,10 @@ func parsePlaylist(filename, fileType string) (channels []any, err error) {
 // FilterThisStream checks if a stream should be filtered based on global filter rules.
 // It is used by benchmarks and potentially other parts of the application.
 func FilterThisStream(s any) (status bool) {
+	if len(Data.Filter) == 0 {
+		return false
+	}
+
 	// status is false by default for a bool named return
 	stream, ok := s.(map[string]string)
 	if !ok {
@@ -41,16 +45,27 @@ func FilterThisStream(s any) (status bool) {
 
 	// Cache raw stream values. Normalize _values once.
 	rawStreamGroup, streamGroupOK := stream["group-title"]
-	rawStreamValues, streamValuesOK := stream["_values"]
-	if streamValuesOK {
-		rawStreamValues = strings.Replace(rawStreamValues, "\r", "", -1)
-	}
 
 	// Lazy initialization vars
+	var rawStreamValues string
+	var rawStreamValuesInit bool
+	var streamValuesOK bool
+
 	var lowerStreamGroup string
 	var lowerStreamValues string
 	var lowerStreamGroupInit bool
 	var lowerStreamValuesInit bool
+
+	// Helper to ensure rawStreamValues is populated
+	ensureStreamValues := func() {
+		if !rawStreamValuesInit {
+			if v, ok := stream["_values"]; ok {
+				rawStreamValues = strings.Replace(v, "\r", "", -1)
+				streamValuesOK = true
+			}
+			rawStreamValuesInit = true
+		}
+	}
 
 	for _, filter := range Data.Filter {
 		if filter.Rule == "" {
@@ -62,7 +77,7 @@ func FilterThisStream(s any) (status bool) {
 
 		// Determine effective stream values based on case sensitivity
 		var effectiveStreamGroup = rawStreamGroup
-		var effectiveStreamValues = rawStreamValues
+		var effectiveStreamValues string
 
 		// Apply case insensitivity if needed
 		if !filter.CaseSensitive {
@@ -73,12 +88,24 @@ func FilterThisStream(s any) (status bool) {
 				}
 				effectiveStreamGroup = lowerStreamGroup
 			}
-			if streamValuesOK {
-				if !lowerStreamValuesInit {
-					lowerStreamValues = strings.ToLower(rawStreamValues)
-					lowerStreamValuesInit = true
+
+			if filter.Type == "custom-filter" {
+				ensureStreamValues()
+				if streamValuesOK {
+					if !lowerStreamValuesInit {
+						lowerStreamValues = strings.ToLower(rawStreamValues)
+						lowerStreamValuesInit = true
+					}
+					effectiveStreamValues = lowerStreamValues
 				}
-				effectiveStreamValues = lowerStreamValues
+			}
+		} else {
+			// Case sensitive
+			if filter.Type == "custom-filter" {
+				ensureStreamValues()
+				if streamValuesOK {
+					effectiveStreamValues = rawStreamValues
+				}
 			}
 		}
 
