@@ -863,12 +863,20 @@ func getProgramData(xepgChannel XEPGChannelStruct) (xepgXML XMLTV, err error) {
 	upperChannelName := strings.ToUpper(xepgChannel.XName)
 	xCategory := xepgChannel.XCategory
 
+	// Optimization: Pre-allocate slice capacity to avoid reallocations
+	if len(programs) > 0 {
+		xepgXML.Program = make([]*Program, 0, len(programs))
+	}
+
+	// Optimization: Parse timeshift once outside the loop
+	timeshift, _ := strconv.Atoi(xepgChannel.XTimeshift)
+
 	for _, xmltvProgram := range programs {
 		// No need to check channelID match again, index guarantees it
 		var program = &Program{}
 		// Channel ID
 		program.Channel = xepgChannel.XChannelID
-		timeshift, _ := strconv.Atoi(xepgChannel.XTimeshift)
+
 		progStart := strings.Split(xmltvProgram.Start, " ")
 		progStop := strings.Split(xmltvProgram.Stop, " ")
 
@@ -1000,6 +1008,15 @@ func createDummyProgram(xepgChannel XEPGChannelStruct) (dummyXMLTV XMLTV) {
 
 // Expand Categories (createXMLTVFile)
 func getCategory(program *Program, xmltvProgram *Program, xCategory string) {
+	// Optimization: Pre-allocate slice capacity
+	targetLen := len(xmltvProgram.Category)
+	if len(xCategory) > 0 {
+		targetLen++
+	}
+	if targetLen > 0 {
+		program.Category = make([]*Category, 0, targetLen)
+	}
+
 	for _, i := range xmltvProgram.Category {
 		category := &Category{}
 		category.Value = i.Value
@@ -1018,6 +1035,15 @@ func getCategory(program *Program, xmltvProgram *Program, xCategory string) {
 // Load the Poster Cover Program from the XMLTV File
 func getPoster(program *Program, xmltvProgram *Program) {
 	var imgc = Data.Cache.Images
+
+	// Optimization: Pre-allocate slice capacity
+	targetLen := len(xmltvProgram.Poster)
+	if Settings.XepgReplaceMissingImages && targetLen == 0 {
+		targetLen = 1
+	}
+	if targetLen > 0 {
+		program.Poster = make([]Poster, 0, targetLen)
+	}
 
 	for _, poster := range xmltvProgram.Poster {
 		poster.Src = imgc.Image.GetURL(poster.Src)
