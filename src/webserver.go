@@ -1,6 +1,7 @@
 package src
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"mime"
@@ -305,12 +306,25 @@ func xTeVe(w http.ResponseWriter, r *http.Request) {
 
 	setGlobalDomain(r.Host)
 
-	// XMLTV File
 	if strings.Contains(path, "xmltv/") {
+		requestType = "xml"
+	} else if strings.Contains(path, "m3u/") {
+		requestType = "m3u"
+	}
+
+	// Check Authentication
+	err = urlAuth(r, requestType)
+	if err != nil {
+		ShowError(err, 000)
+		httpStatusError(w, r, 403)
+		return
+	}
+
+	// XMLTV File
+	if requestType == "xml" {
 		_, childSpan := otel.Tracer("webserver").Start(r.Context(), "xmltv")
 		defer childSpan.End()
 
-		requestType = "xml"
 		file = System.Folder.Data + getFilenameFromPath(path)
 		content, err = readStringFromFile(file)
 		if err != nil {
@@ -318,14 +332,24 @@ func xTeVe(w http.ResponseWriter, r *http.Request) {
 			httpStatusError(w, r, 404)
 			return
 		}
+
+		contentType = http.DetectContentType([]byte(content))
+		if strings.Contains(strings.ToLower(contentType), "xml") {
+			contentType = "application/xml; charset=utf-8"
+		}
+
+		w.Header().Set("Content-Type", contentType)
+		if _, writeErr := w.Write([]byte(content)); writeErr != nil {
+			log.Printf("Error writing response in xTeVe handler: %v", writeErr)
+		}
+		return
 	}
 
 	// M3U File
-	if strings.Contains(path, "m3u/") {
+	if requestType == "m3u" {
 		_, childSpan := otel.Tracer("webserver").Start(r.Context(), "m3u")
 		defer childSpan.End()
 
-		requestType = "m3u"
 		groupTitle = r.URL.Query().Get("group-title")
 
 		if !System.Dev {
@@ -338,29 +362,21 @@ func xTeVe(w http.ResponseWriter, r *http.Request) {
 			groups = strings.Split(groupTitle, ",")
 		}
 
-		content, err = buildM3U(groups)
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+
+		bw := bufio.NewWriter(w)
+		err = buildM3UToWriter(bw, groups)
 		if err != nil {
 			childSpan.RecordError(err)
 			ShowError(err, 000)
 		}
-	}
-
-	// Check Authentication
-	err = urlAuth(r, requestType)
-	if err != nil {
-		ShowError(err, 000)
-		httpStatusError(w, r, 403)
-		return
-	}
-
-	contentType = http.DetectContentType([]byte(content))
-	if strings.Contains(strings.ToLower(contentType), "xml") {
-		contentType = "application/xml; charset=utf-8"
-	}
-
-	w.Header().Set("Content-Type", contentType)
-	if _, writeErr := w.Write([]byte(content)); writeErr != nil {
-		log.Printf("Error writing response in xTeVe handler: %v", writeErr)
+		if flushErr := bw.Flush(); flushErr != nil {
+			// Only log flush error if we haven't already logged a build error
+			if err == nil {
+				childSpan.RecordError(flushErr)
+				log.Printf("Error flushing M3U response: %v", flushErr)
+			}
+		}
 	}
 }
 
