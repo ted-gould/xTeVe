@@ -5,12 +5,16 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 
 	"xteve/src/filecache"
 )
 
 func TestWebDAVFS_SizeFallback_Triggered(t *testing.T) {
+	os.Setenv("XTEVE_ALLOW_LOOPBACK", "true")
+	defer os.Unsetenv("XTEVE_ALLOW_LOOPBACK")
+
 	// Setup FileCache
 	filecache.Reset()
 	tmpDir := t.TempDir()
@@ -70,6 +74,9 @@ func TestWebDAVFS_SizeFallback_Triggered(t *testing.T) {
 }
 
 func TestWebDAVFS_SizeFallback_LastBytes(t *testing.T) {
+	os.Setenv("XTEVE_ALLOW_LOOPBACK", "true")
+	defer os.Unsetenv("XTEVE_ALLOW_LOOPBACK")
+
 	// Setup FileCache
 	filecache.Reset()
 	tmpDir := t.TempDir()

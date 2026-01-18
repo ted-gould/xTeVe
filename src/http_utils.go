@@ -7,12 +7,14 @@ import (
 	"net"
 	"net/http"
 	"net/http/cookiejar"
+	"os"
 	"sync"
+	"syscall"
 	"time"
 
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
-	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 var (
@@ -50,6 +52,31 @@ func dialContextWithRetry(ctx context.Context, network, addr string) (net.Conn, 
 	dialer := &net.Dialer{
 		Timeout:   30 * time.Second,
 		KeepAlive: 30 * time.Second,
+	}
+
+	// SSRF Protection: Block Loopback and Link-Local unless explicitly allowed
+	allowLoopback := os.Getenv("XTEVE_ALLOW_LOOPBACK") == "true" || os.Getenv("XTEVE_ALLOW_LOOPBACK") == "1"
+
+	if !allowLoopback {
+		dialer.Control = func(network, address string, c syscall.RawConn) error {
+			host, _, err := net.SplitHostPort(address)
+			if err != nil {
+				return err
+			}
+			ip := net.ParseIP(host)
+			if ip != nil {
+				if ip.IsLoopback() {
+					return fmt.Errorf("SSRF protection: access to loopback %s denied", host)
+				}
+				if ip.IsLinkLocalUnicast() {
+					return fmt.Errorf("SSRF protection: access to link-local %s denied", host)
+				}
+				if ip.IsUnspecified() {
+					return fmt.Errorf("SSRF protection: access to unspecified %s denied", host)
+				}
+			}
+			return nil
+		}
 	}
 
 	// Retry loop for transient errors (like DNS "server misbehaving")
