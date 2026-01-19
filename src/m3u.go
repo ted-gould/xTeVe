@@ -230,9 +230,23 @@ func buildM3U(groups []string) (m3u string, err error) {
 func buildM3UToWriter(w io.Writer, groups []string) (err error) {
 	var imgc = Data.Cache.Images
 
+	// M3UChannelData is a slimmed-down version of XEPGChannelStruct
+	// containing only fields necessary for M3U generation and sorting.
+	// This reduces memory overhead significantly compared to copying the full struct.
+	type m3uChannelData struct {
+		XEPG        string
+		XChannelID  string
+		XName       string
+		TvgID       string
+		TvgLogo     string
+		XGroupTitle string
+		FileM3UID   string
+		URL         string
+	}
+
 	// Collect channels to sort
 	type channelWithNum struct {
-		channel XEPGChannelStruct
+		channel m3uChannelData
 		num     float64
 	}
 
@@ -250,32 +264,34 @@ func buildM3UToWriter(w io.Writer, groups []string) (err error) {
 			if !ok {
 				continue
 			}
-			var channel XEPGChannelStruct
 
-			channel.XName = stream["name"]
-			channel.XGroupTitle = stream["group-title"]
-			channel.TvgLogo = stream["tvg-logo"]
-			channel.URL = stream["url"]
-			channel.FileM3UID = stream["_file.m3u.id"]
+			// We only populate what we need for M3U generation
+			var data m3uChannelData
+
+			data.XName = stream["name"]
+			data.XGroupTitle = stream["group-title"]
+			data.TvgLogo = stream["tvg-logo"]
+			data.URL = stream["url"]
+			data.FileM3UID = stream["_file.m3u.id"]
 
 			// Use tvg-id if present for the tvg-id attribute
 			if tvgID, ok := stream["tvg-id"]; ok && len(tvgID) > 0 {
-				channel.TvgID = tvgID
+				data.TvgID = tvgID
 			}
 
 			// Generate a numeric channel number for tvg-chno and for sorting
-			channel.XChannelID = strconv.Itoa(i + 1000)
-			channel.XEPG = channel.XChannelID // For channelID attribute
+			data.XChannelID = strconv.Itoa(i + 1000)
+			data.XEPG = data.XChannelID // For channelID attribute
 
 			if len(groups) > 0 {
-				if !slices.Contains(groups, channel.XGroupTitle) {
+				if !slices.Contains(groups, data.XGroupTitle) {
 					continue
 				}
 			}
 
-			num, _ := strconv.ParseFloat(channel.XChannelID, 64)
+			num, _ := strconv.ParseFloat(data.XChannelID, 64)
 			tempChannels = append(tempChannels, channelWithNum{
-				channel: channel,
+				channel: data,
 				num:     num,
 			})
 		}
@@ -290,8 +306,21 @@ func buildM3UToWriter(w io.Writer, groups []string) (err error) {
 				}
 
 				num, _ := strconv.ParseFloat(xepgChannel.XChannelID, 64)
+
+				// Create a slim copy of the data
+				data := m3uChannelData{
+					XEPG:        xepgChannel.XEPG,
+					XChannelID:  xepgChannel.XChannelID,
+					XName:       xepgChannel.XName,
+					TvgID:       xepgChannel.TvgID,
+					TvgLogo:     xepgChannel.TvgLogo,
+					XGroupTitle: xepgChannel.XGroupTitle,
+					FileM3UID:   xepgChannel.FileM3UID,
+					URL:         xepgChannel.URL,
+				}
+
 				tempChannels = append(tempChannels, channelWithNum{
-					channel: xepgChannel,
+					channel: data,
 					num:     num,
 				})
 			}
