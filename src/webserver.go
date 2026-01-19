@@ -15,6 +15,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -22,7 +23,6 @@ import (
 	"xteve/src/internal/authentication"
 
 	"github.com/gorilla/websocket"
-	"github.com/samber/lo"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -572,7 +572,7 @@ func WS(w http.ResponseWriter, r *http.Request) {
 
 			response.Settings, err = updateServerSettings(request)
 			if err == nil {
-				response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "settings"))
+				response.OpenMenu = strconv.Itoa(slices.Index(System.WEB.Menu, "settings"))
 
 				if Settings.AuthenticationWEB && !authenticationUpdate {
 					response.Reload = true
@@ -611,49 +611,49 @@ func WS(w http.ResponseWriter, r *http.Request) {
 		case "saveFilesM3U":
 			err = saveFiles(request, "m3u")
 			if err == nil {
-				response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "playlist"))
+				response.OpenMenu = strconv.Itoa(slices.Index(System.WEB.Menu, "playlist"))
 			}
 		case "updateFileM3U":
 			err = updateFile(request, "m3u")
 			if err == nil {
-				response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "playlist"))
+				response.OpenMenu = strconv.Itoa(slices.Index(System.WEB.Menu, "playlist"))
 			}
 		case "saveFilesHDHR":
 			err = saveFiles(request, "hdhr")
 			if err == nil {
-				response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "playlist"))
+				response.OpenMenu = strconv.Itoa(slices.Index(System.WEB.Menu, "playlist"))
 			}
 		case "updateFileHDHR":
 			err = updateFile(request, "hdhr")
 			if err == nil {
-				response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "playlist"))
+				response.OpenMenu = strconv.Itoa(slices.Index(System.WEB.Menu, "playlist"))
 			}
 		case "saveFilesXMLTV":
 			err = saveFiles(request, "xmltv")
 			if err == nil {
-				response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "xmltv"))
+				response.OpenMenu = strconv.Itoa(slices.Index(System.WEB.Menu, "xmltv"))
 			}
 		case "updateFileXMLTV":
 			err = updateFile(request, "xmltv")
 			if err == nil {
-				response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "xmltv"))
+				response.OpenMenu = strconv.Itoa(slices.Index(System.WEB.Menu, "xmltv"))
 			}
 		case "saveFilter":
 			response.Settings, err = saveFilter(request)
 			if err == nil {
-				response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "filter"))
+				response.OpenMenu = strconv.Itoa(slices.Index(System.WEB.Menu, "filter"))
 			}
 		case "saveEpgMapping":
 			err = saveXEpgMapping(request)
 		case "saveUserData":
 			err = saveUserData(request)
 			if err == nil {
-				response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "users"))
+				response.OpenMenu = strconv.Itoa(slices.Index(System.WEB.Menu, "users"))
 			}
 		case "saveNewUser":
 			err = saveNewUser(request)
 			if err == nil {
-				response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "users"))
+				response.OpenMenu = strconv.Itoa(slices.Index(System.WEB.Menu, "users"))
 			}
 		case "resetLogs":
 			WebScreenLog.Mu.Lock()
@@ -661,7 +661,7 @@ func WS(w http.ResponseWriter, r *http.Request) {
 			WebScreenLog.Errors = 0
 			WebScreenLog.Warnings = 0
 			WebScreenLog.Mu.Unlock()
-			response.OpenMenu = strconv.Itoa(lo.IndexOf(System.WEB.Menu, "log"))
+			response.OpenMenu = strconv.Itoa(slices.Index(System.WEB.Menu, "log"))
 		case "xteveBackup":
 			file, errNew := xteveBackup()
 			err = errNew
