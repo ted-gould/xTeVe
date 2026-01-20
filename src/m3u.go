@@ -1,6 +1,7 @@
 package src
 
 import (
+	"cmp"
 	"fmt"
 	"io"
 	"path"
@@ -328,13 +329,7 @@ func buildM3UToWriter(w io.Writer, groups []string) (err error) {
 	}
 
 	slices.SortFunc(tempChannels, func(a, b channelWithNum) int {
-		if a.num < b.num {
-			return -1
-		}
-		if a.num > b.num {
-			return 1
-		}
-		return 0
+		return cmp.Compare(a.num, b.num)
 	})
 
 	// Create M3U Content
