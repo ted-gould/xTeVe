@@ -16,11 +16,11 @@ import (
 	"os/user"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"text/template"
 
 	"github.com/avfs/avfs"
-	"github.com/samber/lo"
 )
 
 // --- System Tools ---
@@ -331,7 +331,7 @@ func resolveHostIP() (err error) {
 	}
 
 	// If IP previously set in settings (including the default, empty) is not available anymore
-	if !lo.Contains(System.IPAddressesV4Host, Settings.HostIP) {
+	if !slices.Contains(System.IPAddressesV4Host, Settings.HostIP) {
 		if len(System.IPAddressesV4Host) > 0 {
 			Settings.HostIP = System.IPAddressesV4Host[0]
 		} else {

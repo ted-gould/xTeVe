@@ -4,10 +4,9 @@ import (
 	"encoding/json"
 	"fmt" // Added for fmt.Sprintf in panic
 	"os"
+	"slices"
 	"strconv"
 	"testing"
-
-	"github.com/samber/lo"
 	// "strings" // Removed as it's unused now
 )
 
@@ -120,7 +119,7 @@ func TestFindFreeChannelNumber(t *testing.T) {
 	if ch1 != "1000" {
 		t.Errorf("Expected channel number 1000, got %s", ch1)
 	}
-	if !lo.Contains(allChannelNumbers, 1000.0) {
+	if !slices.Contains(allChannelNumbers, 1000.0) {
 		t.Errorf("Expected 1000 to be added to allChannelNumbers. Got: %v", allChannelNumbers)
 	}
 
@@ -130,7 +129,7 @@ func TestFindFreeChannelNumber(t *testing.T) {
 	if ch2 != "1002" {
 		t.Errorf("Expected channel number 1002, got %s", ch2)
 	}
-	if !lo.Contains(allChannelNumbers, 1002.0) {
+	if !slices.Contains(allChannelNumbers, 1002.0) {
 		t.Errorf("Expected 1002 to be added to allChannelNumbers. Got: %v", allChannelNumbers)
 	}
 
@@ -140,7 +139,7 @@ func TestFindFreeChannelNumber(t *testing.T) {
 	if ch3 != "1005" {
 		t.Errorf("Expected channel number 1005, got %s", ch3)
 	}
-	if !lo.Contains(allChannelNumbers, 1005.0) {
+	if !slices.Contains(allChannelNumbers, 1005.0) {
 		t.Errorf("Expected 1005 to be added to allChannelNumbers. Got: %v", allChannelNumbers)
 	}
 
@@ -150,7 +149,7 @@ func TestFindFreeChannelNumber(t *testing.T) {
 	if ch4 != "1004" {
 		t.Errorf("Expected channel number 1004, got %s", ch4)
 	}
-	if !lo.Contains(allChannelNumbers, 1004.0) {
+	if !slices.Contains(allChannelNumbers, 1004.0) {
 		t.Errorf("Expected 1004 to be added to allChannelNumbers. Got: %v", allChannelNumbers)
 	}
 
@@ -161,7 +160,7 @@ func TestFindFreeChannelNumber(t *testing.T) {
 	if ch5 != "1006" {
 		t.Errorf("Expected channel number 1006 when starting hint is empty, got %s. Numbers: %v", ch5, allChannelNumbers)
 	}
-	if !lo.Contains(allChannelNumbers, 1006.0) {
+	if !slices.Contains(allChannelNumbers, 1006.0) {
 		t.Errorf("Expected 1006 to be added to allChannelNumbers. Got: %v", allChannelNumbers)
 	}
 
@@ -172,7 +171,7 @@ func TestFindFreeChannelNumber(t *testing.T) {
 	if ch6 != "2000" {
 		t.Errorf("Expected channel number 2000, got %s", ch6)
 	}
-	if !lo.Contains(allChannelNumbers, 2000.0) {
+	if !slices.Contains(allChannelNumbers, 2000.0) {
 		t.Errorf("Expected 2000 to be added to allChannelNumbers. Got: %v", allChannelNumbers)
 	}
 }
@@ -410,7 +409,7 @@ func TestProcessNewXEPGChannel(t *testing.T) {
 		t.Errorf("Expected XChannelID to be '2005', got '%s'", newChannel.XChannelID)
 	}
 	expectedChannelNumFloat, _ := strconv.ParseFloat("2005", 64)
-	if !lo.Contains(allChannelNumbers, expectedChannelNumFloat) {
+	if !slices.Contains(allChannelNumbers, expectedChannelNumFloat) {
 		t.Errorf("Expected %.1f to be added to allChannelNumbers. Got: %v", expectedChannelNumFloat, allChannelNumbers)
 	}
 
@@ -469,7 +468,7 @@ func TestProcessNewXEPGChannel(t *testing.T) {
 	if newChannel2.XChannelID != "2500" {
 		t.Errorf("Expected XChannelID to be '2500', got '%s'", newChannel2.XChannelID)
 	}
-	if !lo.Contains(allChannelNumbers, 2500.0) {
+	if !slices.Contains(allChannelNumbers, 2500.0) {
 		t.Errorf("Expected 2500 to be added to allChannelNumbers. Got: %v", allChannelNumbers)
 	}
 	if newChannel2.TvgShift != "0" {
@@ -512,7 +511,7 @@ func TestProcessNewXEPGChannel(t *testing.T) {
 	if newChannel3.XChannelID != "3000" {
 		t.Errorf("Expected XChannelID to be '3000', got '%s'", newChannel3.XChannelID)
 	}
-	if !lo.Contains(allChannelNumbers, 3000.0) {
+	if !slices.Contains(allChannelNumbers, 3000.0) {
 		t.Errorf("Expected 3000 to be added to allChannelNumbers. Got: %v", allChannelNumbers)
 	}
 }
