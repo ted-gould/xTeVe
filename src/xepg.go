@@ -231,7 +231,8 @@ func createXEPGMapping() {
 // Create / update XEPG Database
 func createXEPGDatabase() (err error) {
 	var allChannelNumbers = make([]float64, 0)
-	Data.Cache.Streams.Active = make([]string, 0)
+	// Optimization: Pre-allocate slice capacity to avoid reallocations
+	Data.Cache.Streams.Active = make([]string, 0, len(Data.Streams.Active))
 	Data.XEPG.Channels = make(map[string]XEPGChannelStruct)
 
 	Data.XEPG.Channels, err = loadXEPGChannels(System.File.XEPG)
