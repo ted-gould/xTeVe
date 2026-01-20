@@ -1013,16 +1013,16 @@ func getCategory(program *Program, xmltvProgram *Program, xCategory string) {
 	if len(xCategory) > 0 {
 		targetLen++
 	}
-	if targetLen > 0 {
-		program.Category = make([]*Category, 0, targetLen)
+
+	if targetLen == 0 {
+		return
 	}
 
-	for _, i := range xmltvProgram.Category {
-		category := &Category{}
-		category.Value = i.Value
-		category.Lang = i.Lang
-		program.Category = append(program.Category, category)
-	}
+	program.Category = make([]*Category, 0, targetLen)
+
+	// Direct append to avoid allocations.
+	// xmltvProgram.Category elements are immutable so we can safely share pointers.
+	program.Category = append(program.Category, xmltvProgram.Category...)
 
 	if len(xCategory) > 0 {
 		category := &Category{}
