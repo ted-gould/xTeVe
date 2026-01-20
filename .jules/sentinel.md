@@ -16,3 +16,8 @@
 1.  Avoid using closures for control flow (like returning early) unless designed with panic/recover (which is non-idiomatic for simple error handling).
 2.  Check errors immediately after the call that produces them.
 3.  Ensure unit tests cover failure paths (invalid tokens, missing users) to verify error propagation.
+
+## 2025-05-23 - Flawed Rate Limiter Logic
+**Vulnerability:** The login rate limiter used a "sliding window" logic that updated the `lastSeen` timestamp on *every* request. The reset condition (`time.Since(lastSeen) > 5min`) would never trigger if requests were made more frequently than 5 minutes (e.g., every 4 minutes), eventually causing a permanent ban for legitimate users.
+**Learning:** Naive rate limiting implementations that mix "last activity" with "window start" can lead to accidental Denial of Service for legitimate users.
+**Prevention:** Implement standard "Fixed Window" or "Token Bucket" algorithms. Ensure the window reset condition is based on the *start* of the window, not the *last* activity.

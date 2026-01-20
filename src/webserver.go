@@ -423,41 +423,45 @@ func DataImages(w http.ResponseWriter, r *http.Request) {
 // Rate Limiter for Login
 var loginRateLimiter = struct {
 	sync.Mutex
-	attempts map[string]int
-	lastSeen map[string]time.Time
+	attempts    map[string]int
+	windowStart map[string]time.Time
 }{
-	attempts: make(map[string]int),
-	lastSeen: make(map[string]time.Time),
+	attempts:    make(map[string]int),
+	windowStart: make(map[string]time.Time),
 }
 
-// checkLoginRateLimit implements a simple sliding window rate limiter.
+// checkLoginRateLimit implements a Fixed Window rate limiter.
 // Note: It relies on IP address. If xTeVe is behind a reverse proxy, all users might appear
 // as the same IP (the proxy) unless the proxy transparency is handled elsewhere (not currently in xTeVe).
 func checkLoginRateLimit(ip string) bool {
+	return checkLoginRateLimitWithTime(ip, time.Now())
+}
+
+func checkLoginRateLimitWithTime(ip string, now time.Time) bool {
 	loginRateLimiter.Lock()
 	defer loginRateLimiter.Unlock()
 
 	// Prevent memory leak: if map gets too big, clear old entries
 	if len(loginRateLimiter.attempts) > 1000 {
-		for k, t := range loginRateLimiter.lastSeen {
-			if time.Since(t) > 10*time.Minute {
+		for k, start := range loginRateLimiter.windowStart {
+			if now.Sub(start) > 10*time.Minute {
 				delete(loginRateLimiter.attempts, k)
-				delete(loginRateLimiter.lastSeen, k)
+				delete(loginRateLimiter.windowStart, k)
 			}
 		}
 		// Hard limit fallback
 		if len(loginRateLimiter.attempts) > 2000 {
 			loginRateLimiter.attempts = make(map[string]int)
-			loginRateLimiter.lastSeen = make(map[string]time.Time)
+			loginRateLimiter.windowStart = make(map[string]time.Time)
 		}
 	}
 
-	// Simple heuristic: reset count if last attempt was > 5 mins ago
-	if time.Since(loginRateLimiter.lastSeen[ip]) > 5*time.Minute {
+	// Fixed Window: reset count if current window expired (> 5 mins)
+	if now.Sub(loginRateLimiter.windowStart[ip]) > 5*time.Minute {
 		loginRateLimiter.attempts[ip] = 0
+		loginRateLimiter.windowStart[ip] = now
 	}
 
-	loginRateLimiter.lastSeen[ip] = time.Now()
 	loginRateLimiter.attempts[ip]++
 
 	return loginRateLimiter.attempts[ip] <= 10
