@@ -11,133 +11,7 @@ import (
 
 var extGrpRx = regexp.MustCompile(`#EXTGRP: *(.*)`)
 var durationRx = regexp.MustCompile(`^:(-?[0-9]+)`)
-
-// parseAttributes extracts key="value" pairs and the channel name from an EXTINF line.
-// It replaces regex operations to reduce allocations and CPU usage.
-func parseAttributes(line string, stream map[string]string) (channelName string, value string) {
-	// Format: ... attributes ... ,Channel Name
-	// attributes: key="value"
-
-	// Find the last comma, which separates attributes from the channel name
-	// Note: Attributes can contain commas inside quotes, so we need to be careful.
-	// However, the original regex logic for channel name was: `,([^\n]*|,[^\r]*)`
-	// And attributes were extracted and REMOVED from the line first.
-
-	// Strategy:
-	// 1. Iterate through the string looking for key="value".
-	// 2. Extract them and skip them.
-	// 3. Whatever remains (ignoring spaces), if it starts with comma, is the name?
-
-	// Let's iterate from left to right.
-	n := len(line)
-	i := 0
-
-	for i < n {
-		// Find '=' which indicates a potential key=value pair
-		eqIdx := strings.IndexByte(line[i:], '=')
-		if eqIdx == -1 {
-			break
-		}
-		eqIdx += i
-
-		// Check if it's followed by a quote
-		if eqIdx+1 < n && line[eqIdx+1] == '"' {
-			// Found key="...
-			// Backtrack to find the start of the key
-			keyEnd := eqIdx
-			keyStart := strings.LastIndexAny(line[i:keyEnd], " ,")
-			if keyStart == -1 {
-				keyStart = i // Start of current segment
-			} else {
-				keyStart += i + 1 // After the space or comma
-			}
-
-			key := line[keyStart:keyEnd]
-
-			// Find closing quote
-			quoteStart := eqIdx + 2
-			quoteEnd := strings.IndexByte(line[quoteStart:], '"')
-			if quoteEnd == -1 {
-				// Malformed, stop parsing attributes
-				break
-			}
-			quoteEnd += quoteStart
-
-			val := line[quoteStart:quoteEnd]
-
-			// Store attribute
-			// Set TVG Key as lowercase
-			if strings.Contains(key, "tvg") {
-				stream[strings.ToLower(key)] = val
-			} else {
-				stream[key] = val
-			}
-
-			// URL's are not passed to the filter function
-			if !strings.Contains(val, "://") && len(val) > 0 {
-				value = value + val + " "
-			}
-
-			// Advance i to after the closing quote
-			i = quoteEnd + 1
-		} else {
-			// Not a quoted attribute, skip past this '='
-			i = eqIdx + 1
-		}
-	}
-
-	// Now find the channel name.
-	// The original logic: exceptForChannelNameRx = regexp.MustCompile(`,([^\n]*|,[^\r]*)`)
-	// It basically looks for the first comma that is NOT inside an attribute (since attributes were removed).
-
-	// Since we didn't modify 'line' in place, we need to find the comma that separates info from name.
-	// Standard EXTINF: #EXTINF:duration attributes,Channel Name
-
-	// Finding the comma is tricky if attributes were not removed and contained commas.
-	// But our parser above skipped over quoted values.
-
-	// Let's do a second pass or integrate?
-	// Actually, simpler: Iterate carefully.
-
-	// Re-implementation of the full line parsing:
-	// 1. Skip duration (if present, handled by regex in caller, but here we scan from start?)
-	// Actually, caller passes the line which might start with specific params.
-
-	// Let's just use LastIndex for comma?
-	// Risky if channel name has comma. M3U says the *first* comma after EXTINF properties.
-
-	// Correct approach: Scan and skip quoted sections. The first comma found outside quotes is the separator.
-
-	commaPos := -1
-	inQuote := false
-	for idx, r := range line {
-		if r == '"' {
-			inQuote = !inQuote
-		} else if r == ',' && !inQuote {
-			commaPos = idx
-			break
-		}
-	}
-
-	if commaPos != -1 {
-		channelName = line[commaPos+1:]
-		channelName = strings.TrimSpace(channelName)
-	}
-
-	if len(channelName) == 0 {
-		if v, ok := stream["tvg-name"]; ok {
-			channelName = v
-		}
-	}
-	channelName = strings.TrimSpace(channelName)
-
-	// Clean up value (remove trailing space)
-	if len(value) > 0 && value[len(value)-1] == ' ' {
-		// value is mostly used for search, trailing space doesn't hurt much but let's match original
-	}
-
-	return
-}
+var attributeRx = regexp.MustCompile(`([a-zA-Z0-9-._]+)="([^"]*)"`)
 
 // MakeInterfaceFromM3U :
 func MakeInterfaceFromM3U(byteStream []byte) (allChannels []any, err error) {
@@ -170,20 +44,71 @@ func MakeInterfaceFromM3U(byteStream []byte) (allChannels []any, err error) {
 					stream["url"] = line
 				} else {
 					// It's the parameter line (the part after #EXTINF)
-					var cName, val string
-					cName, val = parseAttributes(line, stream)
-
-					if len(cName) > 0 {
-						channelName = cName
+					// Format: ... attributes ... ,Channel Name
+					// Find separator comma (first comma not in quotes)
+					commaPos := -1
+					inQuote := false
+					for i, r := range line {
+						if r == '"' {
+							inQuote = !inQuote
+						} else if r == ',' && !inQuote {
+							commaPos = i
+							break
+						}
 					}
-					value += val
+
+					if commaPos != -1 {
+						channelName = strings.TrimSpace(line[commaPos+1:])
+
+						// Parse attributes from the left part
+						attrPart := line[:commaPos]
+						matches := attributeRx.FindAllStringSubmatch(attrPart, -1)
+						for _, m := range matches {
+							key, val := m[1], m[2]
+
+							// Set TVG Key as lowercase
+							if strings.Contains(key, "tvg") {
+								stream[strings.ToLower(key)] = val
+							} else {
+								stream[key] = val
+							}
+
+							// URL's are not passed to the filter function
+							if !strings.Contains(val, "://") && len(val) > 0 {
+								value += val + " "
+							}
+						}
+					} else {
+						// Fallback if no comma found (unlikely for valid EXTINF but possible)
+						// Just parse attributes from whole line?
+						matches := attributeRx.FindAllStringSubmatch(line, -1)
+						for _, m := range matches {
+							key, val := m[1], m[2]
+							if strings.Contains(key, "tvg") {
+								stream[strings.ToLower(key)] = val
+							} else {
+								stream[key] = val
+							}
+							if !strings.Contains(val, "://") && len(val) > 0 {
+								value += val + " "
+							}
+						}
+					}
+
+					if len(channelName) == 0 {
+						if v, ok := stream["tvg-name"]; ok {
+							channelName = v
+						}
+					}
+					channelName = strings.TrimSpace(channelName)
+
+					value += channelName
 				}
 			}
 		}
 
 		if len(channelName) > 0 {
 			stream["name"] = channelName
-			value += channelName
 			stream["_values"] = value
 		} else {
 			// If no name found, skip
