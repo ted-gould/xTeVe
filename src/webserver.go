@@ -392,6 +392,8 @@ func Images(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Security: Prevent Stored XSS via SVG files by enforcing strict CSP (sandbox)
+	w.Header().Set("Content-Security-Policy", "sandbox; default-src 'none'; img-src 'self'; style-src 'unsafe-inline';")
 	w.Header().Add("Content-Type", getContentType(filePath))
 	w.Header().Add("Content-Length", fmt.Sprintf("%d", len(content)))
 	w.WriteHeader(200)
@@ -412,6 +414,8 @@ func DataImages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Security: Prevent Stored XSS via SVG files by enforcing strict CSP (sandbox)
+	w.Header().Set("Content-Security-Policy", "sandbox; default-src 'none'; img-src 'self'; style-src 'unsafe-inline';")
 	w.Header().Add("Content-Type", getContentType(filePath))
 	w.Header().Add("Content-Length", fmt.Sprintf("%d", len(content)))
 	w.WriteHeader(200)
