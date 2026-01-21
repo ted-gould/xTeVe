@@ -2,12 +2,12 @@ package src
 
 import (
 	"bytes"
+	"cmp"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"slices"
 	"strconv"
-
 )
 
 func makeInteraceFromHDHR(content []byte, playlistName, id string) (channels []any, err error) {
@@ -162,29 +162,10 @@ func getLineup() (jsonContent []byte, err error) {
 	}
 
 	// Sort the lineup
-	// Have to use type assertions (https://golang.org/ref/spec#Type_assertions) to cast generic interface{} into LineupStream
-	slices.SortFunc(lineup, func(a, b any) int {
-		var chanA, chanB float64
-		var ok bool
-		var lineupA, lineupB LineupStream
-
-		if lineupA, ok = a.(LineupStream); !ok {
-			return 0
-		}
-
-		if lineupB, ok = b.(LineupStream); !ok {
-			return 0
-		}
-
-		chanA, _ = strconv.ParseFloat(lineupA.GuideNumber, 64)
-		chanB, _ = strconv.ParseFloat(lineupB.GuideNumber, 64)
-		if chanA < chanB {
-			return -1
-		}
-		if chanA > chanB {
-			return 1
-		}
-		return 0
+	slices.SortFunc(lineup, func(a, b LineupStream) int {
+		chanA, _ := strconv.ParseFloat(a.GuideNumber, 64)
+		chanB, _ := strconv.ParseFloat(b.GuideNumber, 64)
+		return cmp.Compare(chanA, chanB)
 	})
 
 	jsonContent, err = json.MarshalIndent(lineup, "", "  ")
