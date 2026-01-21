@@ -16,7 +16,13 @@ VIDEO_SRC = src/html/img/stream-limit.jpg
 VIDEO_TARGET = src/html/video/stream-limit.bin
 
 # Build targets
-build: $(JS_DIR) $(VIDEO_TARGET)
+generate:
+	@echo "--- Generating code ---"
+	$(GO) install github.com/CAFxX/regexp2go@latest
+	$(GO) get github.com/CAFxX/bytespool
+	export PATH=$(PATH):$(shell $(GO) env GOPATH)/bin && $(GO) generate ./src/internal/m3u-parser/
+
+build: $(JS_DIR) $(VIDEO_TARGET) generate
 	@echo "--- Building Go commands ---"
 	@mkdir -p $(BINDIR)
 	$(GOCMD) -o ./$(BINDIR)/xteve .
@@ -36,11 +42,11 @@ $(VIDEO_TARGET): $(VIDEO_SRC)
 	@bash build/generate_video.sh
 
 # Test and lint targets
-test: $(JS_DIR) $(VIDEO_TARGET)
+test: $(JS_DIR) $(VIDEO_TARGET) generate
 	@echo "--- Running Go tests ---"
 	$(GO) test ./...
 
-lint:
+lint: generate
 	@echo "--- Running golangci-lint ---"
 	$(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 	$(shell $(GO) env GOPATH)/bin/golangci-lint run

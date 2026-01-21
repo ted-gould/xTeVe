@@ -28,3 +28,4 @@ test.log
 test_output.txt
 test_runner
 xteve_otel_test
+src/internal/m3u-parser/regexp2go_*.go

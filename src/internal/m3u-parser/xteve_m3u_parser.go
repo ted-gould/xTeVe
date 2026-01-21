@@ -9,9 +9,11 @@ import (
 	"strings"
 )
 
+//go:generate bash -c "regexp2go -flags=212 -pkg=m3u -fn=MatchAttribute -pool=true \"([a-zA-Z0-9-._]+)=\\\"([^\\\"]*)\\\"\" > regexp2go_attribute.go"
+
+var matchAttribute MatchAttribute
 var extGrpRx = regexp.MustCompile(`#EXTGRP: *(.*)`)
 var durationRx = regexp.MustCompile(`^:(-?[0-9]+)`)
-var attributeRx = regexp.MustCompile(`([a-zA-Z0-9-._]+)="([^"]*)"`)
 
 // MakeInterfaceFromM3U :
 func MakeInterfaceFromM3U(byteStream []byte) (allChannels []any, err error) {
@@ -62,9 +64,14 @@ func MakeInterfaceFromM3U(byteStream []byte) (allChannels []any, err error) {
 
 						// Parse attributes from the left part
 						attrPart := line[:commaPos]
-						matches := attributeRx.FindAllStringSubmatch(attrPart, -1)
-						for _, m := range matches {
-							key, val := m[1], m[2]
+
+						offset := 0
+						for offset < len(attrPart) {
+							matches, pos, ok := matchAttribute.FindString(attrPart[offset:])
+							if !ok {
+								break
+							}
+							key, val := matches[1], matches[2]
 
 							// Set TVG Key as lowercase
 							if strings.Contains(key, "tvg") {
@@ -77,13 +84,19 @@ func MakeInterfaceFromM3U(byteStream []byte) (allChannels []any, err error) {
 							if !strings.Contains(val, "://") && len(val) > 0 {
 								value += val + " "
 							}
+
+							offset += pos + len(matches[0])
 						}
 					} else {
 						// Fallback if no comma found (unlikely for valid EXTINF but possible)
 						// Just parse attributes from whole line?
-						matches := attributeRx.FindAllStringSubmatch(line, -1)
-						for _, m := range matches {
-							key, val := m[1], m[2]
+						offset := 0
+						for offset < len(line) {
+							matches, pos, ok := matchAttribute.FindString(line[offset:])
+							if !ok {
+								break
+							}
+							key, val := matches[1], matches[2]
 							if strings.Contains(key, "tvg") {
 								stream[strings.ToLower(key)] = val
 							} else {
@@ -92,6 +105,7 @@ func MakeInterfaceFromM3U(byteStream []byte) (allChannels []any, err error) {
 							if !strings.Contains(val, "://") && len(val) > 0 {
 								value += val + " "
 							}
+							offset += pos + len(matches[0])
 						}
 					}
 
