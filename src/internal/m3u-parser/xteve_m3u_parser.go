@@ -9,13 +9,19 @@ import (
 	"strings"
 )
 
+//go:generate regexp2go -flags=212 -pkg=m3u -fn=MatchAttribute -pool=true "([a-zA-Z0-9-._]+)=\"([^\"]*)\""
+
 var extGrpRx = regexp.MustCompile(`#EXTGRP: *(.*)`)
 var durationRx = regexp.MustCompile(`^:(-?[0-9]+)`)
+
 // MakeInterfaceFromM3U :
 func MakeInterfaceFromM3U(byteStream []byte) (allChannels []any, err error) {
 	var content = string(byteStream)
 	// channelName is now local to parseMetaData
 	processedUUIDs := make(map[string]struct{}) // For optimized UUID check across all channels
+
+	// Initialize the generated matcher
+	var matcher MatchAttribute
 
 	// Using pointers to avoid map copying if possible, but the signature returns []any (likely []map[string]string)
 
@@ -60,7 +66,15 @@ func MakeInterfaceFromM3U(byteStream []byte) (allChannels []any, err error) {
 
 						// Parse attributes from the left part
 						attrPart := line[:commaPos]
-						parseAttributes(attrPart, func(key, val string) {
+
+						offset := 0
+						for offset < len(attrPart) {
+							matches, pos, ok := matcher.FindString(attrPart[offset:])
+							if !ok {
+								break
+							}
+							key, val := matches[1], matches[2]
+
 							// Set TVG Key as lowercase
 							if strings.Contains(key, "tvg") {
 								stream[strings.ToLower(key)] = val
@@ -72,11 +86,19 @@ func MakeInterfaceFromM3U(byteStream []byte) (allChannels []any, err error) {
 							if !strings.Contains(val, "://") && len(val) > 0 {
 								value += val + " "
 							}
-						})
+
+							offset += pos + len(matches[0])
+						}
 					} else {
 						// Fallback if no comma found (unlikely for valid EXTINF but possible)
 						// Just parse attributes from whole line?
-						parseAttributes(line, func(key, val string) {
+						offset := 0
+						for offset < len(line) {
+							matches, pos, ok := matcher.FindString(line[offset:])
+							if !ok {
+								break
+							}
+							key, val := matches[1], matches[2]
 							if strings.Contains(key, "tvg") {
 								stream[strings.ToLower(key)] = val
 							} else {
@@ -85,7 +107,8 @@ func MakeInterfaceFromM3U(byteStream []byte) (allChannels []any, err error) {
 							if !strings.Contains(val, "://") && len(val) > 0 {
 								value += val + " "
 							}
-						})
+							offset += pos + len(matches[0])
+						}
 					}
 
 					if len(channelName) == 0 {
@@ -163,63 +186,4 @@ func MakeInterfaceFromM3U(byteStream []byte) (allChannels []any, err error) {
 		err = errors.New("Invalid M3U file, an extended M3U file is required.")
 	}
 	return
-}
-
-// parseAttributes replaces the regex `([a-zA-Z0-9-._]+)="([^"]*)"`
-// It iterates through the string finding key="value" pairs and calls the callback for each match.
-// This eliminates repeated regex execution and submatch allocations.
-func parseAttributes(line string, callback func(key, val string)) {
-	n := len(line)
-	i := 0
-	for i < n {
-		// Find next '='
-		eqIdx := strings.IndexByte(line[i:], '=')
-		if eqIdx == -1 {
-			break
-		}
-		absEqIdx := i + eqIdx
-
-		// Check if followed by quote
-		if absEqIdx+1 >= n || line[absEqIdx+1] != '"' {
-			i = absEqIdx + 1
-			continue
-		}
-
-		// Backtrack to find key start
-		keyEnd := absEqIdx
-		keyStart := keyEnd
-		for keyStart > i {
-			c := line[keyStart-1]
-			if !isKeyChar(c) {
-				break
-			}
-			keyStart--
-		}
-
-		if keyStart == keyEnd {
-			// No valid key found
-			i = absEqIdx + 1
-			continue
-		}
-
-		key := line[keyStart:keyEnd]
-
-		// Find end of value
-		valStart := absEqIdx + 2
-		closeQuoteIdx := strings.IndexByte(line[valStart:], '"')
-		if closeQuoteIdx == -1 {
-			break
-		}
-		valEnd := valStart + closeQuoteIdx
-		val := line[valStart:valEnd]
-
-		// Clone strings to avoid retaining reference to the potentially large source line/file
-		callback(strings.Clone(key), strings.Clone(val))
-
-		i = valEnd + 1
-	}
-}
-
-func isKeyChar(c byte) bool {
-	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '.' || c == '_'
 }
