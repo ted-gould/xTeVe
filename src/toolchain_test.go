@@ -1,8 +1,6 @@
 package src
 
 import (
-	"crypto/md5"
-	"encoding/hex"
 	"testing"
 )
 
@@ -190,10 +188,4 @@ func TestParseTemplate(t *testing.T) {
 			}
 		})
 	}
-}
-
-// Helper to calculate MD5 for verification
-func calculateMD5(s string) string {
-	hash := md5.Sum([]byte(s))
-	return hex.EncodeToString(hash[:])
 }
