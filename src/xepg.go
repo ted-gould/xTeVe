@@ -878,25 +878,8 @@ func getProgramData(xepgChannel XEPGChannelStruct) (xepgXML XMLTV, err error) {
 		// Channel ID
 		program.Channel = xepgChannel.XChannelID
 
-		progStart := strings.Split(xmltvProgram.Start, " ")
-		progStop := strings.Split(xmltvProgram.Stop, " ")
-
-		// Safety check for start/stop format
-		if len(progStart) > 1 {
-			tzStart, _ := strconv.Atoi(progStart[1])
-			progStart[1] = fmt.Sprintf("%+05d", tzStart+timeshift*100)
-			program.Start = strings.Join(progStart, " ")
-		} else {
-			program.Start = xmltvProgram.Start
-		}
-
-		if len(progStop) > 1 {
-			tzStop, _ := strconv.Atoi(progStop[1])
-			progStop[1] = fmt.Sprintf("%+05d", tzStop+timeshift*100)
-			program.Stop = strings.Join(progStop, " ")
-		} else {
-			program.Stop = xmltvProgram.Stop
-		}
+		program.Start = adjustProgramTime(xmltvProgram.Start, timeshift)
+		program.Stop = adjustProgramTime(xmltvProgram.Stop, timeshift)
 
 		// Title
 		program.Title = xmltvProgram.Title
@@ -952,6 +935,24 @@ func getProgramData(xepgChannel XEPGChannelStruct) (xepgXML XMLTV, err error) {
 		xepgXML.Program = append(xepgXML.Program, program)
 	}
 	return
+}
+
+// adjustProgramTime adjusts the timezone of a program start/stop time string.
+// t format is expected to be "YYYYMMDDhhmmss +ZZZZ".
+func adjustProgramTime(t string, timeshift int) string {
+	if timeshift == 0 {
+		return t
+	}
+
+	before, after, found := strings.Cut(t, " ")
+	if !found {
+		return t
+	}
+
+	tzStart, _ := strconv.Atoi(after)
+	newTz := tzStart + timeshift*100
+
+	return before + " " + fmt.Sprintf("%+05d", newTz)
 }
 
 // Create Dummy Data (createXMLTVFile)
