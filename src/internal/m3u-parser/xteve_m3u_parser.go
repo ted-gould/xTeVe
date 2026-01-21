@@ -213,7 +213,8 @@ func parseAttributes(line string, callback func(key, val string)) {
 		valEnd := valStart + closeQuoteIdx
 		val := line[valStart:valEnd]
 
-		callback(key, val)
+		// Clone strings to avoid retaining reference to the potentially large source line/file
+		callback(strings.Clone(key), strings.Clone(val))
 
 		i = valEnd + 1
 	}
