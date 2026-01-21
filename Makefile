@@ -42,11 +42,11 @@ $(VIDEO_TARGET): $(VIDEO_SRC)
 	@bash build/generate_video.sh
 
 # Test and lint targets
-test: $(JS_DIR) $(VIDEO_TARGET)
+test: $(JS_DIR) $(VIDEO_TARGET) generate
 	@echo "--- Running Go tests ---"
 	$(GO) test ./...
 
-lint:
+lint: generate
 	@echo "--- Running golangci-lint ---"
 	$(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 	$(shell $(GO) env GOPATH)/bin/golangci-lint run
