@@ -9,8 +9,9 @@ import (
 	"strings"
 )
 
-//go:generate regexp2go -flags=212 -pkg=m3u -fn=MatchAttribute -pool=true "([a-zA-Z0-9-._]+)=\"([^\"]*)\""
+//go:generate bash -c "regexp2go -flags=212 -pkg=m3u -fn=MatchAttribute -pool=true \"([a-zA-Z0-9-._]+)=\\\"([^\\\"]*)\\\"\" > regexp2go_attribute.go"
 
+var matchAttribute MatchAttribute
 var extGrpRx = regexp.MustCompile(`#EXTGRP: *(.*)`)
 var durationRx = regexp.MustCompile(`^:(-?[0-9]+)`)
 
@@ -19,9 +20,6 @@ func MakeInterfaceFromM3U(byteStream []byte) (allChannels []any, err error) {
 	var content = string(byteStream)
 	// channelName is now local to parseMetaData
 	processedUUIDs := make(map[string]struct{}) // For optimized UUID check across all channels
-
-	// Initialize the generated matcher
-	var matcher MatchAttribute
 
 	// Using pointers to avoid map copying if possible, but the signature returns []any (likely []map[string]string)
 
@@ -69,7 +67,7 @@ func MakeInterfaceFromM3U(byteStream []byte) (allChannels []any, err error) {
 
 						offset := 0
 						for offset < len(attrPart) {
-							matches, pos, ok := matcher.FindString(attrPart[offset:])
+							matches, pos, ok := matchAttribute.FindString(attrPart[offset:])
 							if !ok {
 								break
 							}
@@ -94,7 +92,7 @@ func MakeInterfaceFromM3U(byteStream []byte) (allChannels []any, err error) {
 						// Just parse attributes from whole line?
 						offset := 0
 						for offset < len(line) {
-							matches, pos, ok := matcher.FindString(line[offset:])
+							matches, pos, ok := matchAttribute.FindString(line[offset:])
 							if !ok {
 								break
 							}
