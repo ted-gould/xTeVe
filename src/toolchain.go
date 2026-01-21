@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/md5"
 	"crypto/rand"
+	"math/big"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -366,17 +367,18 @@ func resolveHostIP() (err error) {
 func randomString(n int) (string, error) {
 	const alphanum = "AB1CD2EF3GH4IJ5KL6MN7OP8QR9ST0UVWXYZ"
 
-	var bytes = make([]byte, n)
+	var randomBytes = make([]byte, n)
+	max := big.NewInt(int64(len(alphanum)))
 
-	if _, err := rand.Read(bytes); err != nil {
-		log.Printf("Error reading random bytes for randomString: %v", err)
-		return "", err
+	for i := 0; i < n; i++ {
+		num, err := rand.Int(rand.Reader, max)
+		if err != nil {
+			log.Printf("Error reading random bytes for randomString: %v", err)
+			return "", err
+		}
+		randomBytes[i] = alphanum[num.Int64()]
 	}
-
-	for i, b := range bytes {
-		bytes[i] = alphanum[b%byte(len(alphanum))]
-	}
-	return string(bytes), nil
+	return string(randomBytes), nil
 }
 
 func parseTemplate(content string, tmpMap map[string]any) (result string) {
