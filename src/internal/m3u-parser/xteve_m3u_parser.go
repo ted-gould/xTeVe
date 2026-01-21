@@ -5,15 +5,13 @@ import (
 	"log"
 	"net/url"
 	"regexp"
-	"strings"
-
 	"slices"
+	"strings"
 )
 
-var exceptForParameterRx = regexp.MustCompile(`[a-z-A-Z=]*(".*?")`)
-var exceptForChannelNameRx = regexp.MustCompile(`,([^\n]*|,[^\r]*)`)
 var extGrpRx = regexp.MustCompile(`#EXTGRP: *(.*)`)
 var durationRx = regexp.MustCompile(`^:(-?[0-9]+)`)
+var attributeRx = regexp.MustCompile(`([a-zA-Z0-9-._]+)="([^"]*)"`)
 
 // MakeInterfaceFromM3U :
 func MakeInterfaceFromM3U(byteStream []byte) (allChannels []any, err error) {
@@ -21,62 +19,80 @@ func MakeInterfaceFromM3U(byteStream []byte) (allChannels []any, err error) {
 	// channelName is now local to parseMetaData
 	processedUUIDs := make(map[string]struct{}) // For optimized UUID check across all channels
 
-	var parseMetaData = func(channelBlock string) (stream map[string]string) { // currentProcessedUUIDs param removed, uses captured processedUUIDs
+	// Using pointers to avoid map copying if possible, but the signature returns []any (likely []map[string]string)
+
+	var parseMetaData = func(channelBlock string) (stream map[string]string) {
 		stream = make(map[string]string)
-		var channelName string // Made local
+		var channelName string
+		var value string
 
-		var linesIn = strings.Split(strings.Replace(channelBlock, "\r\n", "\n", -1), "\n")
+		// Optimized: Iterate over lines without full split
+		// channelBlock contains lines for one channel.
+		// We expect #EXTINF line and URL line.
 
-		// Optimized line filtering
-		var lines []string 
-		for _, line := range linesIn {
-			if len(line) > 0 && line[0] != '#' { // Simplified condition
-				lines = append(lines, line)
-			}
-		}
+		lines := strings.Split(channelBlock, "\n")
 
-		if len(lines) >= 2 {
-			for _, line := range lines {
-				_, errURL := url.ParseRequestURI(line) // Renamed err to errURL
+		for _, rawLine := range lines {
+			line := strings.TrimRight(rawLine, "\r")
+			if len(line) > 0 && line[0] != '#' {
+				// This is either the EXTINF param line (starting with :) or the URL line.
 
-				switch errURL { // Use errURL
-				case nil:
-					stream["url"] = strings.Trim(line, "\r\n")
-				default:
-					var value string
-					// Parse all parameters
-					var streamParameter = exceptForParameterRx.FindAllString(line, -1)
+				_, errURL := url.ParseRequestURI(line)
 
-					for _, p := range streamParameter {
-						line = strings.Replace(line, p, "", 1)
-
-						p = strings.Replace(p, `"`, "", -1)
-						var parameter = strings.SplitN(p, "=", 2)
-
-						if len(parameter) == 2 {
-							// Set TVG Key as lowercase
-							switch strings.Contains(parameter[0], "tvg") {
-							case true:
-								stream[strings.ToLower(parameter[0])] = parameter[1]
-							case false:
-								stream[parameter[0]] = parameter[1]
-							}
-
-							// URL's are not passed to the filter function
-							if !strings.Contains(parameter[1], "://") && len(parameter[1]) > 0 {
-								value = value + parameter[1] + " "
-							}
+				if errURL == nil {
+					// It's a URL
+					stream["url"] = line
+				} else {
+					// It's the parameter line (the part after #EXTINF)
+					// Format: ... attributes ... ,Channel Name
+					// Find separator comma (first comma not in quotes)
+					commaPos := -1
+					inQuote := false
+					for i, r := range line {
+						if r == '"' {
+							inQuote = !inQuote
+						} else if r == ',' && !inQuote {
+							commaPos = i
+							break
 						}
 					}
 
-					// Parse channel names
-					var name = exceptForChannelNameRx.FindAllString(line, 1)
+					if commaPos != -1 {
+						channelName = strings.TrimSpace(line[commaPos+1:])
 
-					if len(name) > 0 {
-						channelName = name[0]
-						channelName = strings.Replace(channelName, `,`, "", 1)
-						channelName = strings.TrimRight(channelName, "\r\n")
-						channelName = strings.Trim(channelName, " ")
+						// Parse attributes from the left part
+						attrPart := line[:commaPos]
+						matches := attributeRx.FindAllStringSubmatch(attrPart, -1)
+						for _, m := range matches {
+							key, val := m[1], m[2]
+
+							// Set TVG Key as lowercase
+							if strings.Contains(key, "tvg") {
+								stream[strings.ToLower(key)] = val
+							} else {
+								stream[key] = val
+							}
+
+							// URL's are not passed to the filter function
+							if !strings.Contains(val, "://") && len(val) > 0 {
+								value += val + " "
+							}
+						}
+					} else {
+						// Fallback if no comma found (unlikely for valid EXTINF but possible)
+						// Just parse attributes from whole line?
+						matches := attributeRx.FindAllStringSubmatch(line, -1)
+						for _, m := range matches {
+							key, val := m[1], m[2]
+							if strings.Contains(key, "tvg") {
+								stream[strings.ToLower(key)] = val
+							} else {
+								stream[key] = val
+							}
+							if !strings.Contains(val, "://") && len(val) > 0 {
+								value += val + " "
+							}
+						}
 					}
 
 					if len(channelName) == 0 {
@@ -84,20 +100,19 @@ func MakeInterfaceFromM3U(byteStream []byte) (allChannels []any, err error) {
 							channelName = v
 						}
 					}
+					channelName = strings.TrimSpace(channelName)
 
-					channelName = strings.Trim(channelName, " ")
-
-					// Channels without names are skipped
-					if len(channelName) == 0 {
-						return
-					}
-
-					stream["name"] = channelName
-					value = value + channelName
-
-					stream["_values"] = value
+					value += channelName
 				}
 			}
+		}
+
+		if len(channelName) > 0 {
+			stream["name"] = channelName
+			stream["_values"] = value
+		} else {
+			// If no name found, skip
+			return nil
 		}
 
 		if durationMatch := durationRx.FindStringSubmatch(channelBlock); len(durationMatch) > 1 {
@@ -106,26 +121,21 @@ func MakeInterfaceFromM3U(byteStream []byte) (allChannels []any, err error) {
 
 		// Search for a unique ID in the stream (optimized with map, using captured processedUUIDs)
 		for key, value := range stream {
-			if !strings.Contains(strings.ToLower(key), "tvg-id") {
-				if strings.Contains(strings.ToLower(key), "id") {
+			lowerKey := strings.ToLower(key)
+			if !strings.Contains(lowerKey, "tvg-id") {
+				if strings.Contains(lowerKey, "id") {
 					if _, exists := processedUUIDs[value]; exists {
 						log.Printf("Channel: %s - %s = %s (Duplicate UUID based on non-tvg-id field)", stream["name"], key, value)
-						// If a duplicate is found for this key, the original logic implies
-						// _uuid.key and _uuid.value are NOT set by this specific id field.
-						// The 'break' ensures we don't look for other 'id' fields in this stream.
 					} else {
-						// This is a new unique value for an "id" field.
-						processedUUIDs[value] = struct{}{} // Mark this value as seen.
+						processedUUIDs[value] = struct{}{}
 						stream["_uuid.key"] = key
 						stream["_uuid.value"] = value
 					}
-					// Whether it was a duplicate or a new unique ID,
-					// we break after processing the first encountered "id" field (non "tvg-id").
 					break
 				}
 			}
 		}
-		return
+		return stream
 	}
 
 	if strings.Contains(content, "#EXT-X-TARGETDURATION") || strings.Contains(content, "#EXT-X-MEDIA-SEQUENCE") {
@@ -134,29 +144,27 @@ func MakeInterfaceFromM3U(byteStream []byte) (allChannels []any, err error) {
 	}
 
 	if strings.Contains(content, "#EXTM3U") {
-		var channelBlocks = strings.Split(content, "#EXTINF") // Renamed 'channels' to 'channelBlocks'
-
-		channelBlocks = slices.Delete(channelBlocks, 0, 1) // Remove the part before the first #EXTINF
+		var channelBlocks = strings.Split(content, "#EXTINF")
+		channelBlocks = slices.Delete(channelBlocks, 0, 1)
 
 		var lastExtGrp string
 
-		for _, cb := range channelBlocks { // Iterate over channelBlocks
-			// parseMetaData now uses the captured processedUUIDs from MakeInterfaceFromM3U
-			var stream = parseMetaData(cb) 
+		for _, cb := range channelBlocks {
+			stream := parseMetaData(cb)
 
-			if extGrp := extGrpRx.FindStringSubmatch(cb); len(extGrp) > 1 {
-				// EXTGRP applies to all subseqent channels until overriden
-				lastExtGrp = strings.Trim(extGrp[1], "\r\n")
+			if stream == nil {
+				continue
 			}
 
-			// group-title has priority over EXTGRP
+			if extGrp := extGrpRx.FindStringSubmatch(cb); len(extGrp) > 1 {
+				lastExtGrp = strings.TrimSpace(extGrp[1])
+			}
+
 			if stream["group-title"] == "" && lastExtGrp != "" {
 				stream["group-title"] = lastExtGrp
 			}
 
-			if len(stream) > 0 && stream != nil {
-				allChannels = append(allChannels, stream)
-			}
+			allChannels = append(allChannels, stream)
 		}
 	} else {
 		err = errors.New("Invalid M3U file, an extended M3U file is required.")
