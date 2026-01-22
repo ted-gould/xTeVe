@@ -1010,15 +1010,15 @@ func createDummyProgram(xepgChannel XEPGChannelStruct) (dummyXMLTV XMLTV) {
 
 // Expand Categories (createXMLTVFile)
 func getCategory(program *Program, xmltvProgram *Program, xCategory string) {
-	// Optimization: Pre-allocate slice capacity
-	targetLen := len(xmltvProgram.Category)
-	if len(xCategory) > 0 {
-		targetLen++
-	}
-
-	if targetLen == 0 {
+	// Optimization: If no extra category is needed, reuse the source slice.
+	// This avoids allocating a new slice header and backing array.
+	if len(xCategory) == 0 {
+		program.Category = xmltvProgram.Category
 		return
 	}
+
+	// Optimization: Pre-allocate slice capacity
+	targetLen := len(xmltvProgram.Category) + 1
 
 	program.Category = make([]*Category, 0, targetLen)
 
@@ -1026,12 +1026,10 @@ func getCategory(program *Program, xmltvProgram *Program, xCategory string) {
 	// xmltvProgram.Category elements are immutable so we can safely share pointers.
 	program.Category = append(program.Category, xmltvProgram.Category...)
 
-	if len(xCategory) > 0 {
-		category := &Category{}
-		category.Value = xCategory
-		category.Lang = "en"
-		program.Category = append(program.Category, category)
-	}
+	category := &Category{}
+	category.Value = xCategory
+	category.Lang = "en"
+	program.Category = append(program.Category, category)
 }
 
 // Load the Poster Cover Program from the XMLTV File
