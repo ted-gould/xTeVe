@@ -1,6 +1,7 @@
 package src
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"net/url"
@@ -24,15 +25,14 @@ func ParseM3U8(stream *ThisStream) (err error) {
 	showDebug(debug, 3)
 
 	var getBandwidth = func(line string) int {
-		var infos = strings.Split(line, ",")
-
-		for _, info := range infos {
-			if strings.Contains(info, "BANDWIDTH=") {
-				var bandwidth = strings.Replace(info, "BANDWIDTH=", "", -1)
-				n, err := strconv.Atoi(bandwidth)
-				if err == nil {
-					return n
-				}
+		if idx := strings.Index(line, "BANDWIDTH="); idx != -1 {
+			var bandwidth = line[idx+10:]
+			if comma := strings.Index(bandwidth, ","); comma != -1 {
+				bandwidth = bandwidth[:comma]
+			}
+			n, err := strconv.Atoi(bandwidth)
+			if err == nil {
+				return n
 			}
 		}
 		return 0
@@ -41,40 +41,30 @@ func ParseM3U8(stream *ThisStream) (err error) {
 	var parseParameter = func(line string, segment *Segment) (err error) {
 		line = strings.Trim(line, "\r\n")
 
-		var parameters = []string{"#EXT-X-VERSION:", "#EXT-X-PLAYLIST-TYPE:", "#EXT-X-MEDIA-SEQUENCE:", "#EXT-X-STREAM-INF:", "#EXTINF:"}
-
-		for _, parameter := range parameters {
-			if strings.Contains(line, parameter) {
-				var value = strings.Replace(line, parameter, "", -1)
-
-				switch parameter {
-				case "#EXT-X-VERSION:":
-					// Version parsing removed as unused
-				case "#EXT-X-PLAYLIST-TYPE:":
-					segment.PlaylistType = value
-				case "#EXT-X-MEDIA-SEQUENCE:":
-					n, err := strconv.ParseInt(value, 10, 64)
-					if err == nil {
-						stream.Sequence = n
-						sequence = n
-					}
-				case "#EXT-X-STREAM-INF:":
-					segment.StreamInf.Bandwidth = getBandwidth(value)
-				case "#EXTINF:":
-					var d = strings.Split(value, ",")
-					if len(d) > 0 {
-						value = strings.Replace(d[0], ",", "", -1)
-						duration, err := strconv.ParseFloat(value, 64)
-						if err == nil {
-							segment.Duration = duration
-						} else {
-							ShowError(err, 1050)
-							return err
-						}
-					}
-				}
+		if strings.HasPrefix(line, "#EXTINF:") {
+			var value = line[8:]
+			if comma := strings.Index(value, ","); comma != -1 {
+				value = value[:comma]
 			}
+			duration, err := strconv.ParseFloat(value, 64)
+			if err == nil {
+				segment.Duration = duration
+			} else {
+				ShowError(err, 1050)
+				return err
+			}
+		} else if strings.HasPrefix(line, "#EXT-X-STREAM-INF:") {
+			segment.StreamInf.Bandwidth = getBandwidth(line[18:])
+		} else if strings.HasPrefix(line, "#EXT-X-MEDIA-SEQUENCE:") {
+			n, err := strconv.ParseInt(line[22:], 10, 64)
+			if err == nil {
+				stream.Sequence = n
+				sequence = n
+			}
+		} else if strings.HasPrefix(line, "#EXT-X-PLAYLIST-TYPE:") {
+			segment.PlaylistType = line[21:]
 		}
+
 		return
 	}
 
@@ -100,15 +90,15 @@ func ParseM3U8(stream *ThisStream) (err error) {
 	}
 
 	if strings.Contains(stream.Body, "#EXTM3U") {
-		var lines = strings.Split(strings.Replace(stream.Body, "\r\n", "\n", -1), "\n")
-
 		if !stream.DynamicBandwidth {
 			stream.DynamicStream = make(map[int]DynamicStream)
 		}
 
+		scanner := bufio.NewScanner(strings.NewReader(stream.Body))
+
 		// Parse Parameters
-		for i, line := range lines {
-			_ = i
+		for scanner.Scan() {
+			line := scanner.Text()
 
 			if len(line) > 0 {
 				if line[0:1] == "#" {
@@ -146,6 +136,10 @@ func ParseM3U8(stream *ThisStream) (err error) {
 					}
 				}
 			}
+		}
+
+		if err := scanner.Err(); err != nil {
+			return err
 		}
 	} else {
 		err = errors.New(getErrMsg(4051))
