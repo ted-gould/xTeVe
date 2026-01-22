@@ -1062,6 +1062,10 @@ func API(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Limit request body to 1MB to prevent DoS (Unrestricted Resource Consumption)
+	// The APIRequestStruct is small, so 1MB is more than enough.
+	r.Body = http.MaxBytesReader(w, r.Body, 1048576)
+
 	b, err := io.ReadAll(r.Body)
 	defer r.Body.Close()
 	if err != nil {
