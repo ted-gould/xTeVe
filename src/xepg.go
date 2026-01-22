@@ -5,6 +5,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path"
 	"regexp"
@@ -1158,15 +1159,8 @@ func createM3UFile() error { // Added error return type
 
 // Clean up the XEPG Database
 func cleanupXEPG() {
-	var sourceIDs []string
-
-	for source := range Settings.Files.M3U {
-		sourceIDs = append(sourceIDs, source)
-	}
-
-	for source := range Settings.Files.HDHR {
-		sourceIDs = append(sourceIDs, source)
-	}
+	sourceIDs := slices.Collect(maps.Keys(Settings.Files.M3U))
+	sourceIDs = slices.AppendSeq(sourceIDs, maps.Keys(Settings.Files.HDHR))
 
 	showInfo("XEPG:" + "Cleanup database")
 	Data.XEPG.XEPGCount = 0
