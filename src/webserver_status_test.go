@@ -40,6 +40,7 @@ func TestAPIStatusHandler_Tuners(t *testing.T) {
 	req := httptest.NewRequest("POST", "/api/", bytes.NewBuffer(bodyBytes))
 	// Mock IP address to loopback to pass security check
 	req.RemoteAddr = "127.0.0.1:12345"
+	req.Header.Set("Content-Type", "application/json")
 
 	w := httptest.NewRecorder()
 
