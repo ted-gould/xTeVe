@@ -716,10 +716,10 @@ func createXMLTVFile() (err error) {
 
 	files, err := os.ReadDir(System.Folder.ImagesCache)
 	if err == nil {
+		// Optimization: Pre-allocate slice capacity and remove redundant linear scan (O(N^2) -> O(N))
+		Data.Cache.ImagesCache = make([]string, 0, len(files))
 		for _, file := range files {
-			if !slices.Contains(Data.Cache.ImagesCache, file.Name()) {
-				Data.Cache.ImagesCache = append(Data.Cache.ImagesCache, file.Name())
-			}
+			Data.Cache.ImagesCache = append(Data.Cache.ImagesCache, file.Name())
 		}
 	}
 
