@@ -23,7 +23,7 @@ type M3UStream struct {
 func TestMakeInterfaceFromM3U(t *testing.T) {
 	// Read playlist
 	file := "test_playlist_1.m3u"
-	content, err := os.ReadFile(file) // Replaced ioutil.ReadFile with os.ReadFile
+	content, err := os.ReadFile(file)
 	assert.NoError(t, err, "Should read playlist")
 
 	// Parse playlist into []interface{}
@@ -32,7 +32,6 @@ func TestMakeInterfaceFromM3U(t *testing.T) {
 
 	// Build []M3UStream from []interface{}
 	streams := []M3UStream{}
-
 	for _, rawStream := range rawStreams {
 		jsonString, err := json.MarshalIndent(rawStream, "", "  ")
 		assert.NoError(t, err, "Should convert from interface")
@@ -46,39 +45,105 @@ func TestMakeInterfaceFromM3U(t *testing.T) {
 
 	assert.Len(t, streams, 4, "Should be 4 streams in total")
 
-	// Test stream 1
-	assert.Equal(t, "Channel 1", streams[0].Name, "Names should match")
-	assert.Equal(t, "Group 1", streams[0].GroupTitle, "Groups should match")
-	assert.Equal(t, "http://example.com/stream/1", streams[0].URL, "URL's should match")
-	assert.Equal(t, "Channel.1", streams[0].TvgName, "TVG names should match")
-	assert.Equal(t, "tvg.id.1", streams[0].TvgID, "TVG ID's should match")
-	assert.Equal(t, "https://example/logo.png", streams[0].TvgLogo, "TVG logos should match")
-	assert.Empty(t, streams[0].TvgShift, "Should not have tvg-shift tag")
+	tests := []struct {
+		name       string
+		index      int
+		wantName   string
+		wantGroup  string
+		wantURL    string
+		wantTvgID  string
+		wantTvgName string
+		wantTvgLogo string
+		wantTvgShift string
+	}{
+		{
+			name:         "stream 1 with all attributes",
+			index:        0,
+			wantName:     "Channel 1",
+			wantGroup:    "Group 1",
+			wantURL:      "http://example.com/stream/1",
+			wantTvgID:    "tvg.id.1",
+			wantTvgName:  "Channel.1",
+			wantTvgLogo:  "https://example/logo.png",
+			wantTvgShift: "",
+		},
+		{
+			name:         "stream 2 with EXTGRP group",
+			index:        1,
+			wantName:     "Channel 2",
+			wantGroup:    "Group 2",
+			wantURL:      "http://example.com/stream/2",
+			wantTvgID:    "tvg.id.2",
+			wantTvgName:  "Channel.2",
+			wantTvgLogo:  "https://example/logo/2.png",
+			wantTvgShift: "",
+		},
+		{
+			name:         "stream 3 with special characters and inherited EXTGRP",
+			index:        2,
+			wantName:     ",:It's - a difficult name |",
+			wantGroup:    "Group 2",
+			wantURL:      "http://example.com/stream/3",
+			wantTvgID:    "",
+			wantTvgName:  "",
+			wantTvgLogo:  "",
+			wantTvgShift: "",
+		},
+		{
+			name:         "stream 4 with group-title overriding EXTGRP",
+			index:        3,
+			wantName:     "Channel 4",
+			wantGroup:    "Group 4",
+			wantURL:      "http://example.com/stream/4",
+			wantTvgID:    "tvg.id.4",
+			wantTvgName:  "Channel.4",
+			wantTvgLogo:  "https://example/logo/4.png",
+			wantTvgShift: "-5",
+		},
+	}
 
-	// Test stream 2
-	assert.Equal(t, "Channel 2", streams[1].Name, "Names should match")
-	assert.Equal(t, "Group 2", streams[1].GroupTitle, "Should have a GroupTitle set from EXTGRP")
-	assert.Equal(t, "http://example.com/stream/2", streams[1].URL, "URL's should match")
-	assert.Equal(t, "Channel.2", streams[1].TvgName, "TVG names should match")
-	assert.Equal(t, "tvg.id.2", streams[1].TvgID, "TVG ID's should match")
-	assert.Equal(t, "https://example/logo/2.png", streams[1].TvgLogo, "TVG logos should match")
-	assert.Empty(t, streams[1].TvgShift, "Should not have tvg-shift tag")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stream := streams[tt.index]
+			assert.Equal(t, tt.wantName, stream.Name)
+			assert.Equal(t, tt.wantGroup, stream.GroupTitle)
+			assert.Equal(t, tt.wantURL, stream.URL)
+			assert.Equal(t, tt.wantTvgID, stream.TvgID)
+			assert.Equal(t, tt.wantTvgName, stream.TvgName)
+			assert.Equal(t, tt.wantTvgLogo, stream.TvgLogo)
+			assert.Equal(t, tt.wantTvgShift, stream.TvgShift)
+		})
+	}
+}
 
-	// Test stream 3
-	assert.Equal(t, ",:It's - a difficult name |", streams[2].Name, "Names should match")
-	assert.Equal(t, "Group 2", streams[2].GroupTitle, "Should have a GroupTitle set from previous EXTGRP")
-	assert.Equal(t, "http://example.com/stream/3", streams[2].URL, "URL's should match")
-	assert.Empty(t, streams[2].TvgName, "Should not have tvg-name tag")
-	assert.Empty(t, streams[2].TvgID, "Should not have tvg-id tag")
-	assert.Empty(t, streams[2].TvgLogo, "Should not have tvg-logo tag")
-	assert.Empty(t, streams[2].TvgShift, "Should not have tvg-shift tag")
+func TestMakeInterfaceFromM3U_ErrorCases(t *testing.T) {
+	tests := []struct {
+		name        string
+		input       string
+		wantErr     string
+	}{
+		{
+			name:    "missing EXTM3U header",
+			input:   "#EXTINF:0,Channel 1\nhttp://example.com/stream",
+			wantErr: "Invalid M3U file, an extended M3U file is required.",
+		},
+		{
+			name:    "HLS playlist with EXT-X-TARGETDURATION",
+			input:   "#EXTM3U\n#EXT-X-TARGETDURATION:10\n#EXTINF:10,\nhttp://example.com/segment.ts",
+			wantErr: "Invalid M3U file, an extended M3U file is required.",
+		},
+		{
+			name:    "HLS playlist with EXT-X-MEDIA-SEQUENCE",
+			input:   "#EXTM3U\n#EXT-X-MEDIA-SEQUENCE:0\n#EXTINF:10,\nhttp://example.com/segment.ts",
+			wantErr: "Invalid M3U file, an extended M3U file is required.",
+		},
+	}
 
-	// Test stream 4
-	assert.Equal(t, "Channel 4", streams[3].Name, "Names should match")
-	assert.Equal(t, "Group 4", streams[3].GroupTitle, "Should have a GroupTitle set from group-title, over EXTGRP")
-	assert.Equal(t, "http://example.com/stream/4", streams[3].URL, "URL's should match")
-	assert.Equal(t, "Channel.4", streams[3].TvgName, "TVG names should match")
-	assert.Equal(t, "tvg.id.4", streams[3].TvgID, "TVG ID's should match")
-	assert.Equal(t, "https://example/logo/4.png", streams[3].TvgLogo, "TVG logos should match")
-	assert.Equal(t, "-5", streams[3].TvgShift, "TVG shifts should match")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := MakeInterfaceFromM3U([]byte(tt.input))
+			assert.Error(t, err)
+			assert.Equal(t, tt.wantErr, err.Error())
+		})
+	}
 }
