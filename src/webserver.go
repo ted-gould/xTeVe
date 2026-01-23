@@ -1062,6 +1062,13 @@ func API(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Security: Enforce Content-Type to prevent CSRF via simple requests (e.g. text/plain)
+	// We check Contains because header might include charset (e.g. "application/json; charset=utf-8")
+	if !strings.Contains(strings.ToLower(r.Header.Get("Content-Type")), "application/json") {
+		httpStatusError(w, r, http.StatusUnsupportedMediaType)
+		return
+	}
+
 	// Limit request body to 1MB to prevent DoS (Unrestricted Resource Consumption)
 	// The APIRequestStruct is small, so 1MB is more than enough.
 	r.Body = http.MaxBytesReader(w, r.Body, 1048576)
