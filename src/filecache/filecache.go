@@ -9,13 +9,15 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"sync"
 	"time"
 )
 
 const (
-	MaxCacheItems = 128
-	MaxFileSize   = 1024 * 1024 // 1MB
+	DefaultMaxCacheItems = 100
+	MaxCacheItems        = 100000      // Maximum allowed cache size
+	MaxFileSize          = 1024 * 1024 // 1MB
 )
 
 type Metadata struct {
@@ -109,6 +111,20 @@ func (c *FileCache) loadCache() {
 func HashURL(url string) string {
 	hash := md5.Sum([]byte(url))
 	return hex.EncodeToString(hash[:])
+}
+
+// getMaxCacheItems returns the configured maximum cache items, defaulting to DefaultMaxCacheItems.
+// The returned value is capped at MaxCacheItems (100,000) to prevent excessive memory usage.
+func getMaxCacheItems() int {
+	if val := os.Getenv("WEBDAV_CACHE_SIZE"); val != "" {
+		if size, err := strconv.Atoi(val); err == nil && size > 0 {
+			if size > MaxCacheItems {
+				return MaxCacheItems
+			}
+			return size
+		}
+	}
+	return DefaultMaxCacheItems
 }
 
 // Get returns the path to the cached file and its metadata if available.
@@ -259,7 +275,8 @@ func (c *FileCache) CleanNow() {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	if len(c.items) <= MaxCacheItems {
+	maxItems := getMaxCacheItems()
+	if len(c.items) <= maxItems {
 		return
 	}
 
@@ -276,7 +293,7 @@ func (c *FileCache) CleanNow() {
 		return a.time.Compare(b.time)
 	})
 
-	toRemove := len(entries) - MaxCacheItems
+	toRemove := len(entries) - maxItems
 	for i := 0; i < toRemove; i++ {
 		e := entries[i]
 		item := c.items[e.hash]
