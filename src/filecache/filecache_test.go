@@ -145,6 +145,24 @@ func TestConfigurableCacheSize(t *testing.T) {
 			expectedSize: DefaultMaxCacheItems,
 			shouldUseEnv: true,
 		},
+		{
+			name:         "cache size at maximum limit",
+			envValue:     "100000",
+			expectedSize: MaxCacheItems,
+			shouldUseEnv: true,
+		},
+		{
+			name:         "cache size above maximum is capped",
+			envValue:     "200000",
+			expectedSize: MaxCacheItems,
+			shouldUseEnv: true,
+		},
+		{
+			name:         "extremely large value is capped",
+			envValue:     "999999999",
+			expectedSize: MaxCacheItems,
+			shouldUseEnv: true,
+		},
 	}
 
 	for _, tt := range tests {

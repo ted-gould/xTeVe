@@ -16,6 +16,7 @@ import (
 
 const (
 	DefaultMaxCacheItems = 100
+	MaxCacheItems        = 100000      // Maximum allowed cache size
 	MaxFileSize          = 1024 * 1024 // 1MB
 )
 
@@ -113,9 +114,13 @@ func HashURL(url string) string {
 }
 
 // getMaxCacheItems returns the configured maximum cache items, defaulting to DefaultMaxCacheItems.
+// The returned value is capped at MaxCacheItems (100,000) to prevent excessive memory usage.
 func getMaxCacheItems() int {
 	if val := os.Getenv("WEBDAV_CACHE_SIZE"); val != "" {
 		if size, err := strconv.Atoi(val); err == nil && size > 0 {
+			if size > MaxCacheItems {
+				return MaxCacheItems
+			}
 			return size
 		}
 	}
