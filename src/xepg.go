@@ -170,9 +170,9 @@ func buildXEPG(background bool) error { // Added error return type
 // Create Mapping Menu for the XMLTV Files
 func createXEPGMapping() {
 	Data.XMLTV.Files = getLocalProviderFiles("xmltv")
-	Data.XMLTV.Mapping = make(map[string]any)
+	Data.XMLTV.Mapping = make(map[string]map[string]XMLTVChannelMapping)
 
-	var tmpMap = make(map[string]any)
+	var tmpMap = make(map[string]map[string]XMLTVChannelMapping)
 
 	if len(Data.XMLTV.Files) > 0 {
 		for i := len(Data.XMLTV.Files) - 1; i >= 0; i-- {
@@ -193,13 +193,13 @@ func createXEPGMapping() {
 			// XML Parsing (Provider File)
 			if err == nil {
 				// Write Data from the XML File to a temporary Map
-				var xmltvMap = make(map[string]any)
+				var xmltvMap = make(map[string]XMLTVChannelMapping)
 
 				for _, c := range xmltv.Channel {
-					var channel = make(map[string]any)
-					channel["id"] = c.ID
-					channel["display-names"] = c.DisplayNames
-					channel["icon"] = c.Icon.Src
+					var channel XMLTVChannelMapping
+					channel.ID = c.ID
+					channel.DisplayNames = c.DisplayNames
+					channel.Icon = c.Icon.Src
 					xmltvMap[c.ID] = channel
 				}
 				tmpMap[getFilenameFromPath(file)] = xmltvMap
@@ -214,17 +214,15 @@ func createXEPGMapping() {
 	}
 
 	// Create selection for the Dummy
-	var dummy = make(map[string]any)
+	var dummy = make(map[string]XMLTVChannelMapping)
 	var times = []string{"30", "60", "90", "120", "180", "240", "360"}
 
 	for _, i := range times {
-		var dummyChannel = make(map[string]any)
-		dummyChannel["display-names"] = []DisplayName{{Value: i + " Minutes"}}
-		dummyChannel["id"] = i + "_Minutes"
-		dummyChannel["icon"] = ""
-		if id, ok := dummyChannel["id"].(string); ok {
-			dummy[id] = dummyChannel
-		}
+		var dummyChannel XMLTVChannelMapping
+		dummyChannel.DisplayNames = []DisplayName{{Value: i + " Minutes"}}
+		dummyChannel.ID = i + "_Minutes"
+		dummyChannel.Icon = ""
+		dummy[dummyChannel.ID] = dummyChannel
 	}
 	Data.XMLTV.Mapping["xTeVe Dummy"] = dummy
 }
@@ -598,86 +596,38 @@ func performAutomaticChannelMapping(xepgChannel XEPGChannelStruct, _ string) (XE
 			if mappingFound {
 				break // Exit outer loop if mapping was found in a previous iteration
 			}
-			xmltvMap, ok := xmltvChannels.(map[string]any)
-			if !ok {
-				continue // Skip if type assertion fails
-			}
 
-			if channel, ok := xmltvMap[tvgID]; ok {
-				channelData, ok := channel.(map[string]any)
-				if !ok {
-					// This case should ideally not happen if data structure is consistent
-					continue
+			if channel, ok := xmltvChannels[tvgID]; ok {
+				xepgChannel.XmltvFile = file
+				xepgChannel.XMapping = channel.ID
+				mappingMade = true
+				if len(channel.Icon) > 0 {
+					xepgChannel.TvgLogo = channel.Icon
 				}
-				if channelID, ok := channelData["id"].(string); ok {
-					xepgChannel.XmltvFile = file
-					xepgChannel.XMapping = channelID
-					mappingMade = true
-					if icon, ok := channelData["icon"].(string); ok {
-						if len(icon) > 0 {
-							xepgChannel.TvgLogo = icon
-						}
-					}
-					mappingFound = true // Set flag to break outer loop
-					// No 'continue' here, loop will break due to mappingFound in the next iteration's check
-				}
+				mappingFound = true // Set flag to break outer loop
+				// No 'continue' here, loop will break due to mappingFound in the next iteration's check
 			} else if !mappingFound { // Only search by name if not already found by tvgID
 				// Search for the proper XEPG channel ID by comparing its name with every alias in XML file
-				for _, xmltvChannel := range xmltvMap {
+				for _, xmltvChannel := range xmltvChannels {
 					if mappingFound { // Check again in case inner loop found something in previous iteration
 						break
 					}
-					channelData, ok := xmltvChannel.(map[string]any)
-					if !ok {
-						continue
-					}
-					displayNamesData, ok := channelData["display-names"]
-					if !ok {
-						continue
-					}
-					displayNamesArray, ok := displayNamesData.([]any)
-					if !ok {
-						concreteDisplayNames, okDisplayName := displayNamesData.([]DisplayName)
-						if okDisplayName {
-							displayNamesArray = make([]any, len(concreteDisplayNames))
-							for i, dn := range concreteDisplayNames {
-								displayNamesArray[i] = dn
-							}
-						} else {
-							continue
-						}
-					}
 
-					for _, nameEntry := range displayNamesArray {
-						var currentDisplayNameValue string
-						if dnStruct, ok := nameEntry.(DisplayName); ok {
-							currentDisplayNameValue = dnStruct.Value
-						} else if dnMap, ok := nameEntry.(map[string]any); ok {
-							if val, ok := dnMap["Value"].(string); ok {
-								currentDisplayNameValue = val
-							} else {
-								continue
-							}
-						} else {
-							continue
-						}
+					for _, nameEntry := range xmltvChannel.DisplayNames {
+						currentDisplayNameValue := nameEntry.Value
 
 						xmltvNameSolid := strings.ReplaceAll(currentDisplayNameValue, " ", "")
 						xepgNameSolid := strings.ReplaceAll(xepgChannel.Name, " ", "")
 
 						if strings.EqualFold(xmltvNameSolid, xepgNameSolid) {
-							if id, ok := channelData["id"].(string); ok {
-								xepgChannel.XmltvFile = file
-								xepgChannel.XMapping = id
-								mappingMade = true
-								if icon, ok := channelData["icon"].(string); ok {
-									if len(icon) > 0 {
-										xepgChannel.TvgLogo = icon
-									}
-								}
-								mappingFound = true // Set flag to break outer and inner loops
-								break               // Break from inner loop over displayNamesArray
+							xepgChannel.XmltvFile = file
+							xepgChannel.XMapping = xmltvChannel.ID
+							mappingMade = true
+							if len(xmltvChannel.Icon) > 0 {
+								xepgChannel.TvgLogo = xmltvChannel.Icon
 							}
+							mappingFound = true // Set flag to break outer and inner loops
+							break               // Break from inner loop over displayNamesArray
 						}
 					}
 					// if mappingFound, the inner loop over xmltvMap will break in next iter
@@ -699,24 +649,22 @@ func verifyExistingChannelMappings(xepgChannel XEPGChannelStruct) XEPGChannelStr
 	var file = xepgChannel.XmltvFile
 
 	if file != "xTeVe Dummy" {
-		xmltvFileMapping, fileExists := Data.XMLTV.Mapping[file].(map[string]any)
+		xmltvFileMapping, fileExists := Data.XMLTV.Mapping[file]
 		if !fileExists {
 			fileID := strings.TrimSuffix(getFilenameFromPath(file), path.Ext(getFilenameFromPath(file)))
 			ShowError(fmt.Errorf("missing XMLTV file: %s", getProviderParameter(fileID, "xmltv", "name")), 0)
 			showWarning(2301)
 			xepgChannel.XActive = false
 		} else {
-			channelData, channelExists := xmltvFileMapping[mappingValue].(map[string]any)
+			channelData, channelExists := xmltvFileMapping[mappingValue]
 			if !channelExists {
 				ShowError(fmt.Errorf("missing EPG data: %s for mapping %s in file %s", xepgChannel.Name, mappingValue, file), 0)
 				showWarning(2302)
 				xepgChannel.XActive = false
 			} else {
 				// Update Channel Logo
-				if logo, ok := channelData["icon"].(string); ok {
-					if xepgChannel.XUpdateChannelIcon && len(logo) > 0 {
-						xepgChannel.TvgLogo = logo
-					}
+				if xepgChannel.XUpdateChannelIcon && len(channelData.Icon) > 0 {
+					xepgChannel.TvgLogo = channelData.Icon
 				}
 			}
 		}
