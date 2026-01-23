@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -94,6 +95,8 @@ func Init() (err error) {
 	System.File.ServerCertPrivKey = getPlatformFile(fmt.Sprintf("%sxteve.key", System.Folder.Certificates))
 	System.File.XML = getPlatformFile(fmt.Sprintf("%s%s.xml", System.Folder.Data, System.AppName))
 	System.File.M3U = getPlatformFile(fmt.Sprintf("%s%s.m3u", System.Folder.Data, System.AppName))
+	// Use a predictable location for the Unix socket so clients can find it
+	System.File.UnixSocket = filepath.Join(os.TempDir(), System.AppName+".sock")
 
 	System.Compressed.GZxml = getPlatformFile(fmt.Sprintf("%s%s.xml.gz", System.Folder.Data, System.AppName))
 
