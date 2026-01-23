@@ -150,6 +150,45 @@ func StartWebserver(startupSpan trace.Span) (err error) {
 	}
 }
 
+// StartLocalSocketServer : Start a local Unix socket server for local tools like xteve-status
+func StartLocalSocketServer() error {
+	// Remove any existing socket file
+	if err := os.RemoveAll(System.File.UnixSocket); err != nil {
+		return fmt.Errorf("failed to remove existing socket: %w", err)
+	}
+
+	// Create Unix socket listener
+	listener, err := net.Listen("unix", System.File.UnixSocket)
+	if err != nil {
+		return fmt.Errorf("failed to create Unix socket listener: %w", err)
+	}
+
+	// Set socket permissions to be accessible by the user only
+	if err := os.Chmod(System.File.UnixSocket, 0600); err != nil {
+		listener.Close()
+		return fmt.Errorf("failed to set socket permissions: %w", err)
+	}
+
+	showInfo(fmt.Sprintf("Local Socket Server:%s", System.File.UnixSocket))
+
+	// Create a simple mux for the local socket server
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/", API)
+
+	server := &http.Server{
+		Handler: mux,
+	}
+
+	// Start the server in a goroutine
+	go func() {
+		if err := server.Serve(listener); err != nil && err != http.ErrServerClosed {
+			ShowError(fmt.Errorf("local socket server error: %w", err), 0)
+		}
+	}()
+
+	return nil
+}
+
 // Index : Web Server /
 func Index(w http.ResponseWriter, r *http.Request) {
 	var err error
@@ -988,27 +1027,34 @@ func Web(w http.ResponseWriter, r *http.Request) {
 
 // API : API request /api/
 func API(w http.ResponseWriter, r *http.Request) {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		trace.SpanFromContext(r.Context()).RecordError(err)
-		// Log the error for debugging, but still deny access.
-		ShowError(fmt.Errorf("API: error parsing RemoteAddr '%s': %w", r.RemoteAddr, err), 0)
-		http.Error(w, "Forbidden", http.StatusForbidden)
-		return
-	}
+	// Allow Unix socket connections (RemoteAddr will be "@" or similar for Unix sockets)
+	// For Unix sockets, the network is "unix" and RemoteAddr doesn't contain an IP
+	isUnixSocket := strings.HasPrefix(r.RemoteAddr, "@") || r.RemoteAddr == ""
 
-	ip := net.ParseIP(host)
-	if ip == nil {
-		// Log the error for debugging, but still deny access.
-		ShowError(fmt.Errorf("API: error parsing IP from host '%s' in RemoteAddr '%s'", host, r.RemoteAddr), 0)
-		http.Error(w, "Forbidden", http.StatusForbidden)
-		return
-	}
+	if !isUnixSocket {
+		// For TCP connections, enforce loopback restriction
+		host, _, err := net.SplitHostPort(r.RemoteAddr)
+		if err != nil {
+			trace.SpanFromContext(r.Context()).RecordError(err)
+			// Log the error for debugging, but still deny access.
+			ShowError(fmt.Errorf("API: error parsing RemoteAddr '%s': %w", r.RemoteAddr, err), 0)
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
 
-	if !ip.IsLoopback() {
-		showWarning(2023)
-		http.Error(w, "Forbidden - API access is restricted to localhost.", http.StatusForbidden)
-		return
+		ip := net.ParseIP(host)
+		if ip == nil {
+			// Log the error for debugging, but still deny access.
+			ShowError(fmt.Errorf("API: error parsing IP from host '%s' in RemoteAddr '%s'", host, r.RemoteAddr), 0)
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+
+		if !ip.IsLoopback() {
+			showWarning(2023)
+			http.Error(w, "Forbidden - API access is restricted to localhost.", http.StatusForbidden)
+			return
+		}
 	}
 
 	/*

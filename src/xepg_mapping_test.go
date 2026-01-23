@@ -29,11 +29,12 @@ var testMappingSystem = SystemStruct{ // src.SystemStruct
 		ServerCert        string
 		ServerCertPrivKey string
 		Settings          string
+		UnixSocket        string
 		URLS              string
 		XEPG              string
 		XML               string
 	}{
-		XEPG: "./testdata/xepg_mapping_test.json", 
+		XEPG: "./testdata/xepg_mapping_test.json",
 	},
 }
 

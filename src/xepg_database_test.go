@@ -32,6 +32,7 @@ var testSystem = SystemStruct{
 		ServerCert        string
 		ServerCertPrivKey string
 		Settings          string
+		UnixSocket        string
 		URLS              string
 		XEPG              string
 		XML               string
