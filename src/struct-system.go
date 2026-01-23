@@ -104,6 +104,13 @@ type GitStruct struct {
 	Version  string `json:"version"`
 }
 
+// XMLTVChannelMapping : Structure for the XMLTV Mapping
+type XMLTVChannelMapping struct {
+	ID           string        `json:"id"`
+	DisplayNames []DisplayName `json:"display-names"`
+	Icon         string        `json:"icon"`
+}
+
 // DataStruct : All Data is stored here. (Lineup, XMLTV)
 type DataStruct struct {
 	Cache struct {
@@ -145,7 +152,7 @@ type DataStruct struct {
 
 	XMLTV struct {
 		Files   []string
-		Mapping map[string]any
+		Mapping map[string]map[string]XMLTVChannelMapping
 	}
 
 	XEPG struct {

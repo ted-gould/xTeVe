@@ -110,9 +110,9 @@ func setupXMLTVTestGlobals() func() {
 		},
 		XMLTV: struct {
 			Files   []string
-			Mapping map[string]any
+			Mapping map[string]map[string]XMLTVChannelMapping
 		}{
-			Mapping: make(map[string]any),
+			Mapping: make(map[string]map[string]XMLTVChannelMapping),
 		},
 	}
 

@@ -55,9 +55,9 @@ func setupMappingTestGlobals() func() {
 	Data = DataStruct{
 		XMLTV: struct {
 			Files   []string
-			Mapping map[string]any
+			Mapping map[string]map[string]XMLTVChannelMapping
 		}{
-			Mapping: make(map[string]any),
+			Mapping: make(map[string]map[string]XMLTVChannelMapping),
 		},
 		XEPG: struct {
 			Channels  map[string]XEPGChannelStruct
@@ -70,29 +70,29 @@ func setupMappingTestGlobals() func() {
 
 	// Pre-populate Data.XMLTV.Mapping for tests
 	// Sample XMLTV file "test_provider.xml"
-	Data.XMLTV.Mapping["test_provider.xml"] = map[string]any{
-		"channel1.tvg.id": map[string]any{
-			"id":   "channel1.tvg.id",
-			"display-names": []DisplayName{{Value: "Test Channel 1 TVG-ID"}},
-			"icon": "icon1.png",
+	Data.XMLTV.Mapping["test_provider.xml"] = map[string]XMLTVChannelMapping{
+		"channel1.tvg.id": {
+			ID:           "channel1.tvg.id",
+			DisplayNames: []DisplayName{{Value: "Test Channel 1 TVG-ID"}},
+			Icon:         "icon1.png",
 		},
-		"channel2.name.match": map[string]any{
-			"id":   "channel2.name.match",
-			"display-names": []DisplayName{{Value: "Test Channel NameMatch"}},
-			"icon": "icon2.png",
+		"channel2.name.match": {
+			ID:           "channel2.name.match",
+			DisplayNames: []DisplayName{{Value: "Test Channel NameMatch"}},
+			Icon:         "icon2.png",
 		},
 	}
 	// Sample Dummy EPG
-	Data.XMLTV.Mapping["xTeVe Dummy"] = map[string]any{
-		"default_dummy": map[string]any{
-			"id":   "default_dummy",
-			"display-names": []DisplayName{{Value: "Default Dummy EPG"}},
-			"icon": "",
+	Data.XMLTV.Mapping["xTeVe Dummy"] = map[string]XMLTVChannelMapping{
+		"default_dummy": {
+			ID:           "default_dummy",
+			DisplayNames: []DisplayName{{Value: "Default Dummy EPG"}},
+			Icon:         "",
 		},
-		"60_Minutes": map[string]any{
-			"id": "60_Minutes",
-			"display-names": []DisplayName{{Value: "60 Minutes"}},
-			"icon": "",
+		"60_Minutes": {
+			ID:           "60_Minutes",
+			DisplayNames: []DisplayName{{Value: "60 Minutes"}},
+			Icon:         "",
 		},
 	}
 
@@ -282,7 +282,7 @@ func TestVerifyExistingChannelMappings(t *testing.T) {
 	tests := []struct {
 		name            string
 		initialChannel  XEPGChannelStruct
-		xmltvMapping    map[string]any // To set Data.XMLTV.Mapping for the test
+		xmltvMapping    map[string]map[string]XMLTVChannelMapping // To set Data.XMLTV.Mapping for the test
 		expectedChannel XEPGChannelStruct
 	}{
 		{
