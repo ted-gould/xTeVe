@@ -2,20 +2,22 @@ package src
 
 import (
 	"bufio"
+	"cmp"
 	"context"
 	"encoding/json"
-	"mime"
 	"errors"
 	"fmt"
 	"io"
 	"io/fs"
 	"log" // Added for log.Printf
+	"mime"
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
-	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -48,8 +50,29 @@ func connState(c net.Conn, state http.ConnState) {
 }
 
 func init() {
-	// Fix for MIME type issue with .js files
-	_ = mime.AddExtensionType(".js", "application/javascript")
+	// Register types to ensure consistent behavior across platforms and replace custom logic
+	types := map[string]string{
+		".html": "text/html; charset=utf-8",
+		".css":  "text/css; charset=utf-8",
+		".js":   "application/javascript",
+		".json": "application/json",
+		".png":  "image/png",
+		".jpg":  "image/jpeg",
+		".jpeg": "image/jpeg",
+		".gif":  "image/gif",
+		".svg":  "image/svg+xml",
+		".mp4":  "video/mp4",
+		".webm": "video/webm",
+		".ogg":  "video/ogg",
+		".mp3":  "audio/mpeg",
+		".wav":  "audio/wav",
+		".ico":  "image/x-icon",
+	}
+	for ext, typ := range types {
+		if err := mime.AddExtensionType(ext, typ); err != nil {
+			panic(fmt.Sprintf("failed to register mime type %s: %v", ext, err))
+		}
+	}
 }
 
 // StartWebserver : Start the Webserver
@@ -950,7 +973,8 @@ func Web(w http.ResponseWriter, r *http.Request) {
 	contentType = getContentType(requestFile)
 	w.Header().Add("Content-Type", contentType)
 
-	if contentType == "text/html" || contentType == "application/javascript" {
+	mediaType, _, _ := mime.ParseMediaType(contentType)
+	if mediaType == "text/html" || mediaType == "application/javascript" {
 		content = string(contentBytes)
 		content = parseTemplate(content, lang)
 		contentBytes = []byte(content)
@@ -1354,37 +1378,6 @@ func httpStatusError(w http.ResponseWriter, _ *http.Request, httpStatusCode int)
 	http.Error(w, fmt.Sprintf("%s [%d]", http.StatusText(httpStatusCode), httpStatusCode), httpStatusCode)
 }
 
-func getContentType(filename string) (contentType string) {
-	if strings.HasSuffix(filename, ".html") {
-		contentType = "text/html"
-	} else if strings.HasSuffix(filename, ".css") {
-		contentType = "text/css"
-	} else if strings.HasSuffix(filename, ".js") {
-		contentType = "application/javascript"
-	} else if strings.HasSuffix(filename, ".png") {
-		contentType = "image/png"
-	} else if strings.HasSuffix(filename, ".jpg") {
-		contentType = "image/jpeg"
-	} else if strings.HasSuffix(filename, ".gif") {
-		contentType = "image/gif"
-	} else if strings.HasSuffix(filename, ".svg") {
-		contentType = "image/svg+xml"
-	} else if strings.HasSuffix(filename, ".mp4") {
-		contentType = "video/mp4"
-	} else if strings.HasSuffix(filename, ".webm") {
-		contentType = "video/webm"
-	} else if strings.HasSuffix(filename, ".ogg") {
-		contentType = "video/ogg"
-	} else if strings.HasSuffix(filename, ".mp3") {
-		contentType = "audio/mp3"
-	} else if strings.HasSuffix(filename, ".wav") {
-		contentType = "audio/wav"
-	} else if strings.HasSuffix(filename, ".ico") {
-		contentType = "image/x-icon"
-	} else if strings.HasSuffix(filename, ".json") {
-		contentType = "application/json"
-	} else {
-		contentType = "text/plain"
-	}
-	return
+func getContentType(filename string) string {
+	return cmp.Or(mime.TypeByExtension(filepath.Ext(filename)), "text/plain")
 }
