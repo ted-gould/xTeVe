@@ -21,3 +21,10 @@
 **Vulnerability:** The login rate limiter used a "sliding window" logic that updated the `lastSeen` timestamp on *every* request. The reset condition (`time.Since(lastSeen) > 5min`) would never trigger if requests were made more frequently than 5 minutes (e.g., every 4 minutes), eventually causing a permanent ban for legitimate users.
 **Learning:** Naive rate limiting implementations that mix "last activity" with "window start" can lead to accidental Denial of Service for legitimate users.
 **Prevention:** Implement standard "Fixed Window" or "Token Bucket" algorithms. Ensure the window reset condition is based on the *start* of the window, not the *last* activity.
+
+## 2026-02-15 - Unbounded Memory Consumption in File Download
+**Vulnerability:** The `Download` and `xTeVe` (XML) handlers in `src/webserver.go` used `readStringFromFile` to load entire files into memory before writing them to the response. This created a Denial of Service (DoS) vulnerability where downloading large files (e.g., XMLTV guides or backups) could cause the application to crash due to Out of Memory (OOM).
+**Learning:** Convenience functions like `readStringFromFile` are dangerous for web handlers serving variable-sized content. Even if the file is "temporary", its size is not guaranteed to be small.
+**Prevention:**
+1.  Always stream file content using `io.Copy` (or `http.ServeFile`) instead of reading fully into memory.
+2.  For content type detection, read only the first 512 bytes (standard sniffing size) and then rewind the stream, rather than loading the whole file.
