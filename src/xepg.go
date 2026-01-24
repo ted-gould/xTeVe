@@ -229,7 +229,10 @@ func createXEPGMapping() {
 
 // Create / update XEPG Database
 func createXEPGDatabase() (err error) {
-	var allChannelNumbers = make([]float64, 0)
+	// Optimization: Use a map for O(1) lookup of channel numbers instead of linear scan.
+	// This significantly speeds up channel allocation for large playlists.
+	var allChannelNumbers = make(map[float64]bool)
+
 	// Optimization: Pre-allocate slice capacity to avoid reallocations
 	Data.Cache.Streams.Active = make([]string, 0, len(Data.Streams.Active))
 	Data.XEPG.Channels = make(map[string]XEPGChannelStruct)
@@ -249,7 +252,7 @@ func createXEPGDatabase() (err error) {
 		}
 
 		if xChannelID, err := strconv.ParseFloat(xepgChannel.XChannelID, 64); err == nil {
-			allChannelNumbers = append(allChannelNumbers, xChannelID)
+			allChannelNumbers[xChannelID] = true
 		}
 	}
 
@@ -420,7 +423,7 @@ func createXEPGDatabase() (err error) {
 			}
 		} else { // Was: case false
 			// New Channel
-			processNewXEPGChannel(m3uChannel, &allChannelNumbers)
+			processNewXEPGChannel(m3uChannel, allChannelNumbers)
 		}
 	}
 	showInfo("XEPG:" + "Save DB file")
@@ -444,8 +447,8 @@ func generateNewXEPGID() (xepgID string) {
 }
 
 // findFreeChannelNumber finds the next available channel number.
-func findFreeChannelNumber(allChannelNumbers *[]float64, startingChannel ...string) (xChannelID string) {
-	slices.Sort(*allChannelNumbers)
+func findFreeChannelNumber(allChannelNumbers map[float64]bool, startingChannel ...string) (xChannelID string) {
+	// slices.Sort(*allChannelNumbers) -> Removed as we use a map now
 
 	var firstFreeNumber float64 = Settings.MappingFirstChannel
 	if len(startingChannel) > 0 && startingChannel[0] != "" {
@@ -456,9 +459,10 @@ func findFreeChannelNumber(allChannelNumbers *[]float64, startingChannel ...stri
 	}
 
 	for {
-		if !slices.Contains(*allChannelNumbers, firstFreeNumber) {
+		// O(1) lookup
+		if !allChannelNumbers[firstFreeNumber] {
 			xChannelID = fmt.Sprintf("%g", firstFreeNumber)
-			*allChannelNumbers = append(*allChannelNumbers, firstFreeNumber)
+			allChannelNumbers[firstFreeNumber] = true
 			return
 		}
 		firstFreeNumber++
@@ -505,7 +509,7 @@ func processExistingXEPGChannel(m3uChannel M3UChannelStructXEPG, currentXEPGID s
 }
 
 // processNewXEPGChannel creates a new channel in the XEPG database.
-func processNewXEPGChannel(m3uChannel M3UChannelStructXEPG, allChannelNumbers *[]float64) {
+func processNewXEPGChannel(m3uChannel M3UChannelStructXEPG, allChannelNumbers map[float64]bool) {
 	var xepg = generateNewXEPGID()
 	xChannelID := func() string {
 		if m3uChannel.PreserveMapping == "true" {
