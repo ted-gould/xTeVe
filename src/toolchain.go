@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"crypto/md5"
 	"crypto/rand"
-	"math/big"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -12,6 +11,7 @@ import (
 	"io"
 	"io/fs"
 	"log" // Added for log.Printf
+	"math/big"
 	"net"
 	"os"
 	"os/user"
@@ -210,7 +210,6 @@ func mapToJSON(tmpMap any) string {
 	return string(jsonString)
 }
 
-
 func jsonToInterface(content string) (tmpMap any, err error) {
 	err = json.Unmarshal([]byte(content), &tmpMap)
 	return
@@ -283,25 +282,6 @@ func readByteFromFile(file string) (content []byte, err error) {
 func writeByteToFile(file string, data []byte) (err error) {
 	var filename = getPlatformFile(file)
 	err = os.WriteFile(filename, data, 0644)
-	return
-}
-
-func readStringFromFile(file string) (str string, err error) {
-	var content []byte
-	var filename = getPlatformFile(file)
-
-	err = checkFile(filename)
-	if err != nil {
-		return
-	}
-
-	content, err = os.ReadFile(filename)
-	if err != nil {
-		ShowError(err, 0)
-		return
-	}
-
-	str = string(content)
 	return
 }
 

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt" // Added for fmt.Sprintf in panic
 	"os"
-	"slices"
 	"strconv"
 	"testing"
 	// "strings" // Removed as it's unused now
@@ -112,67 +111,67 @@ func TestFindFreeChannelNumber(t *testing.T) {
 	teardown := setupGlobalStateForTest()
 	defer teardown()
 
-	allChannelNumbers := []float64{}
+	allChannelNumbers := make(map[float64]bool)
 	Settings.MappingFirstChannel = 1000 // Ensure testSettings is used via System
 
 	// Test 1: Empty allChannelNumbers
-	ch1 := findFreeChannelNumber(&allChannelNumbers)
+	ch1 := findFreeChannelNumber(allChannelNumbers)
 	if ch1 != "1000" {
 		t.Errorf("Expected channel number 1000, got %s", ch1)
 	}
-	if !slices.Contains(allChannelNumbers, 1000.0) {
+	if !allChannelNumbers[1000.0] {
 		t.Errorf("Expected 1000 to be added to allChannelNumbers. Got: %v", allChannelNumbers)
 	}
 
 	// Test 2: With existing numbers
-	allChannelNumbers = []float64{1000, 1001, 1003}
-	ch2 := findFreeChannelNumber(&allChannelNumbers)
+	allChannelNumbers = map[float64]bool{1000: true, 1001: true, 1003: true}
+	ch2 := findFreeChannelNumber(allChannelNumbers)
 	if ch2 != "1002" {
 		t.Errorf("Expected channel number 1002, got %s", ch2)
 	}
-	if !slices.Contains(allChannelNumbers, 1002.0) {
+	if !allChannelNumbers[1002.0] {
 		t.Errorf("Expected 1002 to be added to allChannelNumbers. Got: %v", allChannelNumbers)
 	}
 
 	// Test 3: With startingChannel hint
-	allChannelNumbers = []float64{1000, 1001, 1003, 1002} // unsorted
-	ch3 := findFreeChannelNumber(&allChannelNumbers, "1005")
+	allChannelNumbers = map[float64]bool{1000: true, 1001: true, 1003: true, 1002: true}
+	ch3 := findFreeChannelNumber(allChannelNumbers, "1005")
 	if ch3 != "1005" {
 		t.Errorf("Expected channel number 1005, got %s", ch3)
 	}
-	if !slices.Contains(allChannelNumbers, 1005.0) {
+	if !allChannelNumbers[1005.0] {
 		t.Errorf("Expected 1005 to be added to allChannelNumbers. Got: %v", allChannelNumbers)
 	}
 
 	// Test 4: Starting channel hint is already taken
-	allChannelNumbers = []float64{1000, 1001, 1003, 1002, 1005}
-	ch4 := findFreeChannelNumber(&allChannelNumbers, "1003") // 1003 is taken, next should be 1004
+	allChannelNumbers = map[float64]bool{1000: true, 1001: true, 1003: true, 1002: true, 1005: true}
+	ch4 := findFreeChannelNumber(allChannelNumbers, "1003") // 1003 is taken, next should be 1004
 	if ch4 != "1004" {
 		t.Errorf("Expected channel number 1004, got %s", ch4)
 	}
-	if !slices.Contains(allChannelNumbers, 1004.0) {
+	if !allChannelNumbers[1004.0] {
 		t.Errorf("Expected 1004 to be added to allChannelNumbers. Got: %v", allChannelNumbers)
 	}
 
 	// Test 5: Starting channel hint is empty string
-	allChannelNumbers = []float64{1000, 1001, 1002, 1003, 1004, 1005}
+	allChannelNumbers = map[float64]bool{1000: true, 1001: true, 1002: true, 1003: true, 1004: true, 1005: true}
 	Settings.MappingFirstChannel = 1000
-	ch5 := findFreeChannelNumber(&allChannelNumbers, "")
+	ch5 := findFreeChannelNumber(allChannelNumbers, "")
 	if ch5 != "1006" {
 		t.Errorf("Expected channel number 1006 when starting hint is empty, got %s. Numbers: %v", ch5, allChannelNumbers)
 	}
-	if !slices.Contains(allChannelNumbers, 1006.0) {
+	if !allChannelNumbers[1006.0] {
 		t.Errorf("Expected 1006 to be added to allChannelNumbers. Got: %v", allChannelNumbers)
 	}
 
 	// Test 6: Settings.MappingFirstChannel is higher
-	allChannelNumbers = []float64{}
+	allChannelNumbers = make(map[float64]bool)
 	Settings.MappingFirstChannel = 2000
-	ch6 := findFreeChannelNumber(&allChannelNumbers)
+	ch6 := findFreeChannelNumber(allChannelNumbers)
 	if ch6 != "2000" {
 		t.Errorf("Expected channel number 2000, got %s", ch6)
 	}
-	if !slices.Contains(allChannelNumbers, 2000.0) {
+	if !allChannelNumbers[2000.0] {
 		t.Errorf("Expected 2000 to be added to allChannelNumbers. Got: %v", allChannelNumbers)
 	}
 }
@@ -354,7 +353,7 @@ func TestProcessNewXEPGChannel(t *testing.T) {
 	teardown := setupGlobalStateForTest()
 	defer teardown()
 
-	allChannelNumbers := []float64{}
+	allChannelNumbers := make(map[float64]bool)
 	Settings.MappingFirstChannel = 2000
 
 	valuesMap := map[string]string{"attr1": "val1"}
@@ -379,7 +378,7 @@ func TestProcessNewXEPGChannel(t *testing.T) {
 
 	// Test Case 1: PreserveMapping = "true"
 	Data.XEPG.Channels = make(map[string]XEPGChannelStruct)
-	processNewXEPGChannel(m3uChannel, &allChannelNumbers)
+	processNewXEPGChannel(m3uChannel, allChannelNumbers)
 
 	if len(Data.XEPG.Channels) != 1 {
 		t.Fatalf("Expected 1 channel in Data.XEPG.Channels, got %d", len(Data.XEPG.Channels))
@@ -410,7 +409,7 @@ func TestProcessNewXEPGChannel(t *testing.T) {
 		t.Errorf("Expected XChannelID to be '2005', got '%s'", newChannel.XChannelID)
 	}
 	expectedChannelNumFloat, _ := strconv.ParseFloat("2005", 64)
-	if !slices.Contains(allChannelNumbers, expectedChannelNumFloat) {
+	if !allChannelNumbers[expectedChannelNumFloat] {
 		t.Errorf("Expected %.1f to be added to allChannelNumbers. Got: %v", expectedChannelNumFloat, allChannelNumbers)
 	}
 
@@ -439,8 +438,8 @@ func TestProcessNewXEPGChannel(t *testing.T) {
 		TvgShift:        "",
 	}
 	Data.XEPG.Channels = make(map[string]XEPGChannelStruct)
-	allChannelNumbers = []float64{}
-	processNewXEPGChannel(m3uChannel2, &allChannelNumbers)
+	allChannelNumbers = make(map[float64]bool)
+	processNewXEPGChannel(m3uChannel2, allChannelNumbers)
 
 	var newXEPGID2 string
 	i := 0
@@ -469,7 +468,7 @@ func TestProcessNewXEPGChannel(t *testing.T) {
 	if newChannel2.XChannelID != "2500" {
 		t.Errorf("Expected XChannelID to be '2500', got '%s'", newChannel2.XChannelID)
 	}
-	if !slices.Contains(allChannelNumbers, 2500.0) {
+	if !allChannelNumbers[2500.0] {
 		t.Errorf("Expected 2500 to be added to allChannelNumbers. Got: %v", allChannelNumbers)
 	}
 	if newChannel2.TvgShift != "0" {
@@ -486,9 +485,9 @@ func TestProcessNewXEPGChannel(t *testing.T) {
 		PreserveMapping: "false",
 	}
 	Data.XEPG.Channels = make(map[string]XEPGChannelStruct)
-	allChannelNumbers = []float64{}
+	allChannelNumbers = make(map[float64]bool)
 	Settings.MappingFirstChannel = 3000
-	processNewXEPGChannel(m3uChannel3, &allChannelNumbers)
+	processNewXEPGChannel(m3uChannel3, allChannelNumbers)
 
 	var newXEPGID3 string
 	i = 0
@@ -512,7 +511,7 @@ func TestProcessNewXEPGChannel(t *testing.T) {
 	if newChannel3.XChannelID != "3000" {
 		t.Errorf("Expected XChannelID to be '3000', got '%s'", newChannel3.XChannelID)
 	}
-	if !slices.Contains(allChannelNumbers, 3000.0) {
+	if !allChannelNumbers[3000.0] {
 		t.Errorf("Expected 3000 to be added to allChannelNumbers. Got: %v", allChannelNumbers)
 	}
 }
