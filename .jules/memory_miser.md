@@ -18,3 +18,13 @@
 2.  **Aliasing:** If `xCategory` is empty, assign the source slice directly (`program.Category = xmltvProgram.Category`) instead of making a copy. This is safe because the source is effectively immutable during this operation and the destination is write-once (for XML marshaling).
 
 **Impact:** Reduced allocations by 1000 per 1000 ops (33% reduction in `getProgramData` allocation count).
+
+## 2026-01-22 - XEPG Database Rebuild Allocations
+
+**Learning:** `createXEPGDatabase` in `src/xepg.go` contained a redundant map initialization (`make(map...)`) that was immediately overwritten by a function return value. Additionally, slices and maps used for indexing were growing dynamically inside loops despite the source size being known.
+
+**Action:**
+1.  **Remove Redundant Make:** Eliminated `Data.XEPG.Channels = make(...)` as it was dead code (overwritten next line).
+2.  **Pre-allocate Slices/Maps:** Initialized `allChannelNumbers` (slice) and `xepgChannelsValuesMap` (map) with `cap(len(Data.XEPG.Channels))` to eliminate growth reallocation penalties.
+
+**Impact:** Reduced allocation count and GC pressure during the database rebuild phase (O(N) growth allocations -> O(1) allocation).

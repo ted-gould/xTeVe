@@ -229,10 +229,8 @@ func createXEPGMapping() {
 
 // Create / update XEPG Database
 func createXEPGDatabase() (err error) {
-	var allChannelNumbers = make([]float64, 0)
 	// Optimization: Pre-allocate slice capacity to avoid reallocations
 	Data.Cache.Streams.Active = make([]string, 0, len(Data.Streams.Active))
-	Data.XEPG.Channels = make(map[string]XEPGChannelStruct)
 
 	Data.XEPG.Channels, err = loadXEPGChannels(System.File.XEPG)
 	if err != nil {
@@ -241,6 +239,9 @@ func createXEPGDatabase() (err error) {
 	}
 
 	showInfo("XEPG:" + "Update database")
+
+	// Optimization: Pre-allocate slice capacity based on loaded channels
+	var allChannelNumbers = make([]float64, 0, len(Data.XEPG.Channels))
 
 	// Delete Channel with missing Channel Numbers.
 	for id, xepgChannel := range Data.XEPG.Channels {
@@ -254,7 +255,7 @@ func createXEPGDatabase() (err error) {
 	}
 
 	// Make a map of the db channels based on their previously downloaded attributes -- filename, group, title, etc
-	var xepgChannelsValuesMap = make(map[string]XEPGChannelStruct)
+	var xepgChannelsValuesMap = make(map[string]XEPGChannelStruct, len(Data.XEPG.Channels))
 
 	// Optimization: Indices to speed up the slow path lookup
 	// Map: FileM3UID -> Name -> *Channel
