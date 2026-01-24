@@ -361,7 +361,7 @@ func Auto(w http.ResponseWriter, r *http.Request) {
 
 // xTeVe : Web Server /xmltv/ and /m3u/
 func xTeVe(w http.ResponseWriter, r *http.Request) {
-	var requestType, groupTitle, file, content, contentType string
+	var requestType, groupTitle, file, contentType string
 	var err error
 	var path = strings.TrimPrefix(r.URL.Path, "/")
 	var groups = []string{}
@@ -388,21 +388,46 @@ func xTeVe(w http.ResponseWriter, r *http.Request) {
 		defer childSpan.End()
 
 		file = System.Folder.Data + getFilenameFromPath(path)
-		content, err = readStringFromFile(file)
-		if err != nil {
+		platformFile := getPlatformFile(file)
+
+		if err := checkFile(platformFile); err != nil {
 			childSpan.RecordError(err)
 			httpStatusError(w, r, 404)
 			return
 		}
 
-		contentType = http.DetectContentType([]byte(content))
+		f, err := os.Open(platformFile)
+		if err != nil {
+			childSpan.RecordError(err)
+			httpStatusError(w, r, 404)
+			return
+		}
+		defer f.Close()
+
+		// Peek at first 512 bytes for content type detection
+		buffer := make([]byte, 512)
+		n, err := f.Read(buffer)
+		if err != nil && err != io.EOF {
+			childSpan.RecordError(err)
+			httpStatusError(w, r, 500)
+			return
+		}
+
+		contentType = http.DetectContentType(buffer[:n])
 		if strings.Contains(strings.ToLower(contentType), "xml") {
 			contentType = "application/xml; charset=utf-8"
 		}
 
+		// Reset file pointer to beginning
+		if _, err := f.Seek(0, 0); err != nil {
+			childSpan.RecordError(err)
+			httpStatusError(w, r, 500)
+			return
+		}
+
 		w.Header().Set("Content-Type", contentType)
-		if _, writeErr := w.Write([]byte(content)); writeErr != nil {
-			log.Printf("Error writing response in xTeVe handler: %v", writeErr)
+		if _, writeErr := io.Copy(w, f); writeErr != nil {
+			log.Printf("Error streaming response in xTeVe handler: %v", writeErr)
 		}
 		return
 	}
@@ -1265,20 +1290,29 @@ func API(w http.ResponseWriter, r *http.Request) {
 func Download(w http.ResponseWriter, r *http.Request) {
 	var path = r.URL.Path
 	var file = System.Folder.Temp + getFilenameFromPath(path)
-	w.Header().Set("Content-Disposition", "attachment; filename="+getFilenameFromPath(file))
+	platformFile := getPlatformFile(file)
 
-	content, err := readStringFromFile(file)
-	if err != nil {
+	if err := checkFile(platformFile); err != nil {
 		w.WriteHeader(404)
 		return
 	}
 
-	if errRemove := os.RemoveAll(System.Folder.Temp + getFilenameFromPath(path)); errRemove != nil {
-		log.Printf("Error removing temporary file %s after download: %v", file, errRemove)
-		// Continue to send content even if removal failed.
+	f, err := os.Open(platformFile)
+	if err != nil {
+		w.WriteHeader(404)
+		return
 	}
-	if _, writeErr := w.Write([]byte(content)); writeErr != nil {
-		log.Printf("Error writing download response: %v", writeErr)
+	defer func() {
+		f.Close()
+		if errRemove := os.RemoveAll(platformFile); errRemove != nil {
+			log.Printf("Error removing temporary file %s after download: %v", platformFile, errRemove)
+		}
+	}()
+
+	w.Header().Set("Content-Disposition", "attachment; filename="+getFilenameFromPath(file))
+
+	if _, writeErr := io.Copy(w, f); writeErr != nil {
+		log.Printf("Error streaming download response: %v", writeErr)
 	}
 }
 

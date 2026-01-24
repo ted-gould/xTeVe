@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"maps"
 	"slices"
 
 	"context"
@@ -893,35 +894,26 @@ func handleTSStream(resp *http.Response, stream ThisStream, streamID int, playli
 }
 
 func switchBandwidth(stream *ThisStream) (err error) {
-	var bandwidth []int
 	var dynamicStream DynamicStream
 	var segment Segment
 
-	for key := range stream.DynamicStream {
-		bandwidth = append(bandwidth, key)
-	}
-
+	bandwidth := slices.Collect(maps.Keys(stream.DynamicStream))
 	slices.Sort(bandwidth)
 
-	if len(bandwidth) > 0 {
-		for i := range bandwidth {
-			segment.StreamInf.Bandwidth = stream.DynamicStream[bandwidth[i]].Bandwidth
-
-			dynamicStream = stream.DynamicStream[bandwidth[0]]
-
-			if stream.NetworkBandwidth == 0 {
-				dynamicStream = stream.DynamicStream[bandwidth[0]]
-				break
-			} else {
-				if bandwidth[i] > stream.NetworkBandwidth {
-					break
-				}
-				dynamicStream = stream.DynamicStream[bandwidth[i]]
-			}
-		}
-	} else {
+	if len(bandwidth) == 0 {
 		err = errors.New("M3U8 does not contain streaming URLs")
 		return
+	}
+
+	for _, bw := range bandwidth {
+		segment.StreamInf.Bandwidth = stream.DynamicStream[bw].Bandwidth
+
+		dynamicStream = stream.DynamicStream[bandwidth[0]]
+
+		if stream.NetworkBandwidth == 0 || bw > stream.NetworkBandwidth {
+			break
+		}
+		dynamicStream = stream.DynamicStream[bw]
 	}
 
 	segment.URL = dynamicStream.URL
