@@ -28,3 +28,5 @@
 2.  **Pre-allocate Slices/Maps:** Initialized `allChannelNumbers` (slice) and `xepgChannelsValuesMap` (map) with `cap(len(Data.XEPG.Channels))` to eliminate growth reallocation penalties.
 
 **Impact:** Reduced allocation count and GC pressure during the database rebuild phase (O(N) growth allocations -> O(1) allocation).
+
+## 2026-01-25 - [Hash Writer Interface Allocations] **Learning:** Using `io.WriteString(h, s)` where `h` is a `hash.Hash` (interface) causes `[]byte(s)` to allocate because `crypto/md5` does not implement `io.StringWriter`, and passing the slice to the `Write` interface method forces it to escape (or at least allocate). String concatenation + single `[]byte` conversion was significantly faster (3 allocs vs 11 allocs). **Action:** Avoid `io.WriteString` on `hash.Hash` for many small strings; prefer concatenation or `unsafe` if critical, or accept that `md5.Sum` is already optimized.

@@ -903,7 +903,32 @@ func adjustProgramTime(t string, timeshift int) string {
 	tzStart, _ := strconv.Atoi(after)
 	newTz := tzStart + timeshift*100
 
-	return before + " " + fmt.Sprintf("%+05d", newTz)
+	// Optimization: Use strings.Builder and manual formatting to avoid fmt.Sprintf allocations.
+	// This reduces allocations from 2 to 1 (result string) per call.
+	var b strings.Builder
+	b.Grow(len(before) + 6)
+	b.WriteString(before)
+	b.WriteByte(' ')
+
+	if newTz < 0 {
+		b.WriteByte('-')
+		newTz = -newTz
+	} else {
+		b.WriteByte('+')
+	}
+
+	if newTz < 10 {
+		b.WriteString("000")
+	} else if newTz < 100 {
+		b.WriteString("00")
+	} else if newTz < 1000 {
+		b.WriteString("0")
+	}
+
+	var buf [10]byte
+	b.Write(strconv.AppendInt(buf[:0], int64(newTz), 10))
+
+	return b.String()
 }
 
 // Create Dummy Data (createXMLTVFile)
