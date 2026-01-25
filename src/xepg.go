@@ -609,6 +609,9 @@ func performAutomaticChannelMapping(xepgChannel XEPGChannelStruct, _ string) (XE
 				mappingFound = true // Set flag to break outer loop
 				// No 'continue' here, loop will break due to mappingFound in the next iteration's check
 			} else if !mappingFound { // Only search by name if not already found by tvgID
+				// Optimization: Pre-calculate the solid name for the XEPG channel once
+				xepgNameSolid := strings.ReplaceAll(xepgChannel.Name, " ", "")
+
 				// Search for the proper XEPG channel ID by comparing its name with every alias in XML file
 				for _, xmltvChannel := range xmltvChannels {
 					if mappingFound { // Check again in case inner loop found something in previous iteration
@@ -619,7 +622,6 @@ func performAutomaticChannelMapping(xepgChannel XEPGChannelStruct, _ string) (XE
 						currentDisplayNameValue := nameEntry.Value
 
 						xmltvNameSolid := strings.ReplaceAll(currentDisplayNameValue, " ", "")
-						xepgNameSolid := strings.ReplaceAll(xepgChannel.Name, " ", "")
 
 						if strings.EqualFold(xmltvNameSolid, xepgNameSolid) {
 							xepgChannel.XmltvFile = file
