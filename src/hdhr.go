@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"maps"
 	"slices"
 	"strconv"
 )
@@ -198,19 +199,15 @@ func getGuideNumberPMS(channelName string) (pmsID string, err error) {
 
 	var getNewID = func(channelName string) (id string) {
 		var i int
-	newID:
-		var ids []string
-		id = fmt.Sprintf("id-%d", i)
+		ids := slices.Collect(maps.Values(Data.Cache.PMS))
 
-		for _, v := range Data.Cache.PMS {
-			ids = append(ids, v)
-		}
-
-		if slices.Contains(ids, id) {
+		for {
+			id = fmt.Sprintf("id-%d", i)
+			if !slices.Contains(ids, id) {
+				return
+			}
 			i++
-			goto newID
 		}
-		return
 	}
 
 	if value, ok := Data.Cache.PMS[channelName]; ok {
