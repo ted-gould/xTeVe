@@ -1288,6 +1288,47 @@ func API(w http.ResponseWriter, r *http.Request) {
 
 // Download : File Download
 func Download(w http.ResponseWriter, r *http.Request) {
+	// Security: Enforce authentication for downloads if Web Auth is enabled
+	if Settings.AuthenticationWEB {
+		var token string
+		var cookie *http.Cookie
+		var err error
+
+		// 1. Try Cookie
+		cookie, err = r.Cookie("Token")
+		if err == nil {
+			token = cookie.Value
+		}
+
+		// 2. Try Query Param (fallback)
+		if len(token) == 0 {
+			token = r.URL.Query().Get("token")
+		}
+
+		if len(token) == 0 {
+			httpStatusError(w, r, http.StatusUnauthorized)
+			return
+		}
+
+		// 3. Validate Token
+		newToken, err := authentication.CheckTheValidityOfTheToken(token)
+		if err != nil {
+			httpStatusError(w, r, http.StatusUnauthorized)
+			return
+		}
+
+		// 4. Check Authorization Level
+		// Since Download is part of the Web UI features (backup), we check authentication.web
+		err = checkAuthorizationLevel(newToken, "authentication.web")
+		if err != nil {
+			httpStatusError(w, r, http.StatusForbidden)
+			return
+		}
+
+		// 5. Rotate Token (Set Cookie)
+		authentication.SetCookieToken(w, newToken, Settings.TLSMode)
+	}
+
 	var path = r.URL.Path
 	var file = System.Folder.Temp + getFilenameFromPath(path)
 	platformFile := getPlatformFile(file)
