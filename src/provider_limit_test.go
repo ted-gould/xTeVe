@@ -23,7 +23,7 @@ func TestDownloadFileFromServer_Limit(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Send 2KB of data
 		data := make([]byte, 2048)
-		w.Write(data)
+		_, _ = w.Write(data)
 	}))
 	defer server.Close()
 
@@ -55,7 +55,7 @@ func TestDownloadFileFromServer_ContentLengthLimit(t *testing.T) {
 		// Send Content-Length header > limit
 		w.Header().Set("Content-Length", "2048")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("ignore"))
+		_, _ = w.Write([]byte("ignore"))
 	}))
 	defer server.Close()
 
@@ -83,7 +83,7 @@ func TestHandleHLSStream_Limit(t *testing.T) {
 	w := httptest.NewRecorder()
 	// write enough data
 	data := make([]byte, 200)
-	w.Write(data)
+	_, _ = w.Write(data)
 	resp := w.Result()
 	// Ensure Content-Length is set (ResponseRecorder usually sets it if body is written)
 	if resp.ContentLength == -1 {
