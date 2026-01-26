@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"path"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -15,7 +16,7 @@ import (
 // Parse Playlists
 func parsePlaylist(filename, fileType string) (channels []any, err error) {
 	content, err := readByteFromFile(filename)
-	var id = strings.TrimSuffix(getFilenameFromPath(filename), path.Ext(getFilenameFromPath(filename)))
+	var id = strings.TrimSuffix(filepath.Base(filename), path.Ext(filepath.Base(filename)))
 	var playlistName = getProviderParameter(id, fileType, "name")
 
 	if err == nil {

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -65,7 +66,7 @@ func updateServerSettings(request RequestStruct) (settings SettingsStruct, err e
 			case "backup.path":
 				if s, ok := value.(string); ok {
 					s = strings.TrimRight(s, string(os.PathSeparator)) + string(os.PathSeparator)
-					err = checkFolder(s)
+					err = os.MkdirAll(s, 0755)
 					if err == nil {
 						err = checkFilePermission(s)
 					}
@@ -840,7 +841,7 @@ func buildDatabaseDVR() (err error) {
 			var keys = []string{"group-title", "tvg-id", "uuid"}
 			var compatibility = make(map[string]int)
 
-			var id = strings.TrimSuffix(getFilenameFromPath(i), path.Ext(getFilenameFromPath(i)))
+			var id = strings.TrimSuffix(filepath.Base(i), path.Ext(filepath.Base(i)))
 			var playlistName = getProviderParameter(id, fileType, "name")
 
 			switch fileType {

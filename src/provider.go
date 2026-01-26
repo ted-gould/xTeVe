@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -162,7 +163,7 @@ func getProviderData(ctx context.Context, fileType, fileID string) (err error) {
 				err = checkFile(fileSource)
 				if err == nil {
 					body, err = readByteFromFile(fileSource)
-					serverFileName = getFilenameFromPath(fileSource)
+					serverFileName = filepath.Base(fileSource)
 				}
 			}
 		}
@@ -275,7 +276,7 @@ func downloadFileFromServer(ctx context.Context, providerURL string) (filename s
 		filename = f
 		showInfo("Header filename:" + filename)
 	} else {
-		var cleanFilename = strings.SplitN(getFilenameFromPath(providerURL), "?", 2)
+		var cleanFilename = strings.SplitN(filepath.Base(providerURL), "?", 2)
 		filename = cleanFilename[0]
 	}
 
