@@ -1082,16 +1082,16 @@ func getLocalXMLTV(file string, xmltv *XMLTV) (err error) {
 			Data.Cache.XMLTV = make(map[string]XMLTV)
 		}
 		// Read XML Data
-		content, err := readByteFromFile(file)
-		// Local XML File does not exist in the folder: Data
+		f, err := os.Open(getPlatformFile(file))
 		if err != nil {
 			ShowError(err, 1004)
-			err = errors.New("local copy of the file no longer exists")
-			return err
+			return errors.New("local copy of the file no longer exists")
 		}
+		defer f.Close()
 
 		// Parse XML File
-		err = xml.Unmarshal(content, &xmltv)
+		// Optimization: Stream decode to avoid loading entire file into memory
+		err = xml.NewDecoder(f).Decode(xmltv)
 		if err != nil {
 			return err
 		}
