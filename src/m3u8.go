@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"net/url"
 	"path"
 	"strconv"
 	"strings"
@@ -69,24 +68,33 @@ func ParseM3U8(stream *ThisStream) (err error) {
 	}
 
 	var parseURL = func(line string, segment *Segment) {
-		// Check if the address is a valid URL (http://... or /path/to/stream)
-		_, err := url.ParseRequestURI(line)
-		if err == nil {
-			// Prüfen ob die Domain in der Adresse enhalten ist
-			u, _ := url.Parse(line)
+		// Optimization: Check prefixes to avoid expensive url.Parse calls.
+		// Most lines in M3U8 are either absolute URLs, absolute paths, or relative paths.
 
-			if len(u.Host) == 0 {
-				// Check whether the domain is included in the address
-				segment.URL = stream.URLStreamingServer + line
-			} else {
-				// Domain included in the address
-				segment.URL = line
-			}
-		} else {
-			// not URL, but a file path (media/file-01.ts)
-			var serverURLPath = strings.Replace(stream.M3U8URL, path.Base(stream.M3U8URL), line, -1)
-			segment.URL = serverURLPath
+		// 1. Absolute Path (starts with /)
+		if strings.HasPrefix(line, "/") {
+			segment.URL = stream.URLStreamingServer + line
+			return
 		}
+
+		// 2. Full URL (http://, https://) or Protocol Relative (//)
+		// Fast path for common schemes to avoid Contains check
+		if strings.HasPrefix(line, "http") || strings.HasPrefix(line, "//") {
+			if strings.HasPrefix(line, "http://") || strings.HasPrefix(line, "https://") || strings.HasPrefix(line, "//") {
+				segment.URL = line
+				return
+			}
+		}
+
+		// Fallback for other schemes (rtmp://, etc)
+		if strings.Contains(line, "://") {
+			segment.URL = line
+			return
+		}
+
+		// 3. Relative Path (fallback)
+		var serverURLPath = strings.Replace(stream.M3U8URL, path.Base(stream.M3U8URL), line, -1)
+		segment.URL = serverURLPath
 	}
 
 	if strings.Contains(stream.Body, "#EXTM3U") {
