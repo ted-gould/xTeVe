@@ -26,25 +26,6 @@ import (
 
 // --- System Tools ---
 
-// Checks whether the Folder exists, if not, the Folder is created
-func checkFolder(path string) (err error) {
-	var debug string
-	_, err = os.Stat(filepath.Dir(path))
-
-	if os.IsNotExist(err) {
-		// Folder does not exist, will now be created
-		err = os.MkdirAll(getPlatformPath(path), 0755)
-		if err == nil {
-			debug = fmt.Sprintf("Create Folder:%s", path)
-			showDebug(debug, 1)
-		} else {
-			return err
-		}
-		return nil
-	}
-	return nil
-}
-
 // checkVFSFolder : Checks whether the Folder exists in provided virtual filesystem, if not, the Folder is created
 func checkVFSFolder(path string, vfs avfs.VFS) (err error) {
 	var debug string
@@ -161,7 +142,7 @@ func getValidTempDir(path string) string {
 	path = filepath.Clean(path)
 	path = path + string(os.PathSeparator)
 
-	err := checkFolder(path)
+	err := os.MkdirAll(path, 0755)
 	if err == nil {
 		err = checkFilePermission(path)
 	}
@@ -179,11 +160,6 @@ func getPlatformFile(filename string) (osFilePath string) {
 	var newPath = filepath.Dir(path)
 	osFilePath = newPath + string(os.PathSeparator) + file
 	return
-}
-
-// Output Filenames from the File Path
-func getFilenameFromPath(path string) (file string) {
-	return filepath.Base(path)
 }
 
 func removeChildItems(dir string) error {

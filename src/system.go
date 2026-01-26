@@ -32,7 +32,7 @@ func createSystemFolders() (err error) {
 		if !ok {
 			continue
 		}
-		err = checkFolder(folder)
+		err = os.MkdirAll(folder, 0755)
 		if err != nil {
 			return
 		}

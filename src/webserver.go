@@ -387,7 +387,7 @@ func xTeVe(w http.ResponseWriter, r *http.Request) {
 		_, childSpan := otel.Tracer("webserver").Start(r.Context(), "xmltv")
 		defer childSpan.End()
 
-		file = System.Folder.Data + getFilenameFromPath(path)
+		file = System.Folder.Data + filepath.Base(path)
 		platformFile := getPlatformFile(file)
 
 		if err := checkFile(platformFile); err != nil {
@@ -442,7 +442,7 @@ func xTeVe(w http.ResponseWriter, r *http.Request) {
 		if !System.Dev {
 			// false: File name is set in the header
 			// true: M3U is displayed directly in the browser
-			w.Header().Set("Content-Disposition", "attachment; filename="+getFilenameFromPath(path))
+			w.Header().Set("Content-Disposition", "attachment; filename="+filepath.Base(path))
 		}
 
 		if len(groupTitle) > 0 {
@@ -470,7 +470,7 @@ func xTeVe(w http.ResponseWriter, r *http.Request) {
 // Images : Image Cache /images/
 func Images(w http.ResponseWriter, r *http.Request) {
 	var path = strings.TrimPrefix(r.URL.Path, "/")
-	var filePath = System.Folder.ImagesCache + getFilenameFromPath(path)
+	var filePath = System.Folder.ImagesCache + filepath.Base(path)
 
 	content, err := readByteFromFile(filePath)
 	if err != nil {
@@ -492,7 +492,7 @@ func Images(w http.ResponseWriter, r *http.Request) {
 // DataImages : Image path for Logos / Images that have been uploaded / data_images /
 func DataImages(w http.ResponseWriter, r *http.Request) {
 	var path = strings.TrimPrefix(r.URL.Path, "/")
-	var filePath = System.Folder.ImagesUpload + getFilenameFromPath(path)
+	var filePath = System.Folder.ImagesUpload + filepath.Base(path)
 
 	content, err := readByteFromFile(filePath)
 	if err != nil {
@@ -924,7 +924,7 @@ func Web(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if getFilenameFromPath(requestFile) == "html" {
+	if filepath.Base(requestFile) == "html" {
 		if System.ScanInProgress == 0 {
 			if len(Settings.Files.M3U) == 0 && len(Settings.Files.HDHR) == 0 {
 				System.ConfigurationWizard = true
@@ -1330,7 +1330,7 @@ func Download(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var path = r.URL.Path
-	var file = System.Folder.Temp + getFilenameFromPath(path)
+	var file = System.Folder.Temp + filepath.Base(path)
 	platformFile := getPlatformFile(file)
 
 	if err := checkFile(platformFile); err != nil {
@@ -1350,7 +1350,7 @@ func Download(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	w.Header().Set("Content-Disposition", "attachment; filename="+getFilenameFromPath(file))
+	w.Header().Set("Content-Disposition", "attachment; filename="+filepath.Base(file))
 
 	if _, writeErr := io.Copy(w, f); writeErr != nil {
 		log.Printf("Error streaming download response: %v", writeErr)

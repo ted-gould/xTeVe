@@ -170,7 +170,7 @@ func Init() (err error) {
 	// Separate tmp Folder for each Instance
 	showInfo(fmt.Sprintf("Temporary Folder:%s", getPlatformPath(System.Folder.Temp)))
 
-	err = checkFolder(System.Folder.Temp)
+	err = os.MkdirAll(System.Folder.Temp, 0755)
 	if err != nil {
 		return
 	}

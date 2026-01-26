@@ -8,6 +8,7 @@ import (
 	"maps"
 	"os"
 	"path"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"slices"
@@ -177,7 +178,7 @@ func createXEPGMapping() {
 	if len(Data.XMLTV.Files) > 0 {
 		for i := len(Data.XMLTV.Files) - 1; i >= 0; i-- {
 			var file = Data.XMLTV.Files[i]
-			var fileID = strings.TrimSuffix(getFilenameFromPath(file), path.Ext(getFilenameFromPath(file)))
+			var fileID = strings.TrimSuffix(filepath.Base(file), path.Ext(filepath.Base(file)))
 			showInfo("XEPG:" + "Parse XMLTV file: " + getProviderParameter(fileID, "xmltv", "name"))
 
 			var xmltv XMLTV
@@ -202,8 +203,8 @@ func createXEPGMapping() {
 					channel.Icon = c.Icon.Src
 					xmltvMap[c.ID] = channel
 				}
-				tmpMap[getFilenameFromPath(file)] = xmltvMap
-				Data.XMLTV.Mapping[getFilenameFromPath(file)] = xmltvMap
+				tmpMap[filepath.Base(file)] = xmltvMap
+				Data.XMLTV.Mapping[filepath.Base(file)] = xmltvMap
 			}
 		}
 		Data.XMLTV.Mapping = tmpMap
@@ -655,7 +656,7 @@ func verifyExistingChannelMappings(xepgChannel XEPGChannelStruct) XEPGChannelStr
 	if file != "xTeVe Dummy" {
 		xmltvFileMapping, fileExists := Data.XMLTV.Mapping[file]
 		if !fileExists {
-			fileID := strings.TrimSuffix(getFilenameFromPath(file), path.Ext(getFilenameFromPath(file)))
+			fileID := strings.TrimSuffix(filepath.Base(file), path.Ext(filepath.Base(file)))
 			ShowError(fmt.Errorf("missing XMLTV file: %s", getProviderParameter(fileID, "xmltv", "name")), 0)
 			showWarning(2301)
 			xepgChannel.XActive = false

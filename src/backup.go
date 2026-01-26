@@ -23,7 +23,7 @@ func xTeVeAutoBackup() (err error) {
 
 	showInfo("Backup Path:" + System.Folder.Backup)
 
-	err = checkFolder(System.Folder.Backup)
+	err = os.MkdirAll(System.Folder.Backup, 0755)
 	if err != nil {
 		ShowError(err, 1070)
 		return
@@ -89,7 +89,7 @@ func xTeVeAutoBackup() (err error) {
 }
 
 func xteveBackup() (archive string, err error) {
-	err = checkFolder(System.Folder.Temp)
+	err = os.MkdirAll(System.Folder.Temp, 0755)
 	if err != nil {
 		return
 	}
@@ -125,7 +125,7 @@ func xteveRestore(archive string) (newWebURL string, err error) {
 	defer os.RemoveAll(tmpRestore)
 	defer os.Remove(archive)
 
-	err = checkFolder(tmpRestore)
+	err = os.MkdirAll(tmpRestore, 0755)
 	if err != nil {
 		return
 	}
