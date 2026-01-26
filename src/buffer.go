@@ -696,10 +696,30 @@ func connectToStreamingServer(streamID int, playlistID string, ctx context.Conte
 	} // End of BufferInformation
 }
 
+// Limit the playlist download size to 32MB to prevent DoS
+var maxPlaylistDownloadSize int64 = 33554432
+
 func handleHLSStream(ctx context.Context, resp *http.Response, stream ThisStream, tmpFolder string, tmpSegment *int, addErrorToStream func(err error), currentURL string) (ThisStream, error) {
-	body, err := io.ReadAll(resp.Body)
+	// Security: Check Content-Length to avoid starting download of obviously too large files
+	if resp.ContentLength > maxPlaylistDownloadSize {
+		err := fmt.Errorf("playlist too large: %d bytes (max: %d)", resp.ContentLength, maxPlaylistDownloadSize)
+		ShowError(err, 4050)
+		addErrorToStream(err)
+		return stream, err
+	}
+
+	// Security: Use LimitReader to enforce the size limit
+	lr := io.LimitReader(resp.Body, maxPlaylistDownloadSize+1)
+	body, err := io.ReadAll(lr)
 	if err != nil {
 		ShowError(err, 0)
+		addErrorToStream(err)
+		return stream, err
+	}
+
+	if int64(len(body)) > maxPlaylistDownloadSize {
+		err := fmt.Errorf("playlist too large: exceeds %d bytes", maxPlaylistDownloadSize)
+		ShowError(err, 4050)
 		addErrorToStream(err)
 		return stream, err
 	}

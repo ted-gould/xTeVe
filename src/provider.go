@@ -238,6 +238,9 @@ func getProviderData(ctx context.Context, fileType, fileID string) (err error) {
 	return
 }
 
+// Limit the download size to 512MB to prevent DoS
+var maxProviderDownloadSize int64 = 536870912
+
 func downloadFileFromServer(ctx context.Context, providerURL string) (filename string, body []byte, err error) {
 	_, err = url.ParseRequestURI(providerURL)
 	if err != nil {
@@ -279,8 +282,24 @@ func downloadFileFromServer(ctx context.Context, providerURL string) (filename s
 		filename = cleanFilename[0]
 	}
 
-	body, err = io.ReadAll(resp.Body)
+	// Security: Check Content-Length to avoid starting download of obviously too large files
+	if resp.ContentLength > maxProviderDownloadSize {
+		err = fmt.Errorf("file too large: %d bytes (max: %d)", resp.ContentLength, maxProviderDownloadSize)
+		return
+	}
+
+	// Security: Use LimitReader to enforce the size limit during download
+	// Read up to limit + 1 to detect truncation
+	lr := io.LimitReader(resp.Body, maxProviderDownloadSize+1)
+	body, err = io.ReadAll(lr)
 	if err != nil {
+		return
+	}
+
+	if int64(len(body)) > maxProviderDownloadSize {
+		err = fmt.Errorf("file too large: exceeds %d bytes", maxProviderDownloadSize)
+		// Clear body to free memory
+		body = nil
 		return
 	}
 	return
