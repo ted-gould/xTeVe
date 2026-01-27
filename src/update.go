@@ -3,7 +3,6 @@ package src
 import (
 	"errors"
 	"fmt"
-	"reflect"
 )
 
 func conditionalUpdateChanges() (err error) {
@@ -114,22 +113,17 @@ checkVersion:
 func convertToNewFilter(oldFilter []any) (newFilterMap map[int]any) {
 	newFilterMap = make(map[int]any)
 
-	switch reflect.TypeOf(oldFilter).Kind() {
-	case reflect.Slice:
-		s := reflect.ValueOf(oldFilter)
-
-		for i := range s.Len() {
-			var newFilter FilterStruct
-			newFilter.Active = true
-			newFilter.Name = fmt.Sprintf("Custom filter %d", i+1)
-			if filter, ok := s.Index(i).Interface().(string); ok {
-				newFilter.Filter = filter
-			}
-			newFilter.Type = "custom-filter"
-			newFilter.CaseSensitive = false
-
-			newFilterMap[i] = newFilter
+	for i, item := range oldFilter {
+		var newFilter FilterStruct
+		newFilter.Active = true
+		newFilter.Name = fmt.Sprintf("Custom filter %d", i+1)
+		if filter, ok := item.(string); ok {
+			newFilter.Filter = filter
 		}
+		newFilter.Type = "custom-filter"
+		newFilter.CaseSensitive = false
+
+		newFilterMap[i] = newFilter
 	}
 	return
 }
