@@ -28,3 +28,10 @@
 **Prevention:**
 1.  Always stream file content using `io.Copy` (or `http.ServeFile`) instead of reading fully into memory.
 2.  For content type detection, read only the first 512 bytes (standard sniffing size) and then rewind the stream, rather than loading the whole file.
+
+## 2026-02-16 - Unbounded Memory Consumption in WebSocket
+**Vulnerability:** The `WS` handler in `src/webserver.go` did not enforce a read limit on the WebSocket connection (`conn.SetReadLimit`). This allowed an unauthenticated attacker to send an arbitrarily large message (e.g., 1GB) which `conn.ReadJSON` would attempt to read into memory, leading to a Denial of Service (OOM).
+**Learning:** `gorilla/websocket` does not have a default read limit. Always explicitly call `SetReadLimit` on new connections.
+**Prevention:**
+1.  Define a reasonable limit (e.g., 32MB).
+2.  Call `conn.SetReadLimit(limit)` immediately after upgrade.
