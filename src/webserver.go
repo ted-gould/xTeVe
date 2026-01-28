@@ -40,6 +40,9 @@ var restartWebserver = make(chan bool, 1)
 // Active HTTP connections counter
 var activeHTTPConnections int64
 
+// WebSocket read limit (32MB) to prevent DoS
+var websocketReadLimit int64 = 32 * 1024 * 1024
+
 func connState(c net.Conn, state http.ConnState) {
 	switch state {
 	case http.StateNew:
@@ -583,6 +586,10 @@ func WS(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Could not open websocket connection", http.StatusBadRequest)
 		return
 	}
+
+	// Security: Set read limit to prevent DoS via large messages
+	conn.SetReadLimit(websocketReadLimit)
+
 	// The connection has been hijacked. ConnState will receive StateHijacked and will NOT receive StateClosed.
 	// We must manually decrement the counter when this handler exits.
 	defer atomic.AddInt64(&activeHTTPConnections, -1)
