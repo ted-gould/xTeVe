@@ -37,6 +37,9 @@ import (
 var webAlerts = make(chan string, 3)
 var restartWebserver = make(chan bool, 1)
 
+// WebSocket read limit (32MB) to prevent memory exhaustion DoS
+var websocketReadLimit int64 = 32 * 1024 * 1024
+
 // Active HTTP connections counter
 var activeHTTPConnections int64
 
@@ -587,6 +590,8 @@ func WS(w http.ResponseWriter, r *http.Request) {
 	// We must manually decrement the counter when this handler exits.
 	defer atomic.AddInt64(&activeHTTPConnections, -1)
 	defer conn.Close()
+
+	conn.SetReadLimit(websocketReadLimit)
 
 	setGlobalDomain(r.Host)
 
