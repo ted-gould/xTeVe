@@ -1,17 +1,96 @@
 package src
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
-	"path"
 	"strconv"
 	"strings"
 	"time"
 )
 
+// getM3U8Bandwidth extracts bandwidth from #EXT-X-STREAM-INF line
+func getM3U8Bandwidth(line string) int {
+	if idx := strings.Index(line, "BANDWIDTH="); idx != -1 {
+		var bandwidth = line[idx+10:]
+		if comma := strings.Index(bandwidth, ","); comma != -1 {
+			bandwidth = bandwidth[:comma]
+		}
+		n, err := strconv.Atoi(bandwidth)
+		if err == nil {
+			return n
+		}
+	}
+	return 0
+}
+
+// parseM3U8Parameter parses M3U tags
+func parseM3U8Parameter(line string, segment *Segment, stream *ThisStream, sequence *int64) error {
+	line = strings.Trim(line, "\r\n")
+
+	if strings.HasPrefix(line, "#EXTINF:") {
+		var value = line[8:]
+		if comma := strings.Index(value, ","); comma != -1 {
+			value = value[:comma]
+		}
+		duration, err := strconv.ParseFloat(value, 64)
+		if err == nil {
+			segment.Duration = duration
+		} else {
+			ShowError(err, 1050)
+			return err
+		}
+	} else if strings.HasPrefix(line, "#EXT-X-STREAM-INF:") {
+		segment.StreamInf.Bandwidth = getM3U8Bandwidth(line[18:])
+	} else if strings.HasPrefix(line, "#EXT-X-MEDIA-SEQUENCE:") {
+		n, err := strconv.ParseInt(line[22:], 10, 64)
+		if err == nil {
+			stream.Sequence = n
+			*sequence = n
+		}
+	} else if strings.HasPrefix(line, "#EXT-X-PLAYLIST-TYPE:") {
+		segment.PlaylistType = line[21:]
+	}
+
+	return nil
+}
+
+// parseM3U8URL resolves the URL for a segment or playlist
+func parseM3U8URL(line string, segment *Segment, stream *ThisStream) {
+	// Optimization: Check prefixes to avoid expensive url.Parse calls.
+	// Most lines in M3U8 are either absolute URLs, absolute paths, or relative paths.
+
+	// 1. Absolute Path (starts with /)
+	if strings.HasPrefix(line, "/") {
+		segment.URL = stream.URLStreamingServer + line
+		return
+	}
+
+	// 2. Full URL (http://, https://) or Protocol Relative (//)
+	// Fast path for common schemes to avoid Contains check
+	if strings.HasPrefix(line, "http") || strings.HasPrefix(line, "//") {
+		if strings.HasPrefix(line, "http://") || strings.HasPrefix(line, "https://") || strings.HasPrefix(line, "//") {
+			segment.URL = line
+			return
+		}
+	}
+
+	// Fallback for other schemes (rtmp://, etc)
+	if strings.Contains(line, "://") {
+		segment.URL = line
+		return
+	}
+
+	// 3. Relative Path (fallback)
+	// Optimization: Avoid path.Base and strings.Replace which allocate.
+	if idx := strings.LastIndex(stream.M3U8URL, "/"); idx != -1 {
+		segment.URL = stream.M3U8URL[:idx+1] + line
+	} else {
+		// Fallback if no slash found (unlikely for a valid URL context)
+		segment.URL = line
+	}
+}
+
 func ParseM3U8(stream *ThisStream) (err error) {
-	var debug string
 	var noNewSegment = false
 	var lastSegmentDuration float64
 	var segment Segment
@@ -20,81 +99,10 @@ func ParseM3U8(stream *ThisStream) (err error) {
 
 	stream.DynamicBandwidth = false
 
-	debug = fmt.Sprintf(`M3U8 Playlist:`+"\n"+`%s`, stream.Body)
-	showDebug(debug, 3)
-
-	var getBandwidth = func(line string) int {
-		if idx := strings.Index(line, "BANDWIDTH="); idx != -1 {
-			var bandwidth = line[idx+10:]
-			if comma := strings.Index(bandwidth, ","); comma != -1 {
-				bandwidth = bandwidth[:comma]
-			}
-			n, err := strconv.Atoi(bandwidth)
-			if err == nil {
-				return n
-			}
-		}
-		return 0
-	}
-
-	var parseParameter = func(line string, segment *Segment) (err error) {
-		line = strings.Trim(line, "\r\n")
-
-		if strings.HasPrefix(line, "#EXTINF:") {
-			var value = line[8:]
-			if comma := strings.Index(value, ","); comma != -1 {
-				value = value[:comma]
-			}
-			duration, err := strconv.ParseFloat(value, 64)
-			if err == nil {
-				segment.Duration = duration
-			} else {
-				ShowError(err, 1050)
-				return err
-			}
-		} else if strings.HasPrefix(line, "#EXT-X-STREAM-INF:") {
-			segment.StreamInf.Bandwidth = getBandwidth(line[18:])
-		} else if strings.HasPrefix(line, "#EXT-X-MEDIA-SEQUENCE:") {
-			n, err := strconv.ParseInt(line[22:], 10, 64)
-			if err == nil {
-				stream.Sequence = n
-				sequence = n
-			}
-		} else if strings.HasPrefix(line, "#EXT-X-PLAYLIST-TYPE:") {
-			segment.PlaylistType = line[21:]
-		}
-
-		return
-	}
-
-	var parseURL = func(line string, segment *Segment) {
-		// Optimization: Check prefixes to avoid expensive url.Parse calls.
-		// Most lines in M3U8 are either absolute URLs, absolute paths, or relative paths.
-
-		// 1. Absolute Path (starts with /)
-		if strings.HasPrefix(line, "/") {
-			segment.URL = stream.URLStreamingServer + line
-			return
-		}
-
-		// 2. Full URL (http://, https://) or Protocol Relative (//)
-		// Fast path for common schemes to avoid Contains check
-		if strings.HasPrefix(line, "http") || strings.HasPrefix(line, "//") {
-			if strings.HasPrefix(line, "http://") || strings.HasPrefix(line, "https://") || strings.HasPrefix(line, "//") {
-				segment.URL = line
-				return
-			}
-		}
-
-		// Fallback for other schemes (rtmp://, etc)
-		if strings.Contains(line, "://") {
-			segment.URL = line
-			return
-		}
-
-		// 3. Relative Path (fallback)
-		var serverURLPath = strings.Replace(stream.M3U8URL, path.Base(stream.M3U8URL), line, -1)
-		segment.URL = serverURLPath
+	// Optimization: Avoid formatting debug string unless debug level is sufficient
+	if System.Flag.Debug >= 3 {
+		var debug = fmt.Sprintf(`M3U8 Playlist:`+"\n"+`%s`, stream.Body)
+		showDebug(debug, 3)
 	}
 
 	if strings.Contains(stream.Body, "#EXTM3U") {
@@ -102,15 +110,26 @@ func ParseM3U8(stream *ThisStream) (err error) {
 			stream.DynamicStream = make(map[int]DynamicStream)
 		}
 
-		scanner := bufio.NewScanner(strings.NewReader(stream.Body))
+		// Optimization: Use string slicing instead of bufio.Scanner to avoid allocation
+		var remainder = stream.Body
+		for len(remainder) > 0 {
+			var line string
+			if idx := strings.IndexByte(remainder, '\n'); idx >= 0 {
+				line = remainder[:idx]
+				remainder = remainder[idx+1:]
+			} else {
+				line = remainder
+				remainder = ""
+			}
 
-		// Parse Parameters
-		for scanner.Scan() {
-			line := scanner.Text()
+			// Trim CR if present (Scanner does this automatically)
+			if len(line) > 0 && line[len(line)-1] == '\r' {
+				line = line[:len(line)-1]
+			}
 
 			if len(line) > 0 {
-				if line[0:1] == "#" {
-					err := parseParameter(line, &segment)
+				if line[0] == '#' {
+					err := parseM3U8Parameter(line, &segment, stream, &sequence)
 					if err != nil {
 						return err
 					}
@@ -118,14 +137,14 @@ func ParseM3U8(stream *ThisStream) (err error) {
 				}
 
 				// M3U8 contains several links to additional M3U8 Playlists (Bandwidth option)
-				if segment.StreamInf.Bandwidth > 0 && len(line) > 0 && line[0:1] != "#" {
+				if segment.StreamInf.Bandwidth > 0 && line[0] != '#' {
 					var dynamicStream DynamicStream
 
 					segment.Duration = 0
 					noNewSegment = false
 
 					stream.DynamicBandwidth = true
-					parseURL(line, &segment)
+					parseM3U8URL(line, &segment, stream)
 
 					dynamicStream.Bandwidth = segment.StreamInf.Bandwidth
 					dynamicStream.URL = segment.URL
@@ -134,8 +153,8 @@ func ParseM3U8(stream *ThisStream) (err error) {
 				}
 
 				// Segment with TS Stream
-				if segment.Duration > 0 && line[0:1] != "#" {
-					parseURL(line, &segment)
+				if segment.Duration > 0 && line[0] != '#' {
+					parseM3U8URL(line, &segment, stream)
 
 					if len(segment.URL) > 0 {
 						segment.Sequence = sequence
@@ -146,9 +165,6 @@ func ParseM3U8(stream *ThisStream) (err error) {
 			}
 		}
 
-		if err := scanner.Err(); err != nil {
-			return err
-		}
 	} else {
 		err = errors.New(getErrMsg(4051))
 		return

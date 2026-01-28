@@ -30,3 +30,17 @@
 **Impact:** Reduced allocation count and GC pressure during the database rebuild phase (O(N) growth allocations -> O(1) allocation).
 
 ## 2026-01-25 - [Hash Writer Interface Allocations] **Learning:** Using `io.WriteString(h, s)` where `h` is a `hash.Hash` (interface) causes `[]byte(s)` to allocate because `crypto/md5` does not implement `io.StringWriter`, and passing the slice to the `Write` interface method forces it to escape (or at least allocate). String concatenation + single `[]byte` conversion was significantly faster (3 allocs vs 11 allocs). **Action:** Avoid `io.WriteString` on `hash.Hash` for many small strings; prefer concatenation or `unsafe` if critical, or accept that `md5.Sum` is already optimized.
+
+## 2026-01-27 - Debug Logging Pre-formatting Allocations
+
+**Learning:** `debug = fmt.Sprintf(...)` followed by `showDebug(debug, level)` allocates the string *before* the level check inside `showDebug`. This causes significant allocation overhead in hot paths even when debug logging is disabled.
+
+**Action:** Wrap the `fmt.Sprintf` call in an explicit check for the debug level (e.g., `if System.Flag.Debug >= level { ... }`) to avoid formatting and allocation when not needed.
+
+**Impact:** Reduced allocations in `ParseM3U8` by 1 per call (huge if body is large) when debug is off.
+
+## 2026-01-27 - bufio.Scanner vs String Slicing
+
+**Learning:** `bufio.Scanner` allocates an internal buffer (initially 4KB) and wraps the reader. For parsing strings already in memory, iterating via `strings.IndexByte` and slicing is zero-allocation and significantly faster.
+
+**Action:** Replace `bufio.Scanner` with a manual loop using `strings.IndexByte` when parsing in-memory strings.
