@@ -1044,11 +1044,46 @@ func getEpisodeNum(program *Program, xmltvProgram *Program, xCategory string) {
 
 	if len(xCategory) > 0 && xCategory != "Movie" {
 		if len(xmltvProgram.EpisodeNum) == 0 {
-			var timeLayout = "20060102150405"
-			t, err := time.Parse(timeLayout, strings.Split(xmltvProgram.Start, " ")[0])
-			if err == nil {
-				program.EpisodeNum = append(program.EpisodeNum, &EpisodeNum{Value: t.Format("2006-01-02 15:04:05"), System: "original-air-date"})
+			// Optimization: Avoid time.Parse and allocations for standard format
+			var formattedTime string
+			var err error
+
+			// Extract date part (YYYYMMDDhhmmss)
+			datePart := xmltvProgram.Start
+			if idx := strings.IndexByte(datePart, ' '); idx != -1 {
+				datePart = datePart[:idx]
+			}
+
+			if len(datePart) == 14 {
+				// Fast path: Construct string directly
+				// YYYYMMDDhhmmss -> YYYY-MM-DD hh:mm:ss
+				var sb strings.Builder
+				sb.Grow(19)
+				sb.WriteString(datePart[0:4])
+				sb.WriteByte('-')
+				sb.WriteString(datePart[4:6])
+				sb.WriteByte('-')
+				sb.WriteString(datePart[6:8])
+				sb.WriteByte(' ')
+				sb.WriteString(datePart[8:10])
+				sb.WriteByte(':')
+				sb.WriteString(datePart[10:12])
+				sb.WriteByte(':')
+				sb.WriteString(datePart[12:14])
+				formattedTime = sb.String()
 			} else {
+				// Fallback to slow path
+				var timeLayout = "20060102150405"
+				var t time.Time
+				t, err = time.Parse(timeLayout, datePart)
+				if err == nil {
+					formattedTime = t.Format("2006-01-02 15:04:05")
+				}
+			}
+
+			if err == nil && len(formattedTime) > 0 {
+				program.EpisodeNum = append(program.EpisodeNum, &EpisodeNum{Value: formattedTime, System: "original-air-date"})
+			} else if err != nil {
 				ShowError(err, 0)
 			}
 		}
