@@ -702,12 +702,8 @@ func createChannelElements(xepgChannel XEPGChannelStruct, imgc *imgcache.Cache) 
 
 // createProgramElements generates XMLTV program elements for a channel.
 // It's a wrapper around getProgramData.
-func createProgramElements(xepgChannel XEPGChannelStruct) ([]*Program, error) {
-	tmpProgramXML, err := getProgramData(xepgChannel)
-	if err != nil {
-		return nil, err
-	}
-	return tmpProgramXML.Program, nil
+func createProgramElements(xepgChannel XEPGChannelStruct, programs *[]*Program) error {
+	return getProgramData(xepgChannel, programs)
 }
 
 // Create XMLTV File
@@ -747,10 +743,8 @@ func createXMLTVFile() (err error) {
 			xepgXML.Channel = append(xepgXML.Channel, channelElement)
 
 			// Create Program Elements
-			programElements, progErr := createProgramElements(xepgChannel) // Renamed err to progErr
-			if progErr == nil {
-				xepgXML.Program = append(xepgXML.Program, programElements...)
-			} else {
+			progErr := createProgramElements(xepgChannel, &xepgXML.Program) // Renamed err to progErr
+			if progErr != nil {
 				// Handle error from createProgramElements if necessary, e.g., log it
 				ShowError(fmt.Errorf("error creating program elements for channel %s: %v", xepgChannel.XName, progErr), 0)
 			}
@@ -772,7 +766,7 @@ func createXMLTVFile() (err error) {
 }
 
 // Create Program Data (createXMLTVFile)
-func getProgramData(xepgChannel XEPGChannelStruct) (xepgXML XMLTV, err error) {
+func getProgramData(xepgChannel XEPGChannelStruct, acc *[]*Program) (err error) {
 	var xmltvFile = System.Folder.Data + xepgChannel.XmltvFile
 	var channelID = xepgChannel.XMapping
 	var xmltv XMLTV
@@ -820,7 +814,7 @@ func getProgramData(xepgChannel XEPGChannelStruct) (xepgXML XMLTV, err error) {
 
 	// Optimization: Pre-allocate slice capacity to avoid reallocations
 	if len(programs) > 0 {
-		xepgXML.Program = make([]*Program, 0, len(programs))
+		*acc = slices.Grow(*acc, len(programs))
 	}
 
 	// Optimization: Parse timeshift once outside the loop
@@ -886,7 +880,7 @@ func getProgramData(xepgChannel XEPGChannelStruct) (xepgXML XMLTV, err error) {
 		// Premiere
 		program.Premiere = xmltvProgram.Premiere
 
-		xepgXML.Program = append(xepgXML.Program, program)
+		*acc = append(*acc, program)
 	}
 	return
 }

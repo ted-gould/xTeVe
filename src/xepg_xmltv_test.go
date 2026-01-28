@@ -299,7 +299,8 @@ func TestCreateProgramElements(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// If testing dummy EPG, ensure Settings.XepgReplaceMissingImages is considered.
 			// For this test, it's false by default in testXMLTVSettings.
-			programs, err := createProgramElements(tt.xepgChannel)
+			var programs []*Program
+			err := createProgramElements(tt.xepgChannel, &programs)
 
 			if (err != nil) != tt.wantErr {
 				t.Errorf("createProgramElements() error = %v, wantErr %v", err, tt.wantErr)
