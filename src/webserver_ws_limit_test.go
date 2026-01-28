@@ -57,7 +57,9 @@ func TestWSLimit(t *testing.T) {
 	// With the fix, the server should close the connection because the message is too big.
 	// Without the fix, the server should process the message and send a response.
 
-    conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+    if err := conn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+		t.Fatalf("Failed to set read deadline: %v", err)
+	}
 	_, _, err = conn.ReadMessage()
 
 	if err == nil {
