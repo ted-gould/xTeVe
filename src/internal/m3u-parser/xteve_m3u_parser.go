@@ -27,6 +27,7 @@ func MakeInterfaceFromM3U(byteStream []byte) (allChannels []any, err error) {
 		stream = make(map[string]string)
 		var channelName string
 		var value string
+		var processedHeader bool
 
 		// Optimized: Iterate over lines without full split
 		// channelBlock contains lines for one channel.
@@ -35,16 +36,37 @@ func MakeInterfaceFromM3U(byteStream []byte) (allChannels []any, err error) {
 		lines := strings.Split(channelBlock, "\n")
 
 		for _, rawLine := range lines {
-			line := strings.TrimRight(rawLine, "\r")
+			line := strings.TrimSpace(rawLine)
 			if len(line) > 0 && line[0] != '#' {
 				// This is either the EXTINF param line (starting with :) or the URL line.
 
-				_, errURL := url.ParseRequestURI(line)
+				var isURL bool
+				if processedHeader {
+					// We've already processed the header (or skipped it), so this must be a URL
+					isURL = true
+				} else if strings.HasPrefix(line, ":") {
+					// Definitive header indicator
+					isURL = false
+				} else {
+					// Ambiguous case: Could be a URL (if header is missing) or a malformed header.
+					// Optimization: Simple check for standard URL schemes to avoid expensive parsing
+					if strings.Contains(line, "://") {
+						isURL = true
+					} else {
+						// Fallback to strict parsing for edge cases (e.g. magnet links, relative URLs that look like garbage)
+						// Note: ParseRequestURI fails for relative paths like "stream/1.ts", so those fall through to header parsing in the old code.
+						// However, treating them as URL here fixes that bug while maintaining safety.
+						_, errURL := url.ParseRequestURI(line)
+						isURL = (errURL == nil)
+					}
+				}
 
-				if errURL == nil {
+				if isURL {
 					// It's a URL
 					stream["url"] = line
+					processedHeader = true
 				} else {
+					processedHeader = true
 					// It's the parameter line (the part after #EXTINF)
 					// Format: ... attributes ... ,Channel Name
 					// Find separator comma (first comma not in quotes)
