@@ -206,27 +206,29 @@ func saveMapToJSONFile(file string, tmpMap any) error {
 	return nil
 }
 
-func loadJSONFileToMap(file string) (tmpMap map[string]any, err error) {
+func loadJSONFile[T any](file string, target *T) (err error) {
 	f, err := os.Open(getPlatformFile(file))
 	if err != nil {
-		return nil, err // Return error instead of panic
+		return err
 	}
-	defer f.Close()
-
-	content, err := io.ReadAll(f)
-
-	if err == nil {
-		err = json.Unmarshal([]byte(content), &tmpMap)
-	}
-
-	if closeErr := f.Close(); closeErr != nil {
-		log.Printf("Error closing file %s: %v", file, closeErr)
-		// If err is nil at this point, we should return closeErr.
-		// If err is not nil, the original error is probably more important.
-		if err == nil {
-			return tmpMap, closeErr
+	defer func() {
+		if closeErr := f.Close(); closeErr != nil {
+			log.Printf("Error closing file %s: %v", file, closeErr)
+			if err == nil {
+				err = closeErr
+			}
 		}
+	}()
+
+	err = json.NewDecoder(f).Decode(target)
+	if err == io.EOF {
+		err = nil
 	}
+	return
+}
+
+func loadJSONFileToMap(file string) (tmpMap map[string]any, err error) {
+	err = loadJSONFile(file, &tmpMap)
 	return
 }
 
