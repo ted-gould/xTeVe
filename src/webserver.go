@@ -1183,7 +1183,9 @@ func API(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("content-type", "application/json")
 
-	if Settings.AuthenticationAPI {
+	// Security: If Web Auth is enabled, we MUST also enforce API Auth to prevent
+	// bypass via reverse proxies (where RemoteAddr is localhost).
+	if Settings.AuthenticationAPI || Settings.AuthenticationWEB {
 		var token string
 		switch len(request.Token) {
 		case 0:
