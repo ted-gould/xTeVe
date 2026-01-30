@@ -551,12 +551,41 @@ func processNewXEPGChannel(m3uChannel M3UChannelStructXEPG, allChannelNumbers ma
 	Data.XEPG.Channels[xepg] = newChannel
 }
 
+// xmltvNameMatch holds the mapping info for name-based lookup
+type xmltvNameMatch struct {
+	XmltvFile string
+	XMapping  string
+	TvgLogo   string
+}
+
 // Automatically assign Channels and check the Mapping
 func mapping() (err error) {
 	showInfo("XEPG:" + "Map channels")
 
+	// Optimization: Build a name index to avoid O(N*M) scans in performAutomaticChannelMapping
+	// Map: File -> NormalizedName -> MatchInfo
+	nameIndex := make(map[string]map[string]xmltvNameMatch, len(Data.XMLTV.Mapping))
+
+	for file, xmltvChannels := range Data.XMLTV.Mapping {
+		fileIndex := make(map[string]xmltvNameMatch, len(xmltvChannels))
+		for _, channel := range xmltvChannels {
+			for _, nameEntry := range channel.DisplayNames {
+				// Normalize: lowercase + remove spaces
+				normalizedName := strings.ToLower(strings.ReplaceAll(nameEntry.Value, " ", ""))
+				// Note: If multiple channels map to the same normalized name within a file,
+				// the last one visited overwrites. This mimics previous behavior where order was random.
+				fileIndex[normalizedName] = xmltvNameMatch{
+					XmltvFile: file,
+					XMapping:  channel.ID,
+					TvgLogo:   channel.Icon,
+				}
+			}
+		}
+		nameIndex[file] = fileIndex
+	}
+
 	for xepgID, xepgChannel := range Data.XEPG.Channels {
-		xepgChannel, _ = performAutomaticChannelMapping(xepgChannel, xepgID)
+		xepgChannel, _ = performAutomaticChannelMapping(xepgChannel, nameIndex)
 
 		if Settings.EnableMappedChannels && (xepgChannel.XmltvFile != "-" || xepgChannel.XMapping != "-") {
 			xepgChannel.XActive = true
@@ -576,7 +605,7 @@ func mapping() (err error) {
 
 // performAutomaticChannelMapping attempts to automatically map an inactive channel.
 // It returns the (potentially modified) channel and a boolean indicating if a mapping was made.
-func performAutomaticChannelMapping(xepgChannel XEPGChannelStruct, _ string) (XEPGChannelStruct, bool) {
+func performAutomaticChannelMapping(xepgChannel XEPGChannelStruct, nameIndex map[string]map[string]xmltvNameMatch) (XEPGChannelStruct, bool) {
 	mappingMade := false
 	// Values can be "-", therefore len <= 1.
 	// Only attempt automatic mapping if BOTH XmltvFile and XMapping are unassigned.
@@ -595,11 +624,17 @@ func performAutomaticChannelMapping(xepgChannel XEPGChannelStruct, _ string) (XE
 		// Data.XEPG.Channels[xepgID] = xepgChannel // This write should happen in the calling function or after all modifications
 
 		mappingFound := false // Flag to indicate if a mapping has been found and we can exit the outer loop
+
+		// Optimization: Calculate normalized name once
+		var xepgNameSolid string
+		nameCalculated := false
+
 		for file, xmltvChannels := range Data.XMLTV.Mapping {
 			if mappingFound {
 				break // Exit outer loop if mapping was found in a previous iteration
 			}
 
+			// 1. Check TVG ID match (Fast O(1))
 			if channel, ok := xmltvChannels[tvgID]; ok {
 				xepgChannel.XmltvFile = file
 				xepgChannel.XMapping = channel.ID
@@ -607,35 +642,29 @@ func performAutomaticChannelMapping(xepgChannel XEPGChannelStruct, _ string) (XE
 				if len(channel.Icon) > 0 {
 					xepgChannel.TvgLogo = channel.Icon
 				}
-				mappingFound = true // Set flag to break outer loop
-				// No 'continue' here, loop will break due to mappingFound in the next iteration's check
-			} else if !mappingFound { // Only search by name if not already found by tvgID
-				// Optimization: Pre-calculate the solid name for the XEPG channel once
-				xepgNameSolid := strings.ReplaceAll(xepgChannel.Name, " ", "")
+				mappingFound = true
+				break
+			}
 
-				// Search for the proper XEPG channel ID by comparing its name with every alias in XML file
-				for _, xmltvChannel := range xmltvChannels {
-					if mappingFound { // Check again in case inner loop found something in previous iteration
+			// 2. Check Name match using Index (Fast O(1))
+			// Only search by name if not already found by tvgID
+			if !mappingFound {
+				if !nameCalculated {
+					xepgNameSolid = strings.ToLower(strings.ReplaceAll(xepgChannel.Name, " ", ""))
+					nameCalculated = true
+				}
+
+				if fileIdx, ok := nameIndex[file]; ok {
+					if match, ok := fileIdx[xepgNameSolid]; ok {
+						xepgChannel.XmltvFile = match.XmltvFile
+						xepgChannel.XMapping = match.XMapping
+						mappingMade = true
+						if len(match.TvgLogo) > 0 {
+							xepgChannel.TvgLogo = match.TvgLogo
+						}
+						mappingFound = true
 						break
 					}
-
-					for _, nameEntry := range xmltvChannel.DisplayNames {
-						currentDisplayNameValue := nameEntry.Value
-
-						xmltvNameSolid := strings.ReplaceAll(currentDisplayNameValue, " ", "")
-
-						if strings.EqualFold(xmltvNameSolid, xepgNameSolid) {
-							xepgChannel.XmltvFile = file
-							xepgChannel.XMapping = xmltvChannel.ID
-							mappingMade = true
-							if len(xmltvChannel.Icon) > 0 {
-								xepgChannel.TvgLogo = xmltvChannel.Icon
-							}
-							mappingFound = true // Set flag to break outer and inner loops
-							break               // Break from inner loop over displayNamesArray
-						}
-					}
-					// if mappingFound, the inner loop over xmltvMap will break in next iter
 				}
 			}
 		}

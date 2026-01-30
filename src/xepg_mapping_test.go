@@ -3,6 +3,7 @@ package src
 import (
 	"fmt" // Added for fmt.Sprintf in panic
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -115,8 +116,6 @@ func setupMappingTestGlobals() func() {
 func TestPerformAutomaticChannelMapping(t *testing.T) {
 	teardown := setupMappingTestGlobals()
 	defer teardown()
-
-	xepgID := "x-ID.test"
 
 	tests := []struct {
 		name                string
@@ -259,7 +258,24 @@ func TestPerformAutomaticChannelMapping(t *testing.T) {
 			// is now with the caller (the main mapping() function).
 			// So, we don't need to check Data.XEPG.Channels here directly for this unit test.
 
-			resultChannel, mappingMade := performAutomaticChannelMapping(tt.initialChannel, xepgID)
+			// Build the index for the test based on current Data.XMLTV.Mapping
+			nameIndex := make(map[string]map[string]xmltvNameMatch, len(Data.XMLTV.Mapping))
+			for file, xmltvChannels := range Data.XMLTV.Mapping {
+				fileIndex := make(map[string]xmltvNameMatch, len(xmltvChannels))
+				for _, channel := range xmltvChannels {
+					for _, nameEntry := range channel.DisplayNames {
+						normalizedName := strings.ToLower(strings.ReplaceAll(nameEntry.Value, " ", ""))
+						fileIndex[normalizedName] = xmltvNameMatch{
+							XmltvFile: file,
+							XMapping:  channel.ID,
+							TvgLogo:   channel.Icon,
+						}
+					}
+				}
+				nameIndex[file] = fileIndex
+			}
+
+			resultChannel, mappingMade := performAutomaticChannelMapping(tt.initialChannel, nameIndex)
 
 			if mappingMade != tt.expectedMappingMade {
 				t.Errorf("performAutomaticChannelMapping mappingMade: got %v, want %v", mappingMade, tt.expectedMappingMade)
