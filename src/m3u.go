@@ -214,7 +214,7 @@ func containsWholeWord(s, substr string) bool {
 // Create xTeVe M3U file
 func buildM3U(groups []string) (m3u string, err error) {
 	var sb strings.Builder
-	err = buildM3UToWriter(&sb, groups)
+	err = buildM3UToWriter(&sb, groups, System.Domain)
 	if err != nil {
 		return "", err
 	}
@@ -229,8 +229,13 @@ func buildM3U(groups []string) (m3u string, err error) {
 
 // buildM3UToWriter writes M3U content to the provided io.Writer.
 // This allows streaming output to avoid large memory allocations.
-func buildM3UToWriter(w io.Writer, groups []string) (err error) {
+func buildM3UToWriter(w io.Writer, groups []string, domain string) (err error) {
 	var imgc = Data.Cache.Images
+	var targetDomain = System.Domain
+
+	if len(domain) > 0 {
+		targetDomain = domain
+	}
 
 	// M3UChannelData is a slimmed-down version of XEPGChannelStruct
 	// containing only fields necessary for M3U generation and sorting.
@@ -334,7 +339,7 @@ func buildM3UToWriter(w io.Writer, groups []string) (err error) {
 	})
 
 	// Create M3U Content
-	var xmltvURL = fmt.Sprintf("%s://%s/xmltv/xteve.xml", System.ServerProtocol.XML, System.Domain)
+	var xmltvURL = fmt.Sprintf("%s://%s/xmltv/xteve.xml", System.ServerProtocol.XML, targetDomain)
 
 	// Optimized M3U Header construction
 	// Helper to handle write errors
@@ -383,7 +388,7 @@ func buildM3UToWriter(w io.Writer, groups []string) (err error) {
 
 		var stream string
 		var streamErr error
-		stream, streamErr = createStreamingURL("M3U", channel.FileM3UID, channel.XChannelID, channel.XName, channel.URL)
+		stream, streamErr = createStreamingURL(targetDomain, "M3U", channel.FileM3UID, channel.XChannelID, channel.XName, channel.URL)
 		if streamErr == nil {
 			write(stream)
 			write("\n")

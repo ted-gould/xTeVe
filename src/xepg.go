@@ -160,7 +160,7 @@ func buildXEPG(background bool) error { // Added error return type
 		// getLineup() // Assuming getLineup() modifies globals and doesn't return error, or handles its own.
 		// If getLineup can fail and that failure should be propagated, it needs to return error.
 		// For now, assume it matches original behavior.
-		if _, err := getLineup(); err != nil {
+		if _, err := getLineup(System.Domain); err != nil {
 			ShowError(err, 0)
 		}
 		System.ScanInProgress = 0
@@ -1144,7 +1144,7 @@ func createM3UFile() error { // Added error return type
 	defer f.Close()
 
 	bw := bufio.NewWriter(f)
-	err = buildM3UToWriter(bw, []string{})
+	err = buildM3UToWriter(bw, []string{}, System.Domain)
 	if err != nil {
 		ShowError(err, 000)
 		return err

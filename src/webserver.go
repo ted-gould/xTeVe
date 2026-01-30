@@ -194,11 +194,7 @@ func Index(w http.ResponseWriter, r *http.Request) {
 	var err error
 	var response []byte
 	var path = r.URL.Path
-	var debug string
-
-	setGlobalDomain(r.Host)
-
-	debug = fmt.Sprintf("Web Server Request:Path: %s", path)
+	debug := fmt.Sprintf("Web Server Request:Path: %s", path)
 	showDebug(debug, 2)
 
 	switch path {
@@ -220,7 +216,7 @@ func Index(w http.ResponseWriter, r *http.Request) {
 	case "/discover.json":
 		_, childSpan := otel.Tracer("webserver").Start(r.Context(), "discover")
 		defer childSpan.End()
-		response, err = getDiscover()
+		response, err = getDiscover(r.Host)
 		if err != nil {
 			childSpan.RecordError(err)
 		}
@@ -245,7 +241,7 @@ func Index(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		response, err = getLineup()
+		response, err = getLineup(r.Host)
 		if err != nil {
 			childSpan.RecordError(err)
 		}
@@ -253,7 +249,7 @@ func Index(w http.ResponseWriter, r *http.Request) {
 	case "/device.xml", "/capability":
 		_, childSpan := otel.Tracer("webserver").Start(r.Context(), "capability")
 		defer childSpan.End()
-		response, err = getCapability()
+		response, err = getCapability(r.Host)
 		if err != nil {
 			childSpan.RecordError(err)
 		}
@@ -261,7 +257,7 @@ func Index(w http.ResponseWriter, r *http.Request) {
 	default:
 		_, childSpan := otel.Tracer("webserver").Start(r.Context(), "default")
 		defer childSpan.End()
-		response, err = getCapability()
+		response, err = getCapability(r.Host)
 		if err != nil {
 			childSpan.RecordError(err)
 		}
@@ -366,8 +362,6 @@ func xTeVe(w http.ResponseWriter, r *http.Request) {
 	var path = strings.TrimPrefix(r.URL.Path, "/")
 	var groups = []string{}
 
-	setGlobalDomain(r.Host)
-
 	if strings.Contains(path, "xmltv/") {
 		requestType = "xml"
 	} else if strings.Contains(path, "m3u/") {
@@ -452,7 +446,7 @@ func xTeVe(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 
 		bw := bufio.NewWriter(w)
-		err = buildM3UToWriter(bw, groups)
+		err = buildM3UToWriter(bw, groups, r.Host)
 		if err != nil {
 			childSpan.RecordError(err)
 			ShowError(err, 000)
@@ -587,8 +581,6 @@ func WS(w http.ResponseWriter, r *http.Request) {
 	// We must manually decrement the counter when this handler exits.
 	defer atomic.AddInt64(&activeHTTPConnections, -1)
 	defer conn.Close()
-
-	setGlobalDomain(r.Host)
 
 	for {
 		var request RequestStruct
@@ -789,7 +781,7 @@ func WS(w http.ResponseWriter, r *http.Request) {
 			}
 		case "uploadLogo":
 			if len(request.Base64) > 0 {
-				response.LogoURL, err = uploadLogo(request.Base64, request.Filename)
+				response.LogoURL, err = uploadLogo(request.Base64, request.Filename, r.Host)
 
 				if err == nil {
 					if errWrite := conn.WriteJSON(&response); errWrite != nil {
@@ -890,8 +882,6 @@ func Web(w http.ResponseWriter, r *http.Request) {
 	var contentType, file string
 
 	var language LanguageUI
-
-	setGlobalDomain(r.Host)
 
 	// Load language file
 	var languageFile = fmt.Sprintf("html/lang/%s.json", Settings.Language)
@@ -1136,7 +1126,6 @@ func API(w http.ResponseWriter, r *http.Request) {
 	// requests are made with different Host headers.
 	// However, the original code called it. If we remove it, we must ensure System.Domain is correct.
 	// For now, we'll leave it as is, but be aware of side effects in tests.
-	setGlobalDomain(r.Host)
 	var request APIRequestStruct
 	var response APIResponseStruct
 
@@ -1230,10 +1219,10 @@ func API(w http.ResponseWriter, r *http.Request) {
 		response.StreamsAll = int64(len(Data.Streams.All))
 		response.StreamsXepg = int64(Data.XEPG.XEPGCount)
 		response.EpgSource = Settings.EpgSource
-		response.URLDvr = System.Domain
-		response.URLM3U = System.ServerProtocol.M3U + "://" + System.Domain + "/m3u/xteve.m3u"
-		response.URLWebDAV = System.ServerProtocol.WEB + "://" + System.Domain + "/dav/"
-		response.URLXepg = System.ServerProtocol.XML + "://" + System.Domain + "/xmltv/xteve.xml"
+		response.URLDvr = r.Host
+		response.URLM3U = System.ServerProtocol.M3U + "://" + r.Host + "/m3u/xteve.m3u"
+		response.URLWebDAV = System.ServerProtocol.WEB + "://" + r.Host + "/dav/"
+		response.URLXepg = System.ServerProtocol.XML + "://" + r.Host + "/xmltv/xteve.xml"
 		response.OtelExporterType = os.Getenv("OTEL_EXPORTER_TYPE")
 		response.OtelExporterEndpoint = os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
 

@@ -28,3 +28,11 @@
 **Prevention:**
 1.  Always stream file content using `io.Copy` (or `http.ServeFile`) instead of reading fully into memory.
 2.  For content type detection, read only the first 512 bytes (standard sniffing size) and then rewind the stream, rather than loading the whole file.
+
+## 2026-10-15 - Host Header Injection via Global State Poisoning
+**Vulnerability:** The application used a global variable `System.Domain` to store the server's domain/IP, which was updated on *every* HTTP request using the `Host` header (`setGlobalDomain(r.Host)`). This created a race condition where a malicious request (e.g. `Host: evil.com`) would poison the global state, causing subsequent requests (even from localhost or other users) to receive responses containing `evil.com` in URLs (M3U, XMLTV, API responses).
+**Learning:** Global mutable state that depends on per-request input is a critical anti-pattern in concurrent web servers. It creates race conditions and vulnerability vectors like Host Header Injection that affect all users.
+**Prevention:**
+1.  Avoid global state for request-specific data.
+2.  Pass request context (like `r.Host`) explicitly to functions that need it to generate responses.
+3.  Initialize global configuration (like default Domain) only once at startup.

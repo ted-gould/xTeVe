@@ -43,12 +43,17 @@ func makeInteraceFromHDHR(content []byte, playlistName, id string) (channels []a
 	return
 }
 
-func getCapability() (xmlContent []byte, err error) {
+func getCapability(domain string) (xmlContent []byte, err error) {
 	var capability Capability
 	var buffer bytes.Buffer
+	var targetDomain = System.Domain
+
+	if len(domain) > 0 {
+		targetDomain = domain
+	}
 
 	capability.Xmlns = "urn:schemas-upnp-org:device-1-0"
-	capability.URLBase = System.ServerProtocol.WEB + "://" + System.Domain
+	capability.URLBase = System.ServerProtocol.WEB + "://" + targetDomain
 
 	capability.SpecVersion.Major = 1
 	capability.SpecVersion.Minor = 0
@@ -72,17 +77,22 @@ func getCapability() (xmlContent []byte, err error) {
 	return
 }
 
-func getDiscover() (jsonContent []byte, err error) {
+func getDiscover(domain string) (jsonContent []byte, err error) {
 	var discover Discover
+	var targetDomain = System.Domain
 
-	discover.BaseURL = System.ServerProtocol.WEB + "://" + System.Domain
+	if len(domain) > 0 {
+		targetDomain = domain
+	}
+
+	discover.BaseURL = System.ServerProtocol.WEB + "://" + targetDomain
 	discover.DeviceAuth = System.AppName
 	discover.DeviceID = System.DeviceID
 	discover.FirmwareName = "bin_" + System.Version
 	discover.FirmwareVersion = System.Version
 	discover.FriendlyName = System.Name
 
-	discover.LineupURL = fmt.Sprintf("%s://%s/lineup.json", System.ServerProtocol.DVR, System.Domain)
+	discover.LineupURL = fmt.Sprintf("%s://%s/lineup.json", System.ServerProtocol.DVR, targetDomain)
 	discover.Manufacturer = "Golang"
 	discover.ModelNumber = System.Version
 	discover.TunerCount = Settings.Tuner
@@ -103,8 +113,13 @@ func getLineupStatus() (jsonContent []byte, err error) {
 	return
 }
 
-func getLineup() (jsonContent []byte, err error) {
+func getLineup(domain string) (jsonContent []byte, err error) {
 	var lineup Lineup
+	var targetDomain = System.Domain
+
+	if len(domain) > 0 {
+		targetDomain = domain
+	}
 
 	switch Settings.EpgSource {
 	case "PMS":
@@ -137,7 +152,7 @@ func getLineup() (jsonContent []byte, err error) {
 				stream.GuideNumber = m3uChannel.UUIDValue
 			}
 
-			stream.URL, err = createStreamingURL("DVR", m3uChannel.FileM3UID, stream.GuideNumber, m3uChannel.Name, m3uChannel.URL)
+			stream.URL, err = createStreamingURL(targetDomain, "DVR", m3uChannel.FileM3UID, stream.GuideNumber, m3uChannel.Name, m3uChannel.URL)
 			if err == nil {
 				lineup = append(lineup, stream)
 			} else {
@@ -152,7 +167,7 @@ func getLineup() (jsonContent []byte, err error) {
 				stream.GuideName = xepgChannel.XName
 				stream.GuideNumber = xepgChannel.XChannelID
 				//stream.URL = fmt.Sprintf("%s://%s/stream/%s-%s", System.ServerProtocol.DVR, System.Domain, xepgChannel.FileM3UID, base64.StdEncoding.EncodeToString([]byte(xepgChannel.URL)))
-				stream.URL, err = createStreamingURL("DVR", xepgChannel.FileM3UID, xepgChannel.XChannelID, xepgChannel.XName, xepgChannel.URL)
+				stream.URL, err = createStreamingURL(targetDomain, "DVR", xepgChannel.FileM3UID, xepgChannel.XChannelID, xepgChannel.XName, xepgChannel.URL)
 				if err == nil {
 					lineup = append(lineup, stream)
 				} else {
