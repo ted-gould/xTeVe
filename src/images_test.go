@@ -39,7 +39,7 @@ func TestUploadLogoPathTraversal(t *testing.T) {
 	input := "data:image/png;base64,dGVzdCBjb250ZW50"
 
 	// Call uploadLogo
-	_, err := uploadLogo(input, traversalFilename)
+	_, err := uploadLogo(input, traversalFilename, System.Domain)
 	if err != nil {
 		t.Fatalf("uploadLogo failed unexpectedly: %v", err)
 	}

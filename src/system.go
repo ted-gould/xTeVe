@@ -267,9 +267,14 @@ func setDeviceID() {
 }
 
 // Convert Provider Streaming URL to xTeVe Streaming URL
-func createStreamingURL(streamingType, playlistID, channelNumber, channelName, url string) (streamingURL string, err error) {
+func createStreamingURL(domain, streamingType, playlistID, channelNumber, channelName, url string) (streamingURL string, err error) {
 	var streamInfo StreamInfo
 	var serverProtocol string
+	var targetDomain = System.Domain
+
+	if len(domain) > 0 {
+		targetDomain = domain
+	}
 
 	if len(Data.Cache.StreamingURLS) == 0 {
 		Data.Cache.StreamingURLS = make(map[string]StreamInfo)
@@ -299,7 +304,7 @@ func createStreamingURL(streamingType, playlistID, channelNumber, channelName, u
 		serverProtocol = System.ServerProtocol.M3U
 	}
 
-	streamingURL = fmt.Sprintf("%s://%s/stream/%s", serverProtocol, System.Domain, streamInfo.URLid)
+	streamingURL = fmt.Sprintf("%s://%s/stream/%s", serverProtocol, targetDomain, streamInfo.URLid)
 	return
 }
 

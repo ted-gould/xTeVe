@@ -39,7 +39,7 @@ func TestUploadLogoStoredXSS(t *testing.T) {
 	input := "data:text/html;base64,PGgxPlhTUzwvaDE+"
 
 	// Call uploadLogo
-	_, err := uploadLogo(input, maliciousFilename)
+	_, err := uploadLogo(input, maliciousFilename, System.Domain)
 
 	// We EXPECT an error here if security is enforced.
 	// If err is nil, it means the upload succeeded, which is a vulnerability.

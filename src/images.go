@@ -8,8 +8,13 @@ import (
 	"strings"
 )
 
-func uploadLogo(input, filename string) (logoURL string, err error) {
+func uploadLogo(input, filename, domain string) (logoURL string, err error) {
 	b64data := input[strings.IndexByte(input, ',')+1:]
+	var targetDomain = System.Domain
+
+	if len(domain) > 0 {
+		targetDomain = domain
+	}
 
 	// Convert Base64 into bytes and save
 	sDec, err := b64.StdEncoding.DecodeString(b64data)
@@ -42,6 +47,6 @@ func uploadLogo(input, filename string) (logoURL string, err error) {
 		return
 	}
 
-	logoURL = fmt.Sprintf("%s://%s/data_images/%s", System.ServerProtocol.XML, System.Domain, filename)
+	logoURL = fmt.Sprintf("%s://%s/data_images/%s", System.ServerProtocol.XML, targetDomain, filename)
 	return
 }
