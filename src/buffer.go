@@ -810,6 +810,7 @@ func handleTSStream(resp *http.Response, stream ThisStream, streamID int, playli
 	}
 
 	parser := mpegts.NewParser()
+	packetBuf := make([]byte, mpegts.PacketSize)
 
 	defer resp.Body.Close()
 	for {
@@ -827,7 +828,7 @@ func handleTSStream(resp *http.Response, stream ThisStream, streamID int, playli
 				return stream, err
 			}
 			for {
-				packet, err := parser.Next()
+				err := parser.NextInto(packetBuf)
 				if err == io.EOF {
 					break
 				}
@@ -838,13 +839,13 @@ func handleTSStream(resp *http.Response, stream ThisStream, streamID int, playli
 					return stream, err
 				}
 
-				if _, err := bufferFile.Write(packet); err != nil {
+				if _, err := bufferFile.Write(packetBuf); err != nil {
 					ShowError(err, 0)
 					addErrorToStream(err)
 					bufferFile.Close()
 					return stream, err
 				}
-				fileSize += len(packet)
+				fileSize += len(packetBuf)
 
 				if fileSize >= tmpFileSize {
 					bufferFile.Close()
