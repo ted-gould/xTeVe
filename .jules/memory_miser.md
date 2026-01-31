@@ -44,3 +44,11 @@
 **Learning:** `bufio.Scanner` allocates an internal buffer (initially 4KB) and wraps the reader. For parsing strings already in memory, iterating via `strings.IndexByte` and slicing is zero-allocation and significantly faster.
 
 **Action:** Replace `bufio.Scanner` with a manual loop using `strings.IndexByte` when parsing in-memory strings.
+
+## 2026-01-31 - Pointer Indices vs IDs
+
+**Learning:** Creating secondary indices using `map[Key]*Struct` where `*Struct` points to a loop variable (or a copy made inside the loop) forces the variable to escape to the heap, resulting in N allocations for N items.
+
+**Action:** Store the primary key (ID) in the secondary index (`map[Key]ID`) instead of a pointer. Retrieve the full struct from the primary storage (`map[ID]Struct`) only when a match is found.
+
+**Impact:** Reduced allocations by ~3000 allocs/op for 1000 items (3 allocs per item saved), and reduced heap memory usage by avoiding 1000 heap-allocated struct copies.

@@ -256,25 +256,29 @@ func createXEPGDatabase() (err error) {
 	}
 
 	// Make a map of the db channels based on their previously downloaded attributes -- filename, group, title, etc
-	var xepgChannelsValuesMap = make(map[string]XEPGChannelStruct, len(Data.XEPG.Channels))
+	var xepgChannelsValuesMap = make(map[string]string, len(Data.XEPG.Channels))
 
 	// Optimization: Indices to speed up the slow path lookup
-	// Map: FileM3UID -> Name -> *Channel
-	channelsByName := make(map[string]map[string]*XEPGChannelStruct)
-	// Map: FileM3UID -> UUIDKey -> UUIDValue -> *Channel
-	channelsByUUID := make(map[string]map[string]map[string]*XEPGChannelStruct)
-	// Map: FileM3UID -> List of channels that have Regex rules
-	channelsWithRegex := make(map[string][]*XEPGChannelStruct)
+	// Map: FileM3UID -> Name -> ID (string)
+	channelsByName := make(map[string]map[string]string)
+	// Map: FileM3UID -> UUIDKey -> UUIDValue -> ID (string)
+	channelsByUUID := make(map[string]map[string]map[string]string)
+	// Map: FileM3UID -> List of channel IDs that have Regex rules
+	channelsWithRegex := make(map[string][]string)
 
-	for _, channel := range Data.XEPG.Channels {
+	for id, channel := range Data.XEPG.Channels {
 		// Create a copy of the channel to safely take its address for the indices
 		c := channel
+
+		// Track if we need to update the global map due to compiled regexes
+		var regexUpdated bool
 
 		if len(c.UpdateChannelNameRegex) > 0 {
 			c.CompiledNameRegex, err = regexp.Compile(c.UpdateChannelNameRegex)
 			if err != nil {
 				ShowError(err, 1018)
 			}
+			regexUpdated = true
 		}
 
 		if len(c.UpdateChannelNameByGroupRegex) > 0 {
@@ -282,30 +286,35 @@ func createXEPGDatabase() (err error) {
 			if err != nil {
 				ShowError(err, 1018)
 			}
+			regexUpdated = true
 		}
+
+		// Update the map because we might have compiled a regex
+		if regexUpdated {
+			Data.XEPG.Channels[id] = c
+		}
+
 		channelHash := generateChannelHash(c.FileM3UID, c.Name, c.GroupTitle, c.TvgID, c.TvgName, c.UUIDKey, c.UUIDValue)
-		xepgChannelsValuesMap[channelHash] = c
+		xepgChannelsValuesMap[channelHash] = c.XEPG
 
 		// Populate indices
-		ptr := &c
-
 		if _, ok := channelsByName[c.FileM3UID]; !ok {
-			channelsByName[c.FileM3UID] = make(map[string]*XEPGChannelStruct)
+			channelsByName[c.FileM3UID] = make(map[string]string)
 		}
-		channelsByName[c.FileM3UID][c.Name] = ptr
+		channelsByName[c.FileM3UID][c.Name] = c.XEPG
 
 		if len(c.UUIDValue) > 0 && len(c.UUIDKey) > 0 {
 			if _, ok := channelsByUUID[c.FileM3UID]; !ok {
-				channelsByUUID[c.FileM3UID] = make(map[string]map[string]*XEPGChannelStruct)
+				channelsByUUID[c.FileM3UID] = make(map[string]map[string]string)
 			}
 			if _, ok := channelsByUUID[c.FileM3UID][c.UUIDKey]; !ok {
-				channelsByUUID[c.FileM3UID][c.UUIDKey] = make(map[string]*XEPGChannelStruct)
+				channelsByUUID[c.FileM3UID][c.UUIDKey] = make(map[string]string)
 			}
-			channelsByUUID[c.FileM3UID][c.UUIDKey][c.UUIDValue] = ptr
+			channelsByUUID[c.FileM3UID][c.UUIDKey][c.UUIDValue] = c.XEPG
 		}
 
 		if len(c.UpdateChannelNameRegex) > 0 {
-			channelsWithRegex[c.FileM3UID] = append(channelsWithRegex[c.FileM3UID], ptr)
+			channelsWithRegex[c.FileM3UID] = append(channelsWithRegex[c.FileM3UID], c.XEPG)
 		}
 	}
 
@@ -331,41 +340,50 @@ func createXEPGDatabase() (err error) {
 
 		// Try to find the channel based on matching all known values. If that fails, then move to full channel scan
 		m3uChannelHash := generateChannelHash(m3uChannel.FileM3UID, m3uChannel.Name, m3uChannel.GroupTitle, m3uChannel.TvgID, m3uChannel.TvgName, m3uChannel.UUIDKey, m3uChannel.UUIDValue)
-		if val, ok := xepgChannelsValuesMap[m3uChannelHash]; ok {
+		if valID, ok := xepgChannelsValuesMap[m3uChannelHash]; ok {
 			channelExists = true
-			currentXEPGID = val.XEPG
+			currentXEPGID = valID
 			if len(m3uChannel.UUIDValue) > 0 {
 				channelHasUUID = true
 			}
 		} else {
 			// SLOW PATH OPTIMIZED: Use indices instead of linear scan
-			var match *XEPGChannelStruct
+			var matchID string
+			var matchFound bool
 
 			// 1. Check UUID match
 			if len(m3uChannel.UUIDValue) > 0 && len(m3uChannel.UUIDKey) > 0 {
 				if uMap, ok := channelsByUUID[m3uChannel.FileM3UID]; ok {
 					if vMap, ok := uMap[m3uChannel.UUIDKey]; ok {
-						if found, ok := vMap[m3uChannel.UUIDValue]; ok {
-							match = found
+						if foundID, ok := vMap[m3uChannel.UUIDValue]; ok {
+							matchID = foundID
+							matchFound = true
 						}
 					}
 				}
 			}
 
-			// 2. Check Name match (if no UUID match found yet)
-			if match == nil {
+			// 2. Check Name match
+			if !matchFound {
 				if nMap, ok := channelsByName[m3uChannel.FileM3UID]; ok {
-					if found, ok := nMap[m3uChannel.Name]; ok {
-						match = found
+					if foundID, ok := nMap[m3uChannel.Name]; ok {
+						matchID = foundID
+						matchFound = true
 					}
 				}
 			}
 
-			// 3. Check Regex (only if no match yet)
-			if match == nil {
+			// 3. Check Regex
+			if !matchFound {
 				if candidates, ok := channelsWithRegex[m3uChannel.FileM3UID]; ok {
-					for _, dxc := range candidates {
-						// Guard against the situation when names are the same (already checked above implicitly by 'match == nil' but good for sanity)
+					for _, dxcID := range candidates {
+						// Retrieve actual channel to check name and regex
+						dxc, exists := Data.XEPG.Channels[dxcID]
+						if !exists {
+							continue
+						}
+
+						// Guard against the situation when names are the same
 						if dxc.Name == m3uChannel.Name {
 							continue
 						}
@@ -386,27 +404,31 @@ func createXEPGDatabase() (err error) {
 						}
 
 						// Regex Match Found
-						match = dxc
-
 						showInfo("XEPG:" + fmt.Sprintf("Renaming the channel '%v' to '%v'", dxc.Name, m3uChannel.Name))
 						channelExists = true
-						match.XName = m3uChannel.Name
-						currentXEPGID = match.XEPG
+						dxc.XName = m3uChannel.Name
+						currentXEPGID = dxc.XEPG
 						// Save the modified channel back to the global state immediately
-						Data.XEPG.Channels[currentXEPGID] = *match
+						Data.XEPG.Channels[currentXEPGID] = dxc
+
+						matchID = dxc.XEPG
+						matchFound = true
 						break
 					}
 				}
 			}
 
-			if match != nil {
+			if matchFound {
 				// If match was found (via UUID or Name) but NOT via regex (channelExists is still false)
 				if !channelExists {
 					channelExists = true
-					currentXEPGID = match.XEPG
+					currentXEPGID = matchID
 
-					if len(match.UUIDValue) > 0 && len(m3uChannel.UUIDValue) > 0 {
-						if match.UUIDValue == m3uChannel.UUIDValue && match.UUIDKey == m3uChannel.UUIDKey {
+					// Retrieve channel to check UUID
+					matchChannel := Data.XEPG.Channels[matchID]
+
+					if len(matchChannel.UUIDValue) > 0 && len(m3uChannel.UUIDValue) > 0 {
+						if matchChannel.UUIDValue == m3uChannel.UUIDValue && matchChannel.UUIDKey == m3uChannel.UUIDKey {
 							channelHasUUID = true
 						}
 					}
