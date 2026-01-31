@@ -1170,19 +1170,15 @@ func cleanupXEPG() {
 	showInfo("XEPG:" + "Cleanup database")
 	Data.XEPG.XEPGCount = 0
 
-	for id, xepgChannel := range Data.XEPG.Channels {
-		if !slices.Contains(Data.Cache.Streams.Active, xepgChannel.Name+xepgChannel.FileM3UID) {
-			delete(Data.XEPG.Channels, id)
-			continue
-		}
-		if !slices.Contains(sourceIDs, xepgChannel.FileM3UID) {
-			delete(Data.XEPG.Channels, id)
-			continue
-		}
-		if xepgChannel.XActive {
+	maps.DeleteFunc(Data.XEPG.Channels, func(id string, xepgChannel XEPGChannelStruct) bool {
+		shouldDelete := !slices.Contains(Data.Cache.Streams.Active, xepgChannel.Name+xepgChannel.FileM3UID) ||
+			!slices.Contains(sourceIDs, xepgChannel.FileM3UID)
+
+		if !shouldDelete && xepgChannel.XActive {
 			Data.XEPG.XEPGCount++
 		}
-	}
+		return shouldDelete
+	})
 
 	err := saveMapToJSONFile(System.File.XEPG, Data.XEPG.Channels)
 	if err != nil {
