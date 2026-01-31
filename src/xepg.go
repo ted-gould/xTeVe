@@ -13,8 +13,7 @@ import (
 	"runtime"
 	"slices"
 
-	"crypto/md5"
-	"encoding/hex"
+	"hash/maphash"
 	"strconv"
 	"strings"
 	"sync"
@@ -28,6 +27,7 @@ var (
 	// Map: XMLTV Filename -> ChannelID -> Slice of Program pointers
 	xmltvProgramIndices = make(map[string]map[string][]*Program)
 	xmltvProgramMutex   sync.RWMutex
+	channelHashSeed     = maphash.MakeSeed()
 )
 
 // Check provider XMLTV File
@@ -256,7 +256,7 @@ func createXEPGDatabase() (err error) {
 	}
 
 	// Make a map of the db channels based on their previously downloaded attributes -- filename, group, title, etc
-	var xepgChannelsValuesMap = make(map[string]XEPGChannelStruct, len(Data.XEPG.Channels))
+	var xepgChannelsValuesMap = make(map[uint64]XEPGChannelStruct, len(Data.XEPG.Channels))
 
 	// Optimization: Indices to speed up the slow path lookup
 	// Map: FileM3UID -> Name -> *Channel
@@ -469,9 +469,17 @@ func findFreeChannelNumber(allChannelNumbers map[float64]bool, startingChannel .
 }
 
 // generateChannelHash creates a hash for a channel based on its attributes.
-func generateChannelHash(m3uID, name, groupTitle, tvgID, tvgName, uuidKey, uuidValue string) string {
-	hash := md5.Sum([]byte(m3uID + name + groupTitle + tvgID + tvgName + uuidKey + uuidValue))
-	return hex.EncodeToString(hash[:])
+func generateChannelHash(m3uID, name, groupTitle, tvgID, tvgName, uuidKey, uuidValue string) uint64 {
+	var h maphash.Hash
+	h.SetSeed(channelHashSeed)
+	h.WriteString(m3uID)
+	h.WriteString(name)
+	h.WriteString(groupTitle)
+	h.WriteString(tvgID)
+	h.WriteString(tvgName)
+	h.WriteString(uuidKey)
+	h.WriteString(uuidValue)
+	return h.Sum64()
 }
 
 // processExistingXEPGChannel updates an existing channel in the XEPG database.

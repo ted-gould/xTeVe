@@ -5,3 +5,7 @@
 ## 2026-01-26 - URL Parsing Optimization
 **Learning:** `url.ParseRequestURI` and `url.Parse` are relatively expensive (~300-1000ns) and generate allocations. For simple prefix checks (like identifying absolute URLs or paths), `strings.HasPrefix` (~5ns) is vastly superior.
 **Action:** When iterating over thousands of items (like playlist segments), avoid parsing URLs if a simple string check suffices to classify the URL type.
+
+## 2026-01-31 - Zero-Allocation Hashing
+**Learning:** `hash/maphash` is significantly faster (6-7x) than `crypto/md5` for internal hash map keys, especially when hashing multiple string components. It supports `WriteString` natively (avoiding `[]byte` allocation from string conversion) and produces `uint64` keys which are faster for map lookups than strings.
+**Action:** For internal deduplication or indexing maps where persistence is not required (as `maphash` is seeded per-process), prefer `maphash` over cryptographic hashes or string concatenation.
