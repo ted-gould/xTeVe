@@ -516,12 +516,58 @@ func TestProcessNewXEPGChannel(t *testing.T) {
 	}
 }
 
-// Ensure all necessary types from the original xepg.go that are used by the
-// new functions or their tests are defined here or properly mocked.
-// This includes M3UChannelStructXEPG and XEPGChannelStruct.
-// The fields included should be the ones relevant to the tested functions.
-// For example, XEPGChannelStruct needs fields like XEPG, Name, URL, XUpdateChannelName, etc.
-// M3UChannelStructXEPG needs Name, URL, GroupTitle, TvgLogo, etc.
-// These are now expected to be available from the src package itself.
-// Ensure imgcache.Cache is properly typed (e.g., *imgcache.Cache) and can be nil if not used.
-// XMLTV and StreamInfo should be available from the src package.
+func TestCleanupXEPG(t *testing.T) {
+	// Setup global state
+	teardown := setupGlobalStateForTest()
+	defer teardown()
+
+	// Mock Settings
+	Settings.Files.M3U = map[string]any{
+		"m3u1": nil,
+		"m3u2": nil,
+	}
+	Settings.Files.HDHR = map[string]any{
+		"hdhr1": nil,
+	}
+
+	// Mock Data.Cache.Streams.Active (active streams in M3U playlist)
+	// Format: Name + FileM3UID
+	Data.Cache.Streams.Active = []string{
+		"Channel1" + "m3u1",
+		"Channel2" + "m3u2",
+		"Channel3" + "hdhr1",
+	}
+
+	// Mock Data.XEPG.Channels
+	Data.XEPG.Channels = map[string]XEPGChannelStruct{
+		"1": {Name: "Channel1", FileM3UID: "m3u1", XActive: true}, // Keep: Match Active Stream & Source
+		"2": {Name: "Channel2", FileM3UID: "m3u2", XActive: false}, // Keep: Match Active Stream & Source
+		"3": {Name: "Channel3", FileM3UID: "hdhr1", XActive: true}, // Keep: Match Active Stream & Source
+		"4": {Name: "Channel4", FileM3UID: "m3u1", XActive: true}, // Delete: Not in Active Streams (Channel4m3u1 not in list)
+		"5": {Name: "Channel1", FileM3UID: "m3u3", XActive: true}, // Delete: Source m3u3 not in Settings
+	}
+
+	// Run cleanup
+	cleanupXEPG()
+
+	// Verify
+	if _, ok := Data.XEPG.Channels["1"]; !ok {
+		t.Error("Channel 1 should be kept")
+	}
+	if _, ok := Data.XEPG.Channels["2"]; !ok {
+		t.Error("Channel 2 should be kept")
+	}
+	if _, ok := Data.XEPG.Channels["3"]; !ok {
+		t.Error("Channel 3 should be kept")
+	}
+	if _, ok := Data.XEPG.Channels["4"]; ok {
+		t.Error("Channel 4 should be deleted")
+	}
+	if _, ok := Data.XEPG.Channels["5"]; ok {
+		t.Error("Channel 5 should be deleted")
+	}
+
+	if Data.XEPG.XEPGCount != 2 {
+		t.Errorf("Expected XEPGCount 2, got %d", Data.XEPG.XEPGCount)
+	}
+}
