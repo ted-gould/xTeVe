@@ -185,22 +185,17 @@ func TestGenerateChannelHash(t *testing.T) {
 	hashDifferent := generateChannelHash("m3u2", "Channel2", "Group2", "tvg2", "TvgName2", "uuidKey2", "uuidValue2")
 	hash3 := generateChannelHash("m3u1", "Channel1", "Group1", "tvg1", "TvgName1", "uuidKey1", "uuidValue1") // Same as hash1
 
-	if hash1 == "" {
-		t.Error("Expected hash1 to not be empty")
+	if hash1 == 0 {
+		t.Error("Expected hash1 to not be 0")
 	}
-	if hashDifferent == "" {
-		t.Error("Expected hashDifferent to not be empty")
+	if hashDifferent == 0 {
+		t.Error("Expected hashDifferent to not be 0")
 	}
 	if hash1 == hashDifferent {
-		t.Errorf("Expected hash1 and hashDifferent to be different, got %s and %s", hash1, hashDifferent)
+		t.Errorf("Expected hash1 and hashDifferent to be different, got %d and %d", hash1, hashDifferent)
 	}
 	if hash1 != hash3 {
-		t.Errorf("Expected hash1 and hash3 to be the same, got %s and %s", hash1, hash3)
-	}
-	// md5("m3u1Channel1Group1tvg1TvgName1uuidKey1uuidValue1") is 8b783b0689c25221d4988c8066f4a3a7
-	expectedHash := "8b783b0689c25221d4988c8066f4a3a7"
-	if hash1 != expectedHash {
-		t.Errorf("Expected hash %s, got %s", expectedHash, hash1)
+		t.Errorf("Expected hash1 and hash3 to be the same, got %d and %d", hash1, hash3)
 	}
 }
 
