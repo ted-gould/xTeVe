@@ -2,6 +2,7 @@ package src
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -67,8 +68,22 @@ func BenchmarkPerformAutomaticChannelMapping(b *testing.B) {
 	defer func() { Settings = originalSettings }()
 	Settings.DefaultMissingEPG = "-" // Do not use default dummy, force search
 
+	// Build Index
+	var xmltvNameIndex = make(map[string]map[string]string)
+	for file, xmltvChannels := range Data.XMLTV.Mapping {
+		xmltvNameIndex[file] = make(map[string]string)
+		for _, channel := range xmltvChannels {
+			for _, displayName := range channel.DisplayNames {
+				normalizedName := strings.ToLower(strings.ReplaceAll(displayName.Value, " ", ""))
+				if _, exists := xmltvNameIndex[file][normalizedName]; !exists {
+					xmltvNameIndex[file][normalizedName] = channel.ID
+				}
+			}
+		}
+	}
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = performAutomaticChannelMapping(targetChannel, "testID")
+		_, _ = performAutomaticChannelMapping(targetChannel, "testID", xmltvNameIndex)
 	}
 }

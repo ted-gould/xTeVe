@@ -3,6 +3,7 @@ package src
 import (
 	"fmt" // Added for fmt.Sprintf in panic
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -117,6 +118,20 @@ func TestPerformAutomaticChannelMapping(t *testing.T) {
 	defer teardown()
 
 	xepgID := "x-ID.test"
+
+	// Build Index manually for tests
+	var xmltvNameIndex = make(map[string]map[string]string)
+	for file, xmltvChannels := range Data.XMLTV.Mapping {
+		xmltvNameIndex[file] = make(map[string]string)
+		for _, channel := range xmltvChannels {
+			for _, displayName := range channel.DisplayNames {
+				normalizedName := strings.ToLower(strings.ReplaceAll(displayName.Value, " ", ""))
+				if _, exists := xmltvNameIndex[file][normalizedName]; !exists {
+					xmltvNameIndex[file][normalizedName] = channel.ID
+				}
+			}
+		}
+	}
 
 	tests := []struct {
 		name                string
@@ -259,7 +274,7 @@ func TestPerformAutomaticChannelMapping(t *testing.T) {
 			// is now with the caller (the main mapping() function).
 			// So, we don't need to check Data.XEPG.Channels here directly for this unit test.
 
-			resultChannel, mappingMade := performAutomaticChannelMapping(tt.initialChannel, xepgID)
+			resultChannel, mappingMade := performAutomaticChannelMapping(tt.initialChannel, xepgID, xmltvNameIndex)
 
 			if mappingMade != tt.expectedMappingMade {
 				t.Errorf("performAutomaticChannelMapping mappingMade: got %v, want %v", mappingMade, tt.expectedMappingMade)
