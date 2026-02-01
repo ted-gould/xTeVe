@@ -4,6 +4,7 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -218,11 +219,13 @@ func UserAuthentication(username, password string) (token string, err error) {
 			return errSHA
 		}
 
-		if sUsername == loginUsername {
-			if sPassword == loginPassword {
-				err = nil
-				return
-			}
+		// Constant time comparison to prevent timing attacks and username enumeration
+		uMatch := subtle.ConstantTimeCompare([]byte(sUsername), []byte(loginUsername))
+		pMatch := subtle.ConstantTimeCompare([]byte(sPassword), []byte(loginPassword))
+
+		if uMatch == 1 && pMatch == 1 {
+			err = nil
+			return
 		}
 
 		// Try LEGACY hash
@@ -235,17 +238,18 @@ func UserAuthentication(username, password string) (token string, err error) {
 			return errSHA
 		}
 
-		if sUsernameLegacy == loginUsername {
-			if sPasswordLegacy == loginPassword {
-				// Legacy Match! Migrate to new hash.
-				loginData["_username"] = sUsername
-				loginData["_password"] = sPassword
+		uMatchLegacy := subtle.ConstantTimeCompare([]byte(sUsernameLegacy), []byte(loginUsername))
+		pMatchLegacy := subtle.ConstantTimeCompare([]byte(sPasswordLegacy), []byte(loginPassword))
 
-				// Attempt to save the migrated data. If it fails, we silently ignore it
-				// and the user will remain on the legacy hash until next login.
-				_ = saveDatabase(data)
-				err = nil
-			}
+		if uMatchLegacy == 1 && pMatchLegacy == 1 {
+			// Legacy Match! Migrate to new hash.
+			loginData["_username"] = sUsername
+			loginData["_password"] = sPassword
+
+			// Attempt to save the migrated data. If it fails, we silently ignore it
+			// and the user will remain on the legacy hash until next login.
+			_ = saveDatabase(data)
+			err = nil
 		}
 		return
 	}
