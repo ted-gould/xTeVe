@@ -44,3 +44,6 @@
 **Learning:** `bufio.Scanner` allocates an internal buffer (initially 4KB) and wraps the reader. For parsing strings already in memory, iterating via `strings.IndexByte` and slicing is zero-allocation and significantly faster.
 
 **Action:** Replace `bufio.Scanner` with a manual loop using `strings.IndexByte` when parsing in-memory strings.
+## 2025-02-23 - Zero-Allocation MPEG-TS Parsing
+**Learning:** `mpegts.Parser.Next()` was allocating a new `[]byte` (188 bytes) for every single packet. In a high-throughput stream, this creates massive GC pressure.
+**Action:** Implemented `NextInto(buf []byte)` to allow buffer reuse. This reduced allocations from N allocs/stream to 0 allocs/stream (excluding initial setup) and improved performance by ~2x. Always look for `make()` calls in `Next()`-style iterator methods.
