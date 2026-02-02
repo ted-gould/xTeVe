@@ -4,6 +4,7 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -127,7 +128,7 @@ func CreateNewUser(username, password string) (userID string, err error) {
 			return err
 		}
 
-		if sUsername == loginUsername {
+		if subtle.ConstantTimeCompare([]byte(sUsername), []byte(loginUsername)) == 1 {
 			err = createError(020)
 			return
 		}
@@ -139,7 +140,7 @@ func CreateNewUser(username, password string) (userID string, err error) {
 			return
 		}
 
-		if sUsernameLegacy == loginUsername {
+		if subtle.ConstantTimeCompare([]byte(sUsernameLegacy), []byte(loginUsername)) == 1 {
 			err = createError(020)
 			return
 		}
@@ -218,8 +219,8 @@ func UserAuthentication(username, password string) (token string, err error) {
 			return errSHA
 		}
 
-		if sUsername == loginUsername {
-			if sPassword == loginPassword {
+		if subtle.ConstantTimeCompare([]byte(sUsername), []byte(loginUsername)) == 1 {
+			if subtle.ConstantTimeCompare([]byte(sPassword), []byte(loginPassword)) == 1 {
 				err = nil
 				return
 			}
@@ -235,8 +236,8 @@ func UserAuthentication(username, password string) (token string, err error) {
 			return errSHA
 		}
 
-		if sUsernameLegacy == loginUsername {
-			if sPasswordLegacy == loginPassword {
+		if subtle.ConstantTimeCompare([]byte(sUsernameLegacy), []byte(loginUsername)) == 1 {
+			if subtle.ConstantTimeCompare([]byte(sPasswordLegacy), []byte(loginPassword)) == 1 {
 				// Legacy Match! Migrate to new hash.
 				loginData["_username"] = sUsername
 				loginData["_password"] = sPassword
