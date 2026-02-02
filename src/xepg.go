@@ -2,6 +2,7 @@ package src
 
 import (
 	"bufio"
+	"compress/gzip"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -15,6 +16,7 @@ import (
 
 	"crypto/md5"
 	"encoding/hex"
+	"io"
 	"strconv"
 	"strings"
 	"sync"
@@ -702,8 +704,8 @@ func createChannelElements(xepgChannel XEPGChannelStruct, imgc *imgcache.Cache) 
 
 // createProgramElements generates XMLTV program elements for a channel.
 // It's a wrapper around getProgramData.
-func createProgramElements(xepgChannel XEPGChannelStruct, programs *[]*Program) error {
-	return getProgramData(xepgChannel, programs)
+func createProgramElements(xepgChannel XEPGChannelStruct, yield func(*Program) error) error {
+	return getProgramData(xepgChannel, yield)
 }
 
 // Create XMLTV File
@@ -731,42 +733,118 @@ func createXMLTVFile() (err error) {
 
 	showInfo("XEPG:" + fmt.Sprintf("Create XMLTV file (%s)", System.File.XML))
 
-	var xepgXML XMLTV
-	xepgXML.Generator = System.Name
+	// Prepare output files
+	// Write to temporary files first to prevent corruption on error
+	xmlFileTmp := System.File.XML + ".tmp"
+	gzFileTmp := System.Compressed.GZxml + ".tmp"
 
-	xepgXML.Source = fmt.Sprintf("%s - %s.%s", System.Name, System.Version, System.Build)
+	fXML, err := os.Create(xmlFileTmp)
+	if err != nil {
+		ShowError(err, 0)
+		return err
+	}
+	defer fXML.Close()
 
+	fGZ, err := os.Create(gzFileTmp)
+	if err != nil {
+		ShowError(err, 0)
+		return err
+	}
+	defer fGZ.Close()
+
+	gw := gzip.NewWriter(fGZ)
+	defer gw.Close()
+
+	// Write to both XML and GZIP files simultaneously
+	mw := io.MultiWriter(fXML, gw)
+
+	// Initialize XML encoder
+	if _, err := mw.Write([]byte(xml.Header)); err != nil {
+		ShowError(err, 0)
+		return err
+	}
+
+	enc := xml.NewEncoder(mw)
+	enc.Indent("  ", "    ")
+
+	// Start <tv> element
+	startTV := xml.StartElement{
+		Name: xml.Name{Local: "tv"},
+		Attr: []xml.Attr{
+			{Name: xml.Name{Local: "generator-info-name"}, Value: System.Name},
+			{Name: xml.Name{Local: "source-info-name"}, Value: fmt.Sprintf("%s - %s.%s", System.Name, System.Version, System.Build)},
+		},
+	}
+	if err := enc.EncodeToken(startTV); err != nil {
+		ShowError(err, 0)
+		return err
+	}
+
+	// XMLTV DTD requires all channel elements to appear before programme elements.
+
+	// Pass 1: Write all Channel elements
 	for _, xepgChannel := range Data.XEPG.Channels {
 		if xepgChannel.XActive {
-			// Create Channel Element
-			channelElement := createChannelElements(xepgChannel, imgc) // Pass the whole imgc *imgcache.Cache
-			xepgXML.Channel = append(xepgXML.Channel, channelElement)
+			channelElement := createChannelElements(xepgChannel, imgc)
+			if err := enc.Encode(channelElement); err != nil {
+				ShowError(err, 0)
+				return err
+			}
+		}
+	}
 
-			// Create Program Elements
-			progErr := createProgramElements(xepgChannel, &xepgXML.Program) // Renamed err to progErr
+	// Pass 2: Write all Program elements
+	for _, xepgChannel := range Data.XEPG.Channels {
+		if xepgChannel.XActive {
+			progErr := createProgramElements(xepgChannel, func(p *Program) error {
+				return enc.Encode(p)
+			})
 			if progErr != nil {
-				// Handle error from createProgramElements if necessary, e.g., log it
 				ShowError(fmt.Errorf("error creating program elements for channel %s: %v", xepgChannel.XName, progErr), 0)
 			}
 		}
 	}
 
-	var content, _ = xml.MarshalIndent(xepgXML, "  ", "    ")
-	var xmlOutput = []byte(xml.Header + string(content))
-	err = writeByteToFile(System.File.XML, xmlOutput)
-	if err != nil {
-		return
+	// End </tv> element
+	if err := enc.EncodeToken(startTV.End()); err != nil {
+		ShowError(err, 0)
+		return err
 	}
 
-	showInfo("XEPG:" + fmt.Sprintf("Compress XMLTV file (%s)", System.Compressed.GZxml))
-	err = compressGZIP(&xmlOutput, System.Compressed.GZxml) // Original err is shadowed here, this is fine.
+	// Flush encoder
+	if err := enc.Flush(); err != nil {
+		ShowError(err, 0)
+		return err
+	}
 
-	xepgXML = XMLTV{} // Clear struct for memory
-	return            // Returns the error from compressGZIP or nil
+	// Close writers explicitly to flush buffers before rename
+	gw.Close()
+	fGZ.Close()
+	fXML.Close()
+
+	// Rename temporary files to final names
+	if err := os.Rename(xmlFileTmp, System.File.XML); err != nil {
+		ShowError(err, 0)
+		return err
+	}
+
+	// Check if GZxml path is valid before renaming
+	if len(System.Compressed.GZxml) > 0 {
+		showInfo("XEPG:" + fmt.Sprintf("Compress XMLTV file (%s)", System.Compressed.GZxml))
+		if err := os.Rename(gzFileTmp, System.Compressed.GZxml); err != nil {
+			ShowError(err, 0)
+			return err
+		}
+	} else {
+		// If no GZ path configured, clean up temp file
+		os.Remove(gzFileTmp)
+	}
+
+	return nil
 }
 
 // Create Program Data (createXMLTVFile)
-func getProgramData(xepgChannel XEPGChannelStruct, acc *[]*Program) (err error) {
+func getProgramData(xepgChannel XEPGChannelStruct, yield func(*Program) error) (err error) {
 	var xmltvFile = System.Folder.Data + xepgChannel.XmltvFile
 	var channelID = xepgChannel.XMapping
 	var xmltv XMLTV
@@ -811,11 +889,6 @@ func getProgramData(xepgChannel XEPGChannelStruct, acc *[]*Program) (err error) 
 	// and extract other fields to avoid passing the whole struct
 	upperChannelName := strings.ToUpper(xepgChannel.XName)
 	xCategory := xepgChannel.XCategory
-
-	// Optimization: Pre-allocate slice capacity to avoid reallocations
-	if len(programs) > 0 {
-		*acc = slices.Grow(*acc, len(programs))
-	}
 
 	// Optimization: Parse timeshift once outside the loop
 	timeshift, _ := strconv.Atoi(xepgChannel.XTimeshift)
@@ -880,7 +953,9 @@ func getProgramData(xepgChannel XEPGChannelStruct, acc *[]*Program) (err error) 
 		// Premiere
 		program.Premiere = xmltvProgram.Premiere
 
-		*acc = append(*acc, program)
+		if err := yield(program); err != nil {
+			return err
+		}
 	}
 	return
 }
