@@ -67,8 +67,11 @@ func BenchmarkPerformAutomaticChannelMapping(b *testing.B) {
 	defer func() { Settings = originalSettings }()
 	Settings.DefaultMissingEPG = "-" // Do not use default dummy, force search
 
+	// Build the index before the benchmark loop
+	nameIndex := buildXMLTVNameIndex()
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = performAutomaticChannelMapping(targetChannel, "testID")
+		_, _ = performAutomaticChannelMapping(targetChannel, nameIndex)
 	}
 }

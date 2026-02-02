@@ -116,8 +116,6 @@ func TestPerformAutomaticChannelMapping(t *testing.T) {
 	teardown := setupMappingTestGlobals()
 	defer teardown()
 
-	xepgID := "x-ID.test"
-
 	tests := []struct {
 		name                string
 		initialChannel      XEPGChannelStruct
@@ -247,6 +245,9 @@ func TestPerformAutomaticChannelMapping(t *testing.T) {
 		},
 	}
 
+	// Build the index once for all tests in this function, based on the global Data setup
+	nameIndex := buildXMLTVNameIndex()
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			originalDefaultEPG := Settings.DefaultMissingEPG
@@ -259,7 +260,7 @@ func TestPerformAutomaticChannelMapping(t *testing.T) {
 			// is now with the caller (the main mapping() function).
 			// So, we don't need to check Data.XEPG.Channels here directly for this unit test.
 
-			resultChannel, mappingMade := performAutomaticChannelMapping(tt.initialChannel, xepgID)
+			resultChannel, mappingMade := performAutomaticChannelMapping(tt.initialChannel, nameIndex)
 
 			if mappingMade != tt.expectedMappingMade {
 				t.Errorf("performAutomaticChannelMapping mappingMade: got %v, want %v", mappingMade, tt.expectedMappingMade)
