@@ -94,7 +94,12 @@ func ParseM3U8(stream *ThisStream) (err error) {
 	var noNewSegment = false
 	var lastSegmentDuration float64
 	var segment Segment
-	var m3u8Segments []Segment
+
+	// Optimization: Pre-allocate slice capacity based on estimated segment count
+	// This reduces allocations during the loop as the slice grows
+	estimatedSegments := strings.Count(stream.Body, "#EXTINF:")
+	m3u8Segments := make([]Segment, 0, estimatedSegments)
+
 	var sequence int64
 
 	stream.DynamicBandwidth = false
