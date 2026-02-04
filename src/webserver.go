@@ -583,6 +583,10 @@ func WS(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Could not open websocket connection", http.StatusBadRequest)
 		return
 	}
+
+	// Security: Limit message size to 32MB to prevent DoS (Unbounded Memory Consumption)
+	conn.SetReadLimit(33554432)
+
 	// The connection has been hijacked. ConnState will receive StateHijacked and will NOT receive StateClosed.
 	// We must manually decrement the counter when this handler exits.
 	defer atomic.AddInt64(&activeHTTPConnections, -1)
