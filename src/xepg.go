@@ -13,8 +13,7 @@ import (
 	"runtime"
 	"slices"
 
-	"crypto/md5"
-	"encoding/hex"
+	"hash/maphash"
 	"strconv"
 	"strings"
 	"sync"
@@ -256,7 +255,8 @@ func createXEPGDatabase() (err error) {
 	}
 
 	// Make a map of the db channels based on their previously downloaded attributes -- filename, group, title, etc
-	var xepgChannelsValuesMap = make(map[string]XEPGChannelStruct, len(Data.XEPG.Channels))
+	var xepgChannelsValuesMap = make(map[uint64]XEPGChannelStruct, len(Data.XEPG.Channels))
+	var h maphash.Hash
 
 	// Optimization: Indices to speed up the slow path lookup
 	// Map: FileM3UID -> Name -> *Channel
@@ -283,7 +283,7 @@ func createXEPGDatabase() (err error) {
 				ShowError(err, 1018)
 			}
 		}
-		channelHash := generateChannelHash(c.FileM3UID, c.Name, c.GroupTitle, c.TvgID, c.TvgName, c.UUIDKey, c.UUIDValue)
+		channelHash := generateChannelHash(&h, c.FileM3UID, c.Name, c.GroupTitle, c.TvgID, c.TvgName, c.UUIDKey, c.UUIDValue)
 		xepgChannelsValuesMap[channelHash] = c
 
 		// Populate indices
@@ -330,7 +330,7 @@ func createXEPGDatabase() (err error) {
 		Data.Cache.Streams.Active = append(Data.Cache.Streams.Active, m3uChannel.Name+m3uChannel.FileM3UID)
 
 		// Try to find the channel based on matching all known values. If that fails, then move to full channel scan
-		m3uChannelHash := generateChannelHash(m3uChannel.FileM3UID, m3uChannel.Name, m3uChannel.GroupTitle, m3uChannel.TvgID, m3uChannel.TvgName, m3uChannel.UUIDKey, m3uChannel.UUIDValue)
+		m3uChannelHash := generateChannelHash(&h, m3uChannel.FileM3UID, m3uChannel.Name, m3uChannel.GroupTitle, m3uChannel.TvgID, m3uChannel.TvgName, m3uChannel.UUIDKey, m3uChannel.UUIDValue)
 		if val, ok := xepgChannelsValuesMap[m3uChannelHash]; ok {
 			channelExists = true
 			currentXEPGID = val.XEPG
@@ -469,9 +469,16 @@ func findFreeChannelNumber(allChannelNumbers map[float64]bool, startingChannel .
 }
 
 // generateChannelHash creates a hash for a channel based on its attributes.
-func generateChannelHash(m3uID, name, groupTitle, tvgID, tvgName, uuidKey, uuidValue string) string {
-	hash := md5.Sum([]byte(m3uID + name + groupTitle + tvgID + tvgName + uuidKey + uuidValue))
-	return hex.EncodeToString(hash[:])
+func generateChannelHash(h *maphash.Hash, m3uID, name, groupTitle, tvgID, tvgName, uuidKey, uuidValue string) uint64 {
+	h.Reset()
+	h.WriteString(m3uID)
+	h.WriteString(name)
+	h.WriteString(groupTitle)
+	h.WriteString(tvgID)
+	h.WriteString(tvgName)
+	h.WriteString(uuidKey)
+	h.WriteString(uuidValue)
+	return h.Sum64()
 }
 
 // processExistingXEPGChannel updates an existing channel in the XEPG database.

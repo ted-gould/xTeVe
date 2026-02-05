@@ -44,3 +44,11 @@
 **Learning:** `bufio.Scanner` allocates an internal buffer (initially 4KB) and wraps the reader. For parsing strings already in memory, iterating via `strings.IndexByte` and slicing is zero-allocation and significantly faster.
 
 **Action:** Replace `bufio.Scanner` with a manual loop using `strings.IndexByte` when parsing in-memory strings.
+
+## 2026-02-05 - Ephemeral Hash Map Optimization
+
+**Learning:** `generateChannelHash` used `md5.Sum` with string concatenation (`s1 + s2 + ...`) and `hex.EncodeToString`. This caused 3 allocations per call (string concat, byte slice conversion, hex string). Since the hash was only used for a local map (`xepgChannelsValuesMap`) within a single function scope, cryptographic persistence wasn't needed.
+
+**Action:** Replaced `md5` with `hash/maphash`. Passed a reused `*maphash.Hash` to the generator function. Changed map key from `string` to `uint64`.
+
+**Impact:** Allocations reduced from 3 to 0. Time reduced by ~11x (790ns -> 71ns).
