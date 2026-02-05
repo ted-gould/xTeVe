@@ -1168,21 +1168,8 @@ func cleanupXEPG() {
 	sourceIDs = slices.AppendSeq(sourceIDs, maps.Keys(Settings.Files.HDHR))
 
 	showInfo("XEPG:" + "Cleanup database")
-	Data.XEPG.XEPGCount = 0
 
-	for id, xepgChannel := range Data.XEPG.Channels {
-		if !slices.Contains(Data.Cache.Streams.Active, xepgChannel.Name+xepgChannel.FileM3UID) {
-			delete(Data.XEPG.Channels, id)
-			continue
-		}
-		if !slices.Contains(sourceIDs, xepgChannel.FileM3UID) {
-			delete(Data.XEPG.Channels, id)
-			continue
-		}
-		if xepgChannel.XActive {
-			Data.XEPG.XEPGCount++
-		}
-	}
+	Data.XEPG.XEPGCount = cleanupXEPGLogic(Data.XEPG.Channels, Data.Cache.Streams.Active, sourceIDs)
 
 	err := saveMapToJSONFile(System.File.XEPG, Data.XEPG.Channels)
 	if err != nil {
@@ -1195,6 +1182,38 @@ func cleanupXEPG() {
 	if len(Data.Streams.Active) > 0 && Data.XEPG.XEPGCount == 0 {
 		showWarning(2005)
 	}
+}
+
+// cleanupXEPGLogic handles the core logic of cleanupXEPG for testing and benchmarking.
+// It modifies the channels map in-place and returns the count of active channels.
+func cleanupXEPGLogic(channels map[string]XEPGChannelStruct, activeStreams []string, sourceIDs []string) int64 {
+	var count int64 = 0
+
+	// Optimization: Create sets for O(1) lookup to replace O(N) slices.Contains
+	activeStreamsSet := make(map[string]struct{}, len(activeStreams))
+	for _, s := range activeStreams {
+		activeStreamsSet[s] = struct{}{}
+	}
+
+	sourceIDsSet := make(map[string]struct{}, len(sourceIDs))
+	for _, id := range sourceIDs {
+		sourceIDsSet[id] = struct{}{}
+	}
+
+	for id, xepgChannel := range channels {
+		if _, ok := activeStreamsSet[xepgChannel.Name+xepgChannel.FileM3UID]; !ok {
+			delete(channels, id)
+			continue
+		}
+		if _, ok := sourceIDsSet[xepgChannel.FileM3UID]; !ok {
+			delete(channels, id)
+			continue
+		}
+		if xepgChannel.XActive {
+			count++
+		}
+	}
+	return count
 }
 
 // clearXMLTVCache empties XMLTV cache and runs a garbage collector
