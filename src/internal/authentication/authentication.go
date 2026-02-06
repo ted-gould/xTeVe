@@ -10,8 +10,11 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 const tokenLength = 40
@@ -208,20 +211,35 @@ func UserAuthentication(username, password string) (token string, err error) {
 			return errors.New("user has no password")
 		}
 
-		// Try NEW hash first
+		// Verify Username (always HMAC-SHA256)
 		sUsername, errSHA := SHA256(username, salt)
-		if errSHA != nil {
-			return errSHA
-		}
-		sPassword, errSHA := SHA256(password, salt)
 		if errSHA != nil {
 			return errSHA
 		}
 
 		if sUsername == loginUsername {
-			if sPassword == loginPassword {
-				err = nil
-				return
+			// Check if password is bcrypt
+			if strings.HasPrefix(loginPassword, "$2a$") {
+				if errCrypt := bcrypt.CompareHashAndPassword([]byte(loginPassword), []byte(password)); errCrypt == nil {
+					err = nil
+					return
+				}
+			} else {
+				// Check for HMAC-SHA256 (Previous Standard)
+				sPassword, errSHA := SHA256(password, salt)
+				if errSHA != nil {
+					return errSHA
+				}
+				if sPassword == loginPassword {
+					// Migrate to bcrypt
+					newHash, errHash := hashPassword(password)
+					if errHash == nil {
+						loginData["_password"] = newHash
+						_ = saveDatabase(data)
+					}
+					err = nil
+					return
+				}
 			}
 		}
 
@@ -237,12 +255,21 @@ func UserAuthentication(username, password string) (token string, err error) {
 
 		if sUsernameLegacy == loginUsername {
 			if sPasswordLegacy == loginPassword {
-				// Legacy Match! Migrate to new hash.
-				loginData["_username"] = sUsername
-				loginData["_password"] = sPassword
+				// Legacy Match! Migrate to new hash (bcrypt)
+				// We update username to HMAC-SHA256 and password to bcrypt
 
-				// Attempt to save the migrated data. If it fails, we silently ignore it
-				// and the user will remain on the legacy hash until next login.
+				// Re-calculate username hash (sUsername calculated above)
+				loginData["_username"] = sUsername
+
+				newHash, errHash := hashPassword(password)
+				if errHash == nil {
+					loginData["_password"] = newHash
+				} else {
+					// Fallback to HMAC-SHA256 if bcrypt fails (unlikely)
+					sPassword, _ := SHA256(password, salt)
+					loginData["_password"] = sPassword
+				}
+
 				_ = saveDatabase(data)
 				err = nil
 			}
@@ -496,9 +523,9 @@ func ChangeCredentials(userID, username, password string) (err error) {
 		}
 
 		if len(password) > 0 {
-			passwordHash, errSHA := SHA256(password, salt)
-			if errSHA != nil {
-				return errSHA
+			passwordHash, errHash := hashPassword(password)
+			if errHash != nil {
+				return errHash
 			}
 			userData["_password"] = passwordHash
 		}
@@ -608,6 +635,12 @@ func loadDatabase() (err error) {
 	return
 }
 
+// hashPassword generates a bcrypt hash of the password
+func hashPassword(password string) (string, error) {
+	bytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	return string(bytes), err
+}
+
 // SHA256 : password + salt = sha256 string
 // Fixed to use salt.
 func SHA256(secret, salt string) (string, error) {
@@ -696,7 +729,9 @@ func defaultsForNewUser(username, password string) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	passwordHash, err := SHA256(password, salt)
+
+	// Use bcrypt for password
+	passwordHash, err := hashPassword(password)
 	if err != nil {
 		return nil, err
 	}

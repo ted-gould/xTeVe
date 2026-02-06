@@ -11,6 +11,7 @@ require (
 )
 
 require (
+	github.com/CAFxX/bytespool v0.0.1
 	github.com/avfs/avfs v0.35.0
 	github.com/canonical/go-snapctl v1.0.0-beta.4
 	github.com/google/go-cmp v0.7.0
@@ -28,12 +29,12 @@ require (
 	go.opentelemetry.io/otel/sdk/metric v1.39.0
 	go.opentelemetry.io/otel/trace v1.39.0
 	go.opentelemetry.io/proto/otlp v1.9.0
+	golang.org/x/crypto v0.47.0
 	golang.org/x/net v0.49.0
 	google.golang.org/grpc v1.78.0
 )
 
 require (
-	github.com/CAFxX/bytespool v0.0.1 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
