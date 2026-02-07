@@ -54,7 +54,8 @@ func TestWebSocket_ReadLimit(t *testing.T) {
 	assert.NoError(t, err, "Should be able to write small message")
 
 	// Read response (server sends response for getServerConfig)
-	ws.SetReadDeadline(time.Now().Add(5 * time.Second))
+	err = ws.SetReadDeadline(time.Now().Add(5 * time.Second))
+	assert.NoError(t, err, "Should be able to set read deadline")
 	_, _, err = ws.ReadMessage()
 	assert.NoError(t, err, "Should be able to read response for small message")
 
@@ -68,8 +69,10 @@ func TestWebSocket_ReadLimit(t *testing.T) {
 	}
 
 	// WriteJSON might succeed as it writes to the buffer/socket
-	err = ws.WriteJSON(largeMsg)
-	// We don't check error here because depending on OS buffer size, it might succeed or fail immediately if connection closed.
+	// We handle the error just to satisfy the linter, but we expect it might be nil OR an error depending on buffer
+	if err := ws.WriteJSON(largeMsg); err != nil {
+		t.Logf("WriteJSON returned error (possibly expected if connection closed early): %v", err)
+	}
 
 	// Attempt to read response.
 	// BEFORE FIX: The server reads the whole message, processes it, and likely sends a response (error or success).
@@ -77,7 +80,8 @@ func TestWebSocket_ReadLimit(t *testing.T) {
 	// AFTER FIX:  The server closes the connection immediately when limit is exceeded.
 	//             So ReadMessage will return a CloseError (err != nil).
 
-	ws.SetReadDeadline(time.Now().Add(10 * time.Second)) // Give enough time for 33MB transfer if it happens
+	err = ws.SetReadDeadline(time.Now().Add(10 * time.Second)) // Give enough time for 33MB transfer if it happens
+	assert.NoError(t, err, "Should be able to set read deadline")
 	_, _, err = ws.ReadMessage()
 
 	// We verify that an error occurred (Connection Closed).
