@@ -17,16 +17,14 @@ parts:
     source: .
     build-packages:
       - ffmpeg
+      - make
     build-snaps:
       - go
       - node/20/stable
     override-build: |
-      go install github.com/CAFxX/regexp2go@latest
-      export PATH=$PATH:$(go env GOPATH)/bin
-      go generate ./src/internal/m3u-parser/
-      npm install
-      (cd ts && npx tsc)
-      ./build/generate_video.sh
+      make generate
+      make src/html/js
+      make src/html/video/stream-limit.bin
       snapcraftctl build
     override-stage: |
       snapcraftctl stage
