@@ -28,3 +28,8 @@
 **Prevention:**
 1.  Always stream file content using `io.Copy` (or `http.ServeFile`) instead of reading fully into memory.
 2.  For content type detection, read only the first 512 bytes (standard sniffing size) and then rewind the stream, rather than loading the whole file.
+
+## 2026-01-29 - Reverse Proxy Authentication Bypass in API
+**Vulnerability:** The API handler restricted access to `localhost` (`r.RemoteAddr`), assuming this provided security. However, when deployed behind a reverse proxy (common for xTeVe), all requests appear to come from `127.0.0.1`. If `Settings.AuthenticationAPI` was disabled (default), external attackers could bypass authentication by proxying through Nginx/Apache, as the application perceived them as local users.
+**Learning:** `r.RemoteAddr` is unreliable for access control when reverse proxies are involved. Relying on "localhost" checks for security is dangerous in modern deployment environments.
+**Prevention:** Authentication logic must take precedence over network location checks. If the application has a "Web Authentication" setting, it should enforce authentication on ALL sensitive endpoints (like API), regardless of the source IP, unless explicitly configured otherwise with full awareness of proxy risks.
