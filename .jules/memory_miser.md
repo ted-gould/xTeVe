@@ -44,11 +44,3 @@
 **Learning:** `bufio.Scanner` allocates an internal buffer (initially 4KB) and wraps the reader. For parsing strings already in memory, iterating via `strings.IndexByte` and slicing is zero-allocation and significantly faster.
 
 **Action:** Replace `bufio.Scanner` with a manual loop using `strings.IndexByte` when parsing in-memory strings.
-
-## 2026-01-29 - XMLTV Streaming Generation
-
-**Learning:** `xml.MarshalIndent` returns the entire marshaled content as a `[]byte` slice. Converting this to a `string`, concatenating with a header, and then converting back to `[]byte` for file writing creates 3 copies of the entire file in memory. For large XML files (e.g., EPGs > 100MB), this causes massive heap spikes.
-
-**Action:** Use `xml.NewEncoder(io.Writer)` to stream the XML generation directly to the file(s). Use `io.MultiWriter` to write to multiple destinations (e.g., .xml and .xml.gz) simultaneously, avoiding intermediate buffers entirely.
-
-**Impact:** Reduced peak memory usage by ~3x the output file size (e.g., 300MB -> ~0MB for a 100MB file).
