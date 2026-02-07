@@ -14,7 +14,7 @@ func generateM3U8Body(segments int) string {
 	sb.WriteString("#EXT-X-MEDIA-SEQUENCE:0\n")
 
 	for i := 0; i < segments; i++ {
-		sb.WriteString(fmt.Sprintf("#EXTINF:10.0,\n"))
+		sb.WriteString("#EXTINF:10.0,\n")
 		sb.WriteString(fmt.Sprintf("segment_%d.ts\n", i))
 	}
 
