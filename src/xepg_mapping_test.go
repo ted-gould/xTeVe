@@ -259,7 +259,7 @@ func TestPerformAutomaticChannelMapping(t *testing.T) {
 			// is now with the caller (the main mapping() function).
 			// So, we don't need to check Data.XEPG.Channels here directly for this unit test.
 
-			resultChannel, mappingMade := performAutomaticChannelMapping(tt.initialChannel, xepgID)
+			resultChannel, mappingMade := performAutomaticChannelMapping(tt.initialChannel, xepgID, nil)
 
 			if mappingMade != tt.expectedMappingMade {
 				t.Errorf("performAutomaticChannelMapping mappingMade: got %v, want %v", mappingMade, tt.expectedMappingMade)
