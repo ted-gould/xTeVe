@@ -36,7 +36,9 @@ func TestCreateXMLTVFileStreaming(t *testing.T) {
 	System.Version = "1.0"
 	System.Build = "test"
 
-	os.MkdirAll(System.Folder.ImagesCache, 0755)
+	if err := os.MkdirAll(System.Folder.ImagesCache, 0755); err != nil {
+		t.Fatalf("Failed to create mock images cache: %v", err)
+	}
 
 	// Mock Data
 	Data.XEPG.Channels = make(map[string]XEPGChannelStruct)
