@@ -12,7 +12,7 @@ func BenchmarkParser_Next(b *testing.B) {
 
 	parser := NewParser()
 	// Initial fill
-	parser.Write(data)
+	_, _ = parser.Write(data)
 
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -21,7 +21,7 @@ func BenchmarkParser_Next(b *testing.B) {
 		if parser.buf.Len() < PacketSize {
 			b.StopTimer()
 			parser.buf.Reset()
-			parser.Write(data)
+			_, _ = parser.Write(data)
 			b.StartTimer()
 		}
 		_, _ = parser.Next()
@@ -36,7 +36,7 @@ func BenchmarkParser_NextInto(b *testing.B) {
 
 	parser := NewParser()
 	// Initial fill
-	parser.Write(data)
+	_, _ = parser.Write(data)
 	packetBuf := make([]byte, PacketSize)
 
 	b.ResetTimer()
@@ -46,7 +46,7 @@ func BenchmarkParser_NextInto(b *testing.B) {
 		if parser.buf.Len() < PacketSize {
 			b.StopTimer()
 			parser.buf.Reset()
-			parser.Write(data)
+			_, _ = parser.Write(data)
 			b.StartTimer()
 		}
 		_ = parser.NextInto(packetBuf)
