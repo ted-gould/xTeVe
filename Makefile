@@ -4,6 +4,11 @@ GOCMD = $(GO) build -v
 BINS = xteve xteve-inactive xteve-status
 BINDIR = bin
 
+GOBIN_DIR := $(shell $(GO) env GOBIN)
+ifeq ($(GOBIN_DIR),)
+GOBIN_DIR := $(shell $(GO) env GOPATH)/bin
+endif
+
 # Default target
 all: build
 
@@ -20,7 +25,7 @@ generate:
 	@echo "--- Generating code ---"
 	$(GO) install github.com/CAFxX/regexp2go@latest
 	$(GO) get github.com/CAFxX/bytespool
-	export PATH=$(PATH):$(shell $(GO) env GOPATH)/bin && $(GO) generate ./src/internal/m3u-parser/
+	export PATH=$(PATH):$(GOBIN_DIR) && $(GO) generate ./src/internal/m3u-parser/
 
 build: $(JS_DIR) $(VIDEO_TARGET) generate
 	@echo "--- Building Go commands ---"
@@ -49,7 +54,7 @@ test: $(JS_DIR) $(VIDEO_TARGET) generate
 lint: generate
 	@echo "--- Running golangci-lint ---"
 	$(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-	$(shell $(GO) env GOPATH)/bin/golangci-lint run
+	$(GOBIN_DIR)/golangci-lint run
 
 e2e-test: build
 	@echo "--- Running E2E tests ---"
