@@ -2,9 +2,11 @@ package src
 
 import (
 	"bufio"
+	"compress/gzip"
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"io"
 	"maps"
 	"os"
 	"path"
@@ -799,18 +801,62 @@ func createXMLTVFile() (err error) {
 		}
 	}
 
-	var content, _ = xml.MarshalIndent(xepgXML, "  ", "    ")
-	var xmlOutput = []byte(xml.Header + string(content))
-	err = writeByteToFile(System.File.XML, xmlOutput)
+	// Stream XMLTV File Creation
+	// This approach avoids allocating the entire XML content (string+bytes) in memory (often 100MB+).
+	// Instead, we stream the encoding directly to the file(s).
+
+	// Prepare writers
+	var writers []io.Writer
+
+	// 1. XML File
+	f, err := os.Create(getPlatformFile(System.File.XML))
 	if err != nil {
-		return
+		return err
+	}
+	defer f.Close()
+	writers = append(writers, f)
+
+	// 2. GZIP File (Optional)
+	var gzFile *os.File
+	var gzWriter *gzip.Writer
+
+	if len(System.Compressed.GZxml) > 0 {
+		showInfo("XEPG:" + fmt.Sprintf("Compress XMLTV file (%s)", System.Compressed.GZxml))
+		gzFile, err = os.Create(getPlatformFile(System.Compressed.GZxml))
+		if err != nil {
+			return err
+		}
+		defer gzFile.Close()
+
+		gzWriter = gzip.NewWriter(gzFile)
+		defer gzWriter.Close()
+		writers = append(writers, gzWriter)
 	}
 
-	showInfo("XEPG:" + fmt.Sprintf("Compress XMLTV file (%s)", System.Compressed.GZxml))
-	err = compressGZIP(&xmlOutput, System.Compressed.GZxml) // Original err is shadowed here, this is fine.
+	// Create MultiWriter to write to both simultaneously
+	multiWriter := io.MultiWriter(writers...)
+
+	// Write XML Header
+	if _, err := io.WriteString(multiWriter, xml.Header); err != nil {
+		return err
+	}
+
+	// Stream Encode XML
+	enc := xml.NewEncoder(multiWriter)
+	enc.Indent("  ", "    ")
+	if err := enc.Encode(xepgXML); err != nil {
+		return err
+	}
+
+	// Explicitly close gzip writer to flush data before the function returns
+	if gzWriter != nil {
+		if err := gzWriter.Close(); err != nil {
+			return err
+		}
+	}
 
 	xepgXML = XMLTV{} // Clear struct for memory
-	return            // Returns the error from compressGZIP or nil
+	return nil
 }
 
 // Create Program Data (createXMLTVFile)
