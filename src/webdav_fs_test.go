@@ -293,22 +293,22 @@ func TestWebDAVFS(t *testing.T) {
 	foundEp1 := false
 	foundEp2 := false
 	for _, info := range infos {
-		if info.Name() == "My Series S01 E01.mp4" {
+		if info.Name() == "My Series - S01 E01.mp4" {
 			foundEp1 = true
 		}
-		if info.Name() == "My Series S01 E02.mp4" {
+		if info.Name() == "My Series - S01 E02.mp4" {
 			foundEp2 = true
 		}
 	}
 	if !foundEp1 {
-		t.Errorf("Season 1 folder did not contain 'My Series S01 E01.mp4'")
+		t.Errorf("Season 1 folder did not contain 'My Series - S01 E01.mp4'")
 	}
 	if !foundEp2 {
-		t.Errorf("Season 1 folder did not contain 'My Series S01 E02.mp4'")
+		t.Errorf("Season 1 folder did not contain 'My Series - S01 E02.mp4'")
 	}
 
 	// Test opening Series File
-	f, err = fs.OpenFile(ctx, "/"+hash+"/"+dirOnDemand+"/Series Group/"+dirSeries+"/My Series/Season 1/My Series S01 E01.mp4", os.O_RDONLY, 0)
+	f, err = fs.OpenFile(ctx, "/"+hash+"/"+dirOnDemand+"/Series Group/"+dirSeries+"/My Series/Season 1/My Series - S01 E01.mp4", os.O_RDONLY, 0)
 	if err != nil {
 		t.Fatalf("Failed to open series file: %v", err)
 	}
@@ -466,7 +466,7 @@ func TestWebDAVFS_FilenameSanitization(t *testing.T) {
 	}
 
 	actualName := infos[0].Name()
-	expectedName := "As We See It S01 E01.mp4"
+	expectedName := "As We See It - S01 E01.mp4"
 
 	if actualName != expectedName {
 		t.Errorf("Filename mismatch.\nExpected: %s\nActual:   %s", expectedName, actualName)

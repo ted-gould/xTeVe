@@ -1796,7 +1796,10 @@ func generateFileStreamInfos(ctx context.Context, streams []map[string]string) [
 			// Avoid redundant regex execution
 			if rawPrefix != "" {
 				remainder := name[len(rawPrefix):]
-				name = cleanName + remainder
+				// name = cleanName + remainder
+				// Normalize separator to " - " for Plex compatibility
+				trimmedRemainder := strings.TrimLeft(remainder, " _-")
+				name = cleanName + " - " + trimmedRemainder
 			}
 		}
 
