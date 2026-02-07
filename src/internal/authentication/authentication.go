@@ -4,6 +4,7 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -217,7 +218,10 @@ func UserAuthentication(username, password string) (token string, err error) {
 			return errSHA
 		}
 
-		if sUsername == loginUsername {
+		// Constant time comparison to prevent timing attacks and username enumeration
+		uMatch := subtle.ConstantTimeCompare([]byte(sUsername), []byte(loginUsername))
+
+		if uMatch == 1 {
 			// Check if password is bcrypt
 			if strings.HasPrefix(loginPassword, "$2a$") {
 				if errCrypt := bcrypt.CompareHashAndPassword([]byte(loginPassword), []byte(password)); errCrypt == nil {
@@ -230,7 +234,11 @@ func UserAuthentication(username, password string) (token string, err error) {
 				if errSHA != nil {
 					return errSHA
 				}
-				if sPassword == loginPassword {
+
+				// Use ConstantTimeCompare for legacy password check
+				pMatch := subtle.ConstantTimeCompare([]byte(sPassword), []byte(loginPassword))
+
+				if pMatch == 1 {
 					// Migrate to bcrypt
 					newHash, errHash := hashPassword(password)
 					if errHash == nil {
@@ -253,26 +261,27 @@ func UserAuthentication(username, password string) (token string, err error) {
 			return errSHA
 		}
 
-		if sUsernameLegacy == loginUsername {
-			if sPasswordLegacy == loginPassword {
-				// Legacy Match! Migrate to new hash (bcrypt)
-				// We update username to HMAC-SHA256 and password to bcrypt
+		uMatchLegacy := subtle.ConstantTimeCompare([]byte(sUsernameLegacy), []byte(loginUsername))
+		pMatchLegacy := subtle.ConstantTimeCompare([]byte(sPasswordLegacy), []byte(loginPassword))
 
-				// Re-calculate username hash (sUsername calculated above)
-				loginData["_username"] = sUsername
+		if uMatchLegacy == 1 && pMatchLegacy == 1 {
+			// Legacy Match! Migrate to new hash (bcrypt)
+			// We update username to HMAC-SHA256 and password to bcrypt
 
-				newHash, errHash := hashPassword(password)
-				if errHash == nil {
-					loginData["_password"] = newHash
-				} else {
-					// Fallback to HMAC-SHA256 if bcrypt fails (unlikely)
-					sPassword, _ := SHA256(password, salt)
-					loginData["_password"] = sPassword
-				}
+			// Re-calculate username hash (sUsername calculated above)
+			loginData["_username"] = sUsername
 
-				_ = saveDatabase(data)
-				err = nil
+			newHash, errHash := hashPassword(password)
+			if errHash == nil {
+				loginData["_password"] = newHash
+			} else {
+				// Fallback to HMAC-SHA256 if bcrypt fails (unlikely)
+				sPassword, _ := SHA256(password, salt)
+				loginData["_password"] = sPassword
 			}
+
+			_ = saveDatabase(data)
+			err = nil
 		}
 		return
 	}
