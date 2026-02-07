@@ -22,7 +22,7 @@ func generateM3U8Body(segments int) string {
 	return sb.String()
 }
 
-func BenchmarkParseM3U8(b *testing.B) {
+func BenchmarkParseM3U8Parse(b *testing.B) {
 	// Setup large body once
 	body := generateM3U8Body(5000)
 
