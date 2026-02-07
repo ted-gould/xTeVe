@@ -233,7 +233,8 @@ func createXEPGDatabase() (err error) {
 	// Optimization: Pre-allocate slice capacity to avoid reallocations
 	Data.Cache.Streams.Active = make([]string, 0, len(Data.Streams.Active))
 
-	Data.XEPG.Channels, err = loadXEPGChannels(System.File.XEPG)
+	Data.XEPG.Channels = make(map[string]XEPGChannelStruct)
+	err = loadJSONFile(System.File.XEPG, &Data.XEPG.Channels)
 	if err != nil {
 		ShowError(err, 1004)
 		return err
