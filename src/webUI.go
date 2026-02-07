@@ -2,7 +2,9 @@ package src
 
 import (
 	"fmt"
+	"maps"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -211,26 +213,22 @@ func sendAlert(text string) {
 }
 
 func addNotification(notification Notification) (err error) {
-	var i int
-	var t = time.Now().UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))
-	notification.Time = strconv.FormatInt(t, 10)
+	notification.Time = strconv.FormatInt(time.Now().UnixMilli(), 10)
 	notification.New = true
 
 	if len(notification.Headline) == 0 {
 		notification.Headline = strings.ToUpper(notification.Type)
 	}
 
-	if len(System.Notification) == 0 {
+	if System.Notification == nil {
 		System.Notification = make(map[string]Notification)
 	}
 
 	System.Notification[notification.Time] = notification
 
-	for key := range System.Notification {
-		if i < len(System.Notification)-10 {
-			delete(System.Notification, key)
-		}
-		i++
+	keys := slices.Sorted(maps.Keys(System.Notification))
+	for _, k := range keys[:max(0, len(keys)-10)] {
+		delete(System.Notification, k)
 	}
 	return
 }
