@@ -8,8 +8,8 @@ import (
 	"strconv" // Added import for strconv
 	"testing"
 
-	m3uParser "xteve/src/internal/m3u-parser"
 	xteveSrc "xteve/src"
+	m3uParser "xteve/src/internal/m3u-parser"
 )
 
 var testdataDir = "testdata/benchmark_m3u"
@@ -34,7 +34,7 @@ func generateM3UContent(numEntries int, numGroups int) []byte {
 	return buffer.Bytes()
 }
 
-func BenchmarkParseM3U(b *testing.B) {
+func BenchmarkParseM3URead(b *testing.B) {
 	fileSizes := []struct {
 		name       string
 		numEntries int // 0 means read from file
