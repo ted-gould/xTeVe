@@ -4,6 +4,7 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -218,11 +219,13 @@ func UserAuthentication(username, password string) (token string, err error) {
 			return errSHA
 		}
 
-		if sUsername == loginUsername {
-			if sPassword == loginPassword {
-				err = nil
-				return
-			}
+		// Constant time comparison to prevent timing attacks and username enumeration
+		uMatch := subtle.ConstantTimeCompare([]byte(sUsername), []byte(loginUsername))
+		pMatch := subtle.ConstantTimeCompare([]byte(sPassword), []byte(loginPassword))
+
+		if uMatch == 1 && pMatch == 1 {
+			err = nil
+			return
 		}
 
 		// Try LEGACY hash
@@ -235,17 +238,18 @@ func UserAuthentication(username, password string) (token string, err error) {
 			return errSHA
 		}
 
-		if sUsernameLegacy == loginUsername {
-			if sPasswordLegacy == loginPassword {
-				// Legacy Match! Migrate to new hash.
-				loginData["_username"] = sUsername
-				loginData["_password"] = sPassword
+		uMatchLegacy := subtle.ConstantTimeCompare([]byte(sUsernameLegacy), []byte(loginUsername))
+		pMatchLegacy := subtle.ConstantTimeCompare([]byte(sPasswordLegacy), []byte(loginPassword))
 
-				// Attempt to save the migrated data. If it fails, we silently ignore it
-				// and the user will remain on the legacy hash until next login.
-				_ = saveDatabase(data)
-				err = nil
-			}
+		if uMatchLegacy == 1 && pMatchLegacy == 1 {
+			// Legacy Match! Migrate to new hash.
+			loginData["_username"] = sUsername
+			loginData["_password"] = sPassword
+
+			// Attempt to save the migrated data. If it fails, we silently ignore it
+			// and the user will remain on the legacy hash until next login.
+			_ = saveDatabase(data)
+			err = nil
 		}
 		return
 	}
@@ -549,24 +553,22 @@ func CheckTheValidityOfTheTokenFromHTTPHeader(w http.ResponseWriter, r *http.Req
 	// It doesn't access shared state directly itself, so no lock needed here.
 
 	err = createError(011) // Default error if token is not found or invalid
-	for _, cookie := range r.Cookies() {
-		if cookie.Name == "Token" {
-			var currentTokenValue = cookie.Value
-			token, errCheck := CheckTheValidityOfTheToken(currentTokenValue) // Use new var for this error
-			if errCheck != nil {
-				// If token is invalid, we might want to clear it or just report error
-				// For now, let's propagate the error and not set a new cookie
-				err = errCheck // Assign the specific error from CheckTheValidityOfTheToken
-				return writer, "", err
-			}
-			writer = SetCookieToken(w, token, secure)
-			newToken = token
-			err = nil // Token was valid and processed, clear default error
-			return    // Found and processed the token, no need to check other cookies
-		}
+
+	cookie, cookieErr := r.Cookie("Token")
+	if cookieErr != nil {
+		// Cookie not found or other error
+		return
 	}
-	// If loop finishes, means no "Token" cookie was found.
-	// The initial err = createError(011) will be returned.
+
+	token, errCheck := CheckTheValidityOfTheToken(cookie.Value)
+	if errCheck != nil {
+		err = errCheck
+		return writer, "", err
+	}
+
+	writer = SetCookieToken(w, token, secure)
+	newToken = token
+	err = nil
 	return
 }
 

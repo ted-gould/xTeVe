@@ -1,6 +1,8 @@
 package src
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -187,5 +189,56 @@ func TestParseTemplate(t *testing.T) {
 				t.Errorf("parseTemplate() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestLoadJSONFile(t *testing.T) {
+	// Create a temp dir
+	tmpDir := t.TempDir()
+
+	// Temporarily override System.Folder.Temp if needed?
+	// loadJSONFile calls getPlatformFile which takes absolute path fine.
+
+	// Test case 1: Valid JSON
+	validJSON := filepath.Join(tmpDir, "valid.json")
+	if err := os.WriteFile(validJSON, []byte(`{"name":"test"}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	var data map[string]string
+	if err := loadJSONFile(validJSON, &data); err != nil {
+		t.Errorf("loadJSONFile valid failed: %v", err)
+	}
+	if data["name"] != "test" {
+		t.Errorf("loadJSONFile valid: want test, got %v", data["name"])
+	}
+
+	// Test case 2: Empty File (should be success/nil error)
+	emptyFile := filepath.Join(tmpDir, "empty.json")
+	if err := os.WriteFile(emptyFile, []byte(""), 0644); err != nil {
+		t.Fatal(err)
+	}
+	var emptyMap map[string]any
+	if err := loadJSONFile(emptyFile, &emptyMap); err != nil {
+		t.Errorf("loadJSONFile empty failed: %v", err)
+	}
+	if emptyMap != nil {
+		t.Errorf("loadJSONFile empty: want nil, got %v", emptyMap)
+	}
+
+	// Test case 3: Invalid JSON
+	invalidJSON := filepath.Join(tmpDir, "invalid.json")
+	if err := os.WriteFile(invalidJSON, []byte(`{name:test}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	var invalidMap map[string]any
+	if err := loadJSONFile(invalidJSON, &invalidMap); err == nil {
+		t.Error("loadJSONFile invalid: want error, got nil")
+	}
+
+	// Test case 4: Missing File
+	missingFile := filepath.Join(tmpDir, "missing.json")
+	if err := loadJSONFile(missingFile, &data); err == nil {
+		t.Error("loadJSONFile missing: want error, got nil")
 	}
 }

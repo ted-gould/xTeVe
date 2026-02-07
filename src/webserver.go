@@ -558,11 +558,47 @@ func checkLoginRateLimitWithTime(ip string, now time.Time) bool {
 	return loginRateLimiter.attempts[ip] <= 10
 }
 
+// isPrivateIP checks if an IP address is private or loopback
+func isPrivateIP(ip net.IP) bool {
+	if ip.IsLoopback() || ip.IsPrivate() {
+		return true
+	}
+	return false
+}
+
 func getClientIP(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
-		return r.RemoteAddr
+		host = r.RemoteAddr
 	}
+
+	// Parse IP
+	remoteIP := net.ParseIP(host)
+	if remoteIP == nil {
+		return host // Fallback
+	}
+
+	// Check if RemoteAddr is private
+	if isPrivateIP(remoteIP) {
+		// Check X-Real-IP first (safer, as it's usually set by the immediate proxy)
+		if xrip := r.Header.Get("X-Real-IP"); xrip != "" {
+			return strings.TrimSpace(xrip)
+		}
+
+		// Check X-Forwarded-For
+		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+			// X-Forwarded-For: client, proxy1, proxy2
+			// The last IP in the list is the one that connected to the last trusted proxy.
+			parts := strings.Split(xff, ",")
+			if len(parts) > 0 {
+				clientIP := strings.TrimSpace(parts[len(parts)-1])
+				if clientIP != "" {
+					return clientIP
+				}
+			}
+		}
+	}
+
 	return host
 }
 
@@ -587,6 +623,9 @@ func WS(w http.ResponseWriter, r *http.Request) {
 	// We must manually decrement the counter when this handler exits.
 	defer atomic.AddInt64(&activeHTTPConnections, -1)
 	defer conn.Close()
+
+	// Security: Limit WebSocket message size to 32MB to prevent DoS (Unrestricted Resource Consumption)
+	conn.SetReadLimit(33554432)
 
 	setGlobalDomain(r.Host)
 
@@ -1183,7 +1222,9 @@ func API(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("content-type", "application/json")
 
-	if Settings.AuthenticationAPI {
+	// Security: If Web Auth is enabled, we MUST also enforce API Auth to prevent
+	// bypass via reverse proxies (where RemoteAddr is localhost).
+	if Settings.AuthenticationAPI || Settings.AuthenticationWEB {
 		var token string
 		switch len(request.Token) {
 		case 0:
