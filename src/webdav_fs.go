@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"maps"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -170,12 +171,9 @@ func (fs *WebDAVFS) openHashSubDir(ctx context.Context, hash, sub string) (webda
 
 func (fs *WebDAVFS) groupExists(ctx context.Context, hash, group string) bool {
 	groups := getGroupsForHash(ctx, hash)
-	for _, g := range groups {
-		if sanitizeGroupName(g) == group {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(groups, func(g string) bool {
+		return sanitizeGroupName(g) == group
+	})
 }
 
 func (fs *WebDAVFS) openOnDemandGroupDir(ctx context.Context, hash, sub, group string) (webdav.File, error) {
@@ -209,15 +207,7 @@ func (fs *WebDAVFS) openOnDemandSeriesDir(ctx context.Context, hash, sub, group,
 		return nil, os.ErrNotExist
 	}
 	// Check if series exists
-	seriesList := getSeriesList(ctx, hash, group)
-	found := false
-	for _, s := range seriesList {
-		if s == series {
-			found = true
-			break
-		}
-	}
-	if !found {
+	if !slices.Contains(getSeriesList(ctx, hash, group), series) {
 		return nil, os.ErrNotExist
 	}
 	return &webdavDir{name: path.Join(hash, sub, group, dirSeries, series), ctx: ctx}, nil
@@ -231,15 +221,7 @@ func (fs *WebDAVFS) openOnDemandSeasonDir(ctx context.Context, hash, sub, group,
 		return nil, os.ErrNotExist
 	}
 	// Check if season exists
-	seasons := getSeasonsList(ctx, hash, group, series)
-	found := false
-	for _, s := range seasons {
-		if s == season {
-			found = true
-			break
-		}
-	}
-	if !found {
+	if !slices.Contains(getSeasonsList(ctx, hash, group, series), season) {
 		return nil, os.ErrNotExist
 	}
 	return &webdavDir{name: path.Join(hash, sub, group, dirSeries, series, season), ctx: ctx}, nil
@@ -685,11 +667,7 @@ func (d *webdavDir) collectInfos(ctx context.Context) ([]os.FileInfo, error) {
 
 func (d *webdavDir) readDirRoot() ([]os.FileInfo, error) {
 	var infos []os.FileInfo
-	var hashes []string
-	for hash := range Settings.Files.M3U {
-		hashes = append(hashes, hash)
-	}
-	slices.Sort(hashes)
+	hashes := slices.Sorted(maps.Keys(Settings.Files.M3U))
 	for _, hash := range hashes {
 		modTime := getM3UModTime(hash)
 		infos = append(infos, &mkDirInfo{name: hash, modTime: modTime})
@@ -1664,11 +1642,7 @@ func getGroupsForHash(ctx context.Context, hash string) []string {
 		}
 	}
 
-	var groups []string
-	for g := range groupsMap {
-		groups = append(groups, g)
-	}
-	slices.Sort(groups)
+	groups := slices.Sorted(maps.Keys(groupsMap))
 
 	webdavCacheMutex.Lock()
 	hc, ok := webdavCache[hash]
@@ -1996,18 +1970,14 @@ func isVOD(stream map[string]string) bool {
 
 	// List of extensions typically associated with VOD
 	vodExts := []string{".mp4", ".mkv", ".avi", ".mov", ".wmv", ".flv", ".webm", ".mpg", ".mpeg", ".m4v"}
-	for _, e := range vodExts {
-		if ext == e {
-			return true // Is VOD
-		}
+	if slices.Contains(vodExts, ext) {
+		return true // Is VOD
 	}
 
 	// List of extensions typically associated with streams
 	streamExts := []string{".m3u8", ".ts", ".php", ".pl"} // .php/pl often used for live stream redirects
-	for _, e := range streamExts {
-		if ext == e {
-			return false // Is Live
-		}
+	if slices.Contains(streamExts, ext) {
+		return false // Is Live
 	}
 
 	// 2. Fallback to duration check if extension is ambiguous or unknown
