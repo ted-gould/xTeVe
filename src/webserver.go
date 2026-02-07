@@ -588,6 +588,9 @@ func WS(w http.ResponseWriter, r *http.Request) {
 	defer atomic.AddInt64(&activeHTTPConnections, -1)
 	defer conn.Close()
 
+	// Security: Limit WebSocket message size to 32MB to prevent DoS (Unrestricted Resource Consumption)
+	conn.SetReadLimit(33554432)
+
 	setGlobalDomain(r.Host)
 
 	for {
