@@ -58,3 +58,37 @@ func (p *Parser) Next() ([]byte, error) {
 
 	return packet, nil
 }
+
+// NextInto reads the next valid MPEG-TS packet into the provided buffer.
+// The buffer must have a length of at least PacketSize.
+// If no packet is available, it returns io.EOF.
+func (p *Parser) NextInto(b []byte) error {
+	if len(b) < PacketSize {
+		return io.ErrShortBuffer
+	}
+
+	// Find the sync byte.
+	idx := bytes.IndexByte(p.buf.Bytes(), SyncByte)
+	if idx == -1 {
+		// No sync byte found, so we can't find a packet.
+		// We can discard the entire buffer.
+		p.buf.Reset()
+		return io.EOF
+	}
+
+	// Discard any data before the sync byte.
+	if idx > 0 {
+		p.buf.Next(idx)
+	}
+
+	// Check if we have a full packet.
+	if p.buf.Len() < PacketSize {
+		return io.EOF
+	}
+
+	if _, err := p.buf.Read(b[:PacketSize]); err != nil {
+		return err
+	}
+
+	return nil
+}
