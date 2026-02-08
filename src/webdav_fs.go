@@ -1500,7 +1500,7 @@ func getM3UModTime(hash string) time.Time {
 }
 
 var sanitizeRegex = regexp.MustCompile(`[^a-zA-Z0-9.\-_ ():]`)
-var seriesRegex = regexp.MustCompile(`(?i)^(.*?)[_\s]*S(\d{1,3})[_\s]*E\d{1,3}`)
+var seriesRegex = regexp.MustCompile(`(?i)^(.*?)[_.\s]*S(\d{1,3})[_.\s]*E\d{1,3}`)
 
 func parseSeries(name string) (string, string, int, bool) {
 	matches := seriesRegex.FindStringSubmatch(name)
