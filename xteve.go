@@ -206,6 +206,13 @@ func run() (err error) {
 		os.Exit(0)
 	}
 
+	// Start local Unix socket server for tools like xteve-status
+	err = src.StartLocalSocketServer()
+	if err != nil {
+		src.ShowError(err, 0)
+		os.Exit(0)
+	}
+
 	err = src.StartSystem(false)
 	if err != nil {
 		src.ShowError(err, 0)
@@ -213,13 +220,6 @@ func run() (err error) {
 	}
 
 	err = src.InitMaintenance()
-	if err != nil {
-		src.ShowError(err, 0)
-		os.Exit(0)
-	}
-
-	// Start local Unix socket server for tools like xteve-status
-	err = src.StartLocalSocketServer()
 	if err != nil {
 		src.ShowError(err, 0)
 		os.Exit(0)
