@@ -500,3 +500,46 @@ func TestWebDAVFS_FilenameSanitization(t *testing.T) {
 		t.Logf("Case 2 Filename matched: %s", actualName2)
 	}
 }
+
+func TestSeriesRegex_DotSeparator(t *testing.T) {
+	testCases := []struct {
+		input          string
+		expectedName   string
+		expectedSeason int
+		expectedOk     bool
+	}{
+		{
+			input:          "Name.S01.E01.mp4",
+			expectedName:   "Name",
+			expectedSeason: 1,
+			expectedOk:     true,
+		},
+		{
+			input:          "My.Series.S02E05.mkv",
+			expectedName:   "My.Series",
+			expectedSeason: 2,
+			expectedOk:     true,
+		},
+		{
+			input:          "Another_Show.S10.E01.avi",
+			expectedName:   "Another_Show",
+			expectedSeason: 10,
+			expectedOk:     true,
+		},
+	}
+
+	for _, tc := range testCases {
+		name, _, season, ok := parseSeries(tc.input)
+		if ok != tc.expectedOk {
+			t.Errorf("Input: %s, Expected ok: %v, got: %v", tc.input, tc.expectedOk, ok)
+		}
+		if ok {
+			if name != tc.expectedName {
+				t.Errorf("Input: %s, Expected name: '%s', got: '%s'", tc.input, tc.expectedName, name)
+			}
+			if season != tc.expectedSeason {
+				t.Errorf("Input: %s, Expected season: %d, got: %d", tc.input, tc.expectedSeason, season)
+			}
+		}
+	}
+}
