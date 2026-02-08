@@ -1,56 +1,73 @@
-# Instructions for Jules
+# Instructions for Agents
+
+This file consolidates critical learnings, architectural decisions, security guidelines, and performance optimizations for the codebase. Always consult this file before making changes.
 
 ## Environment & Build
 * **Prerequisites**:
-    * Go version 1.24 or newer is required.
-    * `ffmpeg` is required. Install with `sudo apt-get update && sudo apt-get install -y ffmpeg`.
-    * Always use `sudo` when running `apt-get` commands for package installation or system updates.
+    * **Go version**: 1.24 or newer is required.
+    * **FFmpeg**: Required for streaming functionality. Install with `sudo apt-get update && sudo apt-get install -y ffmpeg`.
+    * **Packages**: Always use `sudo` for `apt-get` commands.
 * **Building**:
-    * Run `make build` to compile the backend and frontend. Output binaries are placed in `bin/` (`xteve`, `xteve-inactive`, `xteve-status`).
-    * Always run `make build` before running tests to ensure embedded assets (like compiled TypeScript) are generated.
-* **Artifacts**:
-    * Do not edit files in `bin/`, `build/`, `dist/`, or `node_modules/`. Edit the source code in `src/`, `cmd/`, or `ts/`.
-    * `AGENTS.md` scope applies to the entire repository.
-* **Environment**:
-    * When creating a new VM, run `make build` and fix dependency issues until it passes. This ensures the development environment is ready.
-
-## Testing
-* **General**:
-    * For any new code, create a test.
-    * When fixing a bug, first write a failing test to reproduce the bug, then fix it, then verify the test passes.
-    * Run all tests with `go test ./...`.
-* **State Isolation**:
-    * Tests involving `filecache` must explicitly reset the singleton using `filecache.Reset()` (or `resetFileCache()` in `src` package tests).
-    * Tests involving authentication must reset global variables (`data`, `tokens`).
-    * Integration tests using global buffers (`BufferClients`, `BufferInformation`) must use unique IDs or explicit cleanup.
-* **Specifics**:
-    * Integration tests are located in `cmd/e2e-streaming-test`.
-    * Use package path (e.g., `go test -v ./src/ -run <TestName>`) for focused tests to ensure internal dependencies resolve correctly.
-    * Mock WebDAV stream data using `map[string]string`, not `map[string]interface{}`.
-    * The benchmark test `src/benchmark_m3u_test.go` requires `src/testdata/benchmark_m3u/small.m3u`.
-
-## Coding Standards & Patterns
-* **Quality**:
-    * Prioritize code readability and maintainability.
-* **Error Handling**:
-    * Strictly propagate errors. Check errors from IO/OS calls (e.g., `Write`, `Seek`). Use `_` if explicitly ignoring.
-* **Performance**:
-    * Use `strings.Builder` with `WriteString` for large text generation (e.g., M3U playlists).
-    * Use `bindToStruct` for converting maps/objects to structs via JSON (avoids allocations). Avoid `mapToJSON` for internal logic.
-    * Use the standard library `slices` package (Go 1.21+) for slice operations instead of `sort` or third-party libs.
-* **Context & Tracing**:
-    * Propagate `context.Context` in WebDAV and streaming functions to ensure OpenTelemetry spans are correctly inherited.
-    * Use `context.WithoutCancel` if a background task must survive the parent request's cancellation.
-* **Formatting**:
-    * Use constant format strings with `fmt.Sprintf` (e.g., `fmt.Sprintf("%s", val)`, not `fmt.Sprintf(val)`).
+    * Run `make build` to compile backend and frontend. Output binaries are in `bin/`.
+    * **Always run `make build` before running tests** to ensure embedded assets (e.g., compiled TypeScript, generated Go code) are up-to-date.
+* **Artifacts & Scope**:
+    * **Do not edit**: Files in `bin/`, `build/`, `dist/`, `node_modules/`, or generated files like `src/internal/m3u-parser/regexp2go_*.go`.
+    * **Edit Source**: Modify code in `src/`, `cmd/`, or `ts/`.
+    * **Scope**: Instructions in this file apply to the entire repository.
 
 ## Architecture & Logic
+* **XEPG & XMLTV**:
+    * **Streaming Pattern**: Use the `yield` callback pattern (`func(*Program) error`) instead of appending to slices for large datasets (e.g., `getProgramData`).
+    * **Atomic Writes**: When generating files (like XMLTV), write to a temporary file (`.tmp`) first and rename upon success to ensure data integrity.
+    * **Optimization**:
+        * `createXEPGDatabase` uses ID-based indexing (strings) for maps to reduce heap allocations.
+        * `performAutomaticChannelMapping` uses `xmltvNameIndex` for O(1) lookups.
 * **WebDAV**:
-    * Logic resides in `src/webdav_fs.go`.
-    * Implements virtual image files for `tvg-logo` streams.
-    * Filenames are sanitized (replace `/` with `_`, preserve spaces).
-    * Image filenames must mirror video filenames.
-* **Middleware**:
-    * Execution order: OpenTelemetry -> Security Headers -> Panic Recovery -> ServeMux.
-* **Snap**:
-    * Configuration is read from `$SNAP_COMMON/otel.env` at startup.
+    * **Plex Naming**: `generateFileStreamInfos` enforces strict naming (`Series - SXXEXX`) and sanitizes filenames (spaces preserved, slashes replaced).
+    * **Image Handling**: `uploadLogo` validates extensions against an allowlist and uses `filepath.Base` for sanitization.
+* **M3U8 Parser**:
+    * **Pre-allocation**: `ParseM3U8` uses `strings.Count` to estimate segment count and pre-allocate slices.
+* **Concurrency**:
+    * **SSDP**: Manages multiple advertisers (root, WebDAV) in a single goroutine.
+    * **Buffers**: `handleTSStream` reuses a single pre-allocated buffer for packet processing to minimize GC.
+
+## Security & Robustness
+* **Authentication**:
+    * **Timing Attacks**: `UserAuthentication` iterates all registered users regardless of a match and uses `crypto/subtle.ConstantTimeCompare`.
+    * **Passwords**: Use `bcrypt`. Legacy HMAC-SHA256 passwords are lazily migrated to bcrypt upon successful login.
+    * **URL Auth**: Credentials can be extracted from URL query parameters (`username`, `password`).
+    * **Token Validation**: `CheckTheValidityOfTheTokenFromHTTPHeader` retrieves tokens via `r.Cookie("Token")`.
+* **Input Validation**:
+    * **File Uploads**: Strictly validate file extensions and content types. Sanitize filenames to prevent path traversal.
+    * **Network**:
+        * **SSRF**: Block loopback and link-local addresses.
+        * **IP Resolution**: `getClientIP` prioritizes `X-Real-IP` then `X-Forwarded-For` only when the request originates from a private/loopback address.
+* **DoS Prevention**:
+    * **WebSockets**: Enforce a 32MB read limit (`conn.SetReadLimit(33554432)`).
+    * **File Downloads**: Stream files using `io.Copy` or `http.ServeFile`; do not read entire files into memory.
+    * **Rate Limiting**: Use Fixed Window or Token Bucket algorithms; avoid naive "last seen" updates that ban legitimate active users.
+
+## Performance & Memory Optimization
+* **Allocations**:
+    * **Strings**: Use `strings.IndexByte`, `strings.Cut`, or `strings.HasPrefix` instead of `strings.Split`, `strings.Join`, or `url.Parse` in hot loops.
+    * **Slices/Maps**: Always pre-allocate with `make(..., size)` or `cap(len(...))` if the size is known.
+    * **Zero-Allocation**:
+        * Use `parser.NextInto` to parse directly into a caller-supplied buffer.
+        * Use `hash/maphash` (with `uint64` keys) for ephemeral hashing instead of `crypto/md5`.
+* **Patterns**:
+    * **Logging**: Wrap `fmt.Sprintf` calls in debug level checks (`if System.Flag.Debug >= level`) to avoid formatting overhead when disabled.
+    * **Standard Lib**: Use the `slices` and `maps` packages (Go 1.21+) for operations.
+    * **Equality**: Use `github.com/google/go-cmp` for comparisons.
+    * **Sorting**: When sorting with pointers, allocate a new slice for the result; do not rebuild in-place.
+
+## Testing
+* **State Isolation**:
+    * Use `t.Cleanup` to restore global state (`Settings`, `System`) after tests.
+    * Explicitly reset singletons like `filecache.Reset()`.
+    * Tests involving `authentication.Init` must use `os.MkdirTemp` for isolation.
+* **Integration**:
+    * Run integration tests in `cmd/e2e-streaming-test`.
+    * Mock WebDAV data using `map[string]string`.
+* **Generated Code**:
+    * Run `make generate` to install dependencies (`regexp2go`, `bytespool`) and generate code before running tests.
+    * Verify `//go:generate` directives are respected.
