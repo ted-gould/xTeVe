@@ -68,22 +68,26 @@ func SetupOTelSDK(ctx context.Context, exporterType ExporterType) (func(context.
 	otel.SetTracerProvider(tracerProvider)
 
 	// Set up meter provider.
-	meterProvider, err := newMeterProvider()
+	meterProvider, err := newMeterProvider(exporterType)
 	if err != nil {
 		handleErr(err)
 		return shutdown, err
 	}
-	shutdownFuncs = append(shutdownFuncs, meterProvider.Shutdown)
-	otel.SetMeterProvider(meterProvider)
+	if meterProvider != nil {
+		shutdownFuncs = append(shutdownFuncs, meterProvider.Shutdown)
+		otel.SetMeterProvider(meterProvider)
+	}
 
 	// Set up logger provider.
-	loggerProvider, err := newLoggerProvider()
+	loggerProvider, err := newLoggerProvider(exporterType)
 	if err != nil {
 		handleErr(err)
 		return shutdown, err
 	}
-	shutdownFuncs = append(shutdownFuncs, loggerProvider.Shutdown)
-	global.SetLoggerProvider(loggerProvider)
+	if loggerProvider != nil {
+		shutdownFuncs = append(shutdownFuncs, loggerProvider.Shutdown)
+		global.SetLoggerProvider(loggerProvider)
+	}
 
 	return shutdown, err
 }
@@ -138,7 +142,10 @@ func newSpanExporter(ctx context.Context, exporterType ExporterType) (trace.Span
 	}
 }
 
-func newMeterProvider() (*metric.MeterProvider, error) {
+func newMeterProvider(exporterType ExporterType) (*metric.MeterProvider, error) {
+	if exporterType != ExporterTypeStdout {
+		return nil, nil
+	}
 	metricExporter, err := stdoutmetric.New()
 	if err != nil {
 		return nil, err
@@ -152,7 +159,10 @@ func newMeterProvider() (*metric.MeterProvider, error) {
 	return meterProvider, nil
 }
 
-func newLoggerProvider() (*log.LoggerProvider, error) {
+func newLoggerProvider(exporterType ExporterType) (*log.LoggerProvider, error) {
+	if exporterType != ExporterTypeStdout {
+		return nil, nil
+	}
 	logExporter, err := stdoutlog.New()
 	if err != nil {
 		return nil, err
