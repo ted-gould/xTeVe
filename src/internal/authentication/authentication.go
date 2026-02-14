@@ -11,8 +11,11 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 const tokenLength = 40
@@ -186,86 +189,129 @@ func UserAuthentication(username, password string) (token string, err error) {
 		return
 	}
 
-	var login = func(username, password string, iLoginData any) (err error) {
-		err = createError(010)
+	err = createError(010)
 
-		var loginData, ok = iLoginData.(map[string]any)
-		if !ok {
-			return errors.New("user data has to be a map")
-		}
-
-		var salt, okSalt = loginData["_salt"].(string)
-		if !okSalt {
-			return errors.New("user has no salt")
-		}
-
-		var loginUsername, okLogin = loginData["_username"].(string)
-		if !okLogin {
-			return errors.New("user has no username")
-		}
-
-		var loginPassword, okPass = loginData["_password"].(string)
-		if !okPass {
-			return errors.New("user has no password")
-		}
-
-		// Try NEW hash first
-		sUsername, errSHA := SHA256(username, salt)
-		if errSHA != nil {
-			return errSHA
-		}
-		sPassword, errSHA := SHA256(password, salt)
-		if errSHA != nil {
-			return errSHA
-		}
-
-		// Constant time comparison to prevent timing attacks and username enumeration
-		uMatch := subtle.ConstantTimeCompare([]byte(sUsername), []byte(loginUsername))
-		pMatch := subtle.ConstantTimeCompare([]byte(sPassword), []byte(loginPassword))
-
-		if uMatch == 1 && pMatch == 1 {
-			err = nil
-			return
-		}
-
-		// Try LEGACY hash
-		sUsernameLegacy, errSHA := legacySHA256(username, salt)
-		if errSHA != nil {
-			return errSHA
-		}
-		sPasswordLegacy, errSHA := legacySHA256(password, salt)
-		if errSHA != nil {
-			return errSHA
-		}
-
-		uMatchLegacy := subtle.ConstantTimeCompare([]byte(sUsernameLegacy), []byte(loginUsername))
-		pMatchLegacy := subtle.ConstantTimeCompare([]byte(sPasswordLegacy), []byte(loginPassword))
-
-		if uMatchLegacy == 1 && pMatchLegacy == 1 {
-			// Legacy Match! Migrate to new hash.
-			loginData["_username"] = sUsername
-			loginData["_password"] = sPassword
-
-			// Attempt to save the migrated data. If it fails, we silently ignore it
-			// and the user will remain on the legacy hash until next login.
-			_ = saveDatabase(data)
-			err = nil
-		}
-		return
-	}
+	// Dummy hash for timing attack prevention (Cost 10)
+	dummyHash := "$2a$10$89.3q/89.3q/89.3q/89.3q/89.3q/89.3q/89.3q/89.3q/89.3q"
 
 	var users, ok = data["users"].(map[string]any)
 	if !ok {
 		return "", errors.New("users in datebase are not a map")
 	}
 
-	for id, loginData := range users {
-		err = login(username, password, loginData)
-		if err == nil {
-			token, err = setToken(id, "-")
-			return
+	var foundUser map[string]any
+	var foundID string
+	var isLegacy bool
+
+	for id, iLoginData := range users {
+		var loginData, ok = iLoginData.(map[string]any)
+		if !ok {
+			continue
+		}
+
+		var salt, okSalt = loginData["_salt"].(string)
+		if !okSalt {
+			continue
+		}
+
+		var loginUsername, okLogin = loginData["_username"].(string)
+		if !okLogin {
+			continue
+		}
+
+		// Check Username (HMAC-SHA256)
+		sUsername, errSHA := SHA256(username, salt)
+		if errSHA != nil {
+			continue
+		}
+
+		// Constant time comparison
+		if subtle.ConstantTimeCompare([]byte(sUsername), []byte(loginUsername)) == 1 {
+			foundUser = loginData
+			foundID = id
+			isLegacy = false
+			break // Found user!
+		}
+
+		// Check Legacy Username (HMAC-SHA256 with constant salt)
+		sUsernameLegacy, errSHA := legacySHA256(username, salt)
+		if errSHA != nil {
+			continue
+		}
+
+		if subtle.ConstantTimeCompare([]byte(sUsernameLegacy), []byte(loginUsername)) == 1 {
+			foundUser = loginData
+			foundID = id
+			isLegacy = true
+			break // Found user!
 		}
 	}
+
+	if foundUser != nil {
+		var loginPassword, okPass = foundUser["_password"].(string)
+		if !okPass {
+			return "", createError(010)
+		}
+
+		var salt, _ = foundUser["_salt"].(string)
+
+		if isLegacy {
+			// Verify Legacy Password
+			sPasswordLegacy, _ := legacySHA256(password, salt)
+			if subtle.ConstantTimeCompare([]byte(sPasswordLegacy), []byte(loginPassword)) == 1 {
+				// Success! Migrate.
+
+				// 1. Generate new bcrypt password
+				newPass, errHash := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+				if errHash != nil {
+					return "", errHash
+				}
+
+				// 2. Generate new username hash (HMAC)
+				newUsername, errHash := SHA256(username, salt)
+				if errHash != nil {
+					return "", errHash
+				}
+
+				foundUser["_username"] = newUsername
+				foundUser["_password"] = string(newPass)
+
+				_ = saveDatabase(data)
+
+				token, err = setToken(foundID, "-")
+				return
+			}
+		} else {
+			// Verify Password (could be bcrypt or old HMAC)
+			if strings.HasPrefix(loginPassword, "$2") {
+				// Bcrypt
+				errBcrypt := bcrypt.CompareHashAndPassword([]byte(loginPassword), []byte(password))
+				if errBcrypt == nil {
+					token, err = setToken(foundID, "-")
+					return
+				}
+			} else {
+				// Old HMAC
+				sPassword, _ := SHA256(password, salt)
+				if subtle.ConstantTimeCompare([]byte(sPassword), []byte(loginPassword)) == 1 {
+					// Success! Migrate to bcrypt.
+					newPass, errHash := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+					if errHash != nil {
+						return "", errHash
+					}
+					foundUser["_password"] = string(newPass)
+					_ = saveDatabase(data)
+
+					token, err = setToken(foundID, "-")
+					return
+				}
+			}
+		}
+	} else {
+		// User not found. Run dummy bcrypt to consume time.
+		_ = bcrypt.CompareHashAndPassword([]byte(dummyHash), []byte(password))
+	}
+
 	return
 }
 
@@ -500,11 +546,12 @@ func ChangeCredentials(userID, username, password string) (err error) {
 		}
 
 		if len(password) > 0 {
-			passwordHash, errSHA := SHA256(password, salt)
-			if errSHA != nil {
-				return errSHA
+			// Use Bcrypt
+			passwordHashBytes, errHash := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+			if errHash != nil {
+				return errHash
 			}
-			userData["_password"] = passwordHash
+			userData["_password"] = string(passwordHashBytes)
 		}
 		err = saveDatabase(data)
 		if err != nil {
@@ -698,10 +745,14 @@ func defaultsForNewUser(username, password string) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	passwordHash, err := SHA256(password, salt)
+
+	// Use Bcrypt
+	passwordHashBytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, err
 	}
+	passwordHash := string(passwordHashBytes)
+
 	idSuffix, err := randomID(idLength)
 	if err != nil {
 		return nil, err
