@@ -9,6 +9,14 @@ import (
 )
 
 func TestWebDAVTimestamp(t *testing.T) {
+	// Mock fetchRemoteMetadataFunc
+	origFetchRemoteMetadataFunc := fetchRemoteMetadataFunc
+	fetchRemoteMetadataFunc = func(ctx context.Context, urlStr string) (FileMeta, error) {
+		// Return zero time so that the FS uses the defaultModTime (from JSON/M3U)
+		return FileMeta{Size: 1024, ModTime: time.Time{}}, nil
+	}
+	defer func() { fetchRemoteMetadataFunc = origFetchRemoteMetadataFunc }()
+
 	// Setup
 	tempDir, err := os.MkdirTemp("", "xteve_webdav_timestamp_test")
 	if err != nil {

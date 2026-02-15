@@ -492,7 +492,7 @@ func resolveMetadataFromM3U(hash string, stream map[string]string, targetURL str
 }
 
 func resolveMetadataFromRemote(ctx context.Context, hash, targetURL string) (FileMeta, error) {
-	meta, err := fetchRemoteMetadata(ctx, targetURL)
+	meta, err := fetchRemoteMetadataFunc(ctx, targetURL)
 	if err == nil {
 		updateMetadataCache(hash, targetURL, meta)
 	}
@@ -733,16 +733,30 @@ func (d *webdavDir) readDirOnDemandGroupSub(ctx context.Context, hash, sub, grou
 		hc := webdavCache[hash]
 
 		for _, f := range fileInfos {
-			size := int64(0)
-			mt := modTime
+			if hc == nil {
+				continue
+			}
 
-			if hc != nil && f.TargetURL != "" {
-				if meta, ok := hc.FileMetadata[f.TargetURL]; ok {
-					size = meta.Size
-					if !meta.ModTime.IsZero() {
-						mt = meta.ModTime
-					}
-				}
+			// Check video stream metadata (if video is unreachable, hide everything related)
+			videoURL := f.Stream["url"]
+			if _, ok := hc.FileMetadata[videoURL]; !ok {
+				continue
+			}
+
+			// Check file metadata
+			if f.TargetURL == "" {
+				continue
+			}
+
+			meta, ok := hc.FileMetadata[f.TargetURL]
+			if !ok {
+				continue
+			}
+
+			size := meta.Size
+			mt := modTime
+			if !meta.ModTime.IsZero() {
+				mt = meta.ModTime
 			}
 
 			infos = append(infos, &mkFileInfo{name: f.Name, size: size, modTime: mt})
@@ -784,16 +798,30 @@ func (d *webdavDir) readDirSeason(ctx context.Context, hash, sub, group, series,
 	hc := webdavCache[hash]
 
 	for _, f := range fileInfos {
-		size := int64(0)
-		mt := modTime
+		if hc == nil {
+			continue
+		}
 
-		if hc != nil && f.TargetURL != "" {
-			if meta, ok := hc.FileMetadata[f.TargetURL]; ok {
-				size = meta.Size
-				if !meta.ModTime.IsZero() {
-					mt = meta.ModTime
-				}
-			}
+		// Check video stream metadata (if video is unreachable, hide everything related)
+		videoURL := f.Stream["url"]
+		if _, ok := hc.FileMetadata[videoURL]; !ok {
+			continue
+		}
+
+		// Check file metadata
+		if f.TargetURL == "" {
+			continue
+		}
+
+		meta, ok := hc.FileMetadata[f.TargetURL]
+		if !ok {
+			continue
+		}
+
+		size := meta.Size
+		mt := modTime
+		if !meta.ModTime.IsZero() {
+			mt = meta.ModTime
 		}
 
 		infos = append(infos, &mkFileInfo{name: f.Name, size: size, modTime: mt})
@@ -1278,7 +1306,9 @@ func getStreamMetadata(stream map[string]string) (FileMeta, bool) {
 	return meta, found
 }
 
-func fetchRemoteMetadata(ctx context.Context, urlStr string) (FileMeta, error) {
+var fetchRemoteMetadataFunc = defaultFetchRemoteMetadata
+
+func defaultFetchRemoteMetadata(ctx context.Context, urlStr string) (FileMeta, error) {
 	ctx, span := otel.Tracer("webdav").Start(ctx, "fetchRemoteMetadata")
 	defer span.End()
 	span.SetAttributes(attribute.String("http.url", urlStr))
@@ -1330,8 +1360,7 @@ func fetchRemoteMetadata(ctx context.Context, urlStr string) (FileMeta, error) {
 	// 2. GET request with Range
 	req, err = http.NewRequestWithContext(ctx, "GET", urlStr, nil)
 	if err != nil {
-		meta.Size = 1 << 40 // 1TB
-		return meta, nil
+		return meta, err
 	}
 
 	req.Header.Set("User-Agent", Settings.UserAgent)
@@ -1339,8 +1368,7 @@ func fetchRemoteMetadata(ctx context.Context, urlStr string) (FileMeta, error) {
 
 	resp, err = client.Do(req)
 	if err != nil {
-		meta.Size = 1 << 40 // 1TB
-		return meta, nil
+		return meta, err
 	}
 	defer resp.Body.Close()
 
@@ -1385,9 +1413,9 @@ func fetchRemoteMetadata(ctx context.Context, urlStr string) (FileMeta, error) {
 		}
 	}
 
-	// If size is still 0 (unknown or failed parsing), default to 1TB
+	// If size is still 0 (unknown or failed parsing), return error
 	if meta.Size <= 0 {
-		meta.Size = 1 << 40 // 1TB
+		return meta, errors.New("failed to determine file size")
 	}
 
 	// Try to get ModTime from GET response
@@ -1471,7 +1499,7 @@ func ensureMetadataOptimized(ctx context.Context, hash string, files []FileStrea
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
-			meta, err := fetchRemoteMetadata(ctx, u)
+			meta, err := fetchRemoteMetadataFunc(ctx, u)
 			if err == nil {
 				resultsMutex.Lock()
 				results[u] = meta
