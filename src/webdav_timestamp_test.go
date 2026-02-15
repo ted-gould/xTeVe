@@ -38,9 +38,23 @@ func TestWebDAVTimestamp(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Set a specific mod time (e.g., 1 hour ago)
-	fixedTime := time.Now().Add(-1 * time.Hour).Truncate(time.Second)
-	err = os.Chtimes(m3uPath, fixedTime, fixedTime)
+	// Set a specific mod time for M3U (e.g., 2 hours ago)
+	m3uTime := time.Now().Add(-2 * time.Hour).Truncate(time.Second)
+	err = os.Chtimes(m3uPath, m3uTime, m3uTime)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a dummy JSON file with a DIFFERENT timestamp (e.g., 1 hour ago)
+	jsonContent := "{}"
+	jsonPath := filepath.Join(tempDir, hash+".json")
+	err = os.WriteFile(jsonPath, []byte(jsonContent), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	jsonTime := time.Now().Add(-1 * time.Hour).Truncate(time.Second)
+	err = os.Chtimes(jsonPath, jsonTime, jsonTime)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +75,7 @@ func TestWebDAVTimestamp(t *testing.T) {
 	ctx := context.Background()
 
 	// Helper to check timestamp
-	checkTimestamp := func(path string) {
+	checkTimestamp := func(path string, expectedTime time.Time) {
 		info, err := fs.Stat(ctx, path)
 		if err != nil {
 			t.Fatalf("Failed to stat %s: %v", path, err)
@@ -69,28 +83,43 @@ func TestWebDAVTimestamp(t *testing.T) {
 
 		// fs.Stat() calls os.Stat() internally which returns system specific precision.
 		// We use Truncate(Second) for comparison to be safe across FS types.
-		if !info.ModTime().Truncate(time.Second).Equal(fixedTime.Truncate(time.Second)) {
-			t.Errorf("Timestamp for %s mismatch. Expected %v, got %v", path, fixedTime, info.ModTime())
+		if !info.ModTime().Truncate(time.Second).Equal(expectedTime.Truncate(time.Second)) {
+			t.Errorf("Timestamp for %s mismatch. Expected %v, got %v", path, expectedTime, info.ModTime())
 		}
 	}
 
+	// All checks should return the JSON timestamp, not the M3U timestamp
+
 	// 1. Check Hash Dir
-	checkTimestamp("/" + hash)
+	checkTimestamp("/" + hash, jsonTime)
 
 	// 2. Check On Demand Dir
-	checkTimestamp("/" + hash + "/" + dirOnDemand)
+	checkTimestamp("/" + hash + "/" + dirOnDemand, jsonTime)
 
 	// 3. Check Group Dir
-	checkTimestamp("/" + hash + "/" + dirOnDemand + "/Test Group")
+	checkTimestamp("/" + hash + "/" + dirOnDemand + "/Test Group", jsonTime)
 
 	// 4. Check Individual Dir
-	checkTimestamp("/" + hash + "/" + dirOnDemand + "/Test Group/" + dirIndividual)
+	checkTimestamp("/" + hash + "/" + dirOnDemand + "/Test Group/" + dirIndividual, jsonTime)
 
 	// 5. Check File
-	checkTimestamp("/" + hash + "/" + dirOnDemand + "/Test Group/" + dirIndividual + "/Test Stream.mp4")
+	checkTimestamp("/" + hash + "/" + dirOnDemand + "/Test Group/" + dirIndividual + "/Test Stream.mp4", jsonTime)
 
 	// 6. Check Listing File
-	checkTimestamp("/" + hash + "/" + fileListing)
+	// Listing file is the actual M3U content, so its timestamp should be from the M3U file?
+	// But `statHashSubDir` uses `getM3UModTime` for everything EXCEPT `fileListing`.
+	// For `fileListing`, it explicitly stats the M3U file:
+	// "info, err := os.Stat(realPath)" -> this gets M3U file stats directly.
+	// So listing file should retain M3U timestamp unless we change that logic too.
+	// The user requested "verify that we use the date from the json file in the cache... when returning dates through webdav".
+	// Usually this refers to directory timestamps and metadata, but let's check listing file separately.
+	// Current impl:
+	// if sub == fileListing {
+	//		realPath := filepath.Join(System.Folder.Data, hash+".m3u")
+	//		info, err := os.Stat(realPath) ... return info.ModTime()
+	// }
+	// So listing file will use M3U time. I'll assert M3U time for listing file, and JSON time for dirs.
+	checkTimestamp("/" + hash + "/" + fileListing, m3uTime)
 
     // Check Readdir timestamps
     f, err := fs.OpenFile(ctx, "/" + hash + "/" + dirOnDemand + "/Test Group/" + dirIndividual, os.O_RDONLY, 0)
@@ -106,8 +135,8 @@ func TestWebDAVTimestamp(t *testing.T) {
     for _, info := range infos {
         if info.Name() == "Test Stream.mp4" {
             found = true
-            if !info.ModTime().Truncate(time.Second).Equal(fixedTime.Truncate(time.Second)) {
-                 t.Errorf("Readdir Timestamp for Test Stream.mp4 mismatch. Expected %v, got %v", fixedTime, info.ModTime())
+            if !info.ModTime().Truncate(time.Second).Equal(jsonTime.Truncate(time.Second)) {
+                 t.Errorf("Readdir Timestamp for Test Stream.mp4 mismatch. Expected %v, got %v", jsonTime, info.ModTime())
             }
         }
     }
