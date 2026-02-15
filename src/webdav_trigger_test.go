@@ -59,9 +59,9 @@ func TestWebDAVFS_SizeFallback_Triggered(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	// Call fetchRemoteMetadata directly
+	// Call fetchRemoteMetadataFunc directly
 	ctx := context.Background()
-	meta, err := fetchRemoteMetadata(ctx, ts.URL)
+	meta, err := fetchRemoteMetadataFunc(ctx, ts.URL)
 	if err != nil {
 		t.Fatalf("fetchRemoteMetadata failed: %v", err)
 	}
@@ -118,7 +118,7 @@ func TestWebDAVFS_SizeFallback_LastBytes(t *testing.T) {
 	defer ts.Close()
 
 	ctx := context.Background()
-	meta, err := fetchRemoteMetadata(ctx, ts.URL)
+	meta, err := fetchRemoteMetadataFunc(ctx, ts.URL)
 	if err != nil {
 		t.Fatalf("fetchRemoteMetadata failed: %v", err)
 	}

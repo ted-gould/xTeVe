@@ -5,9 +5,17 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestWebDAVFS(t *testing.T) {
+	// Mock fetchRemoteMetadataFunc to avoid network calls and ensure tests pass
+	origFetchRemoteMetadataFunc := fetchRemoteMetadataFunc
+	fetchRemoteMetadataFunc = func(ctx context.Context, urlStr string) (FileMeta, error) {
+		return FileMeta{Size: 1024, ModTime: time.Now()}, nil
+	}
+	defer func() { fetchRemoteMetadataFunc = origFetchRemoteMetadataFunc }()
+
 	// Setup
 	tempDir, err := os.MkdirTemp("", "xteve_webdav_test")
 	if err != nil {
@@ -399,6 +407,13 @@ func TestParseSeriesUserScenario(t *testing.T) {
 }
 
 func TestWebDAVFS_FilenameSanitization(t *testing.T) {
+	// Mock fetchRemoteMetadataFunc
+	origFetchRemoteMetadataFunc := fetchRemoteMetadataFunc
+	fetchRemoteMetadataFunc = func(ctx context.Context, urlStr string) (FileMeta, error) {
+		return FileMeta{Size: 1024, ModTime: time.Now()}, nil
+	}
+	defer func() { fetchRemoteMetadataFunc = origFetchRemoteMetadataFunc }()
+
 	// Setup
 	tempDir, err := os.MkdirTemp("", "xteve_webdav_filename_test")
 	if err != nil {
