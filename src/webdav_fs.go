@@ -1491,6 +1491,11 @@ func ensureMetadataOptimized(ctx context.Context, hash string, files []FileStrea
 }
 
 func getM3UModTime(hash string) time.Time {
+	jsonPath := filepath.Join(System.Folder.Data, hash+".json")
+	if info, err := os.Stat(jsonPath); err == nil {
+		return info.ModTime()
+	}
+
 	realPath := filepath.Join(System.Folder.Data, hash+".m3u")
 	info, err := os.Stat(realPath)
 	if err != nil {

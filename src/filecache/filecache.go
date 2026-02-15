@@ -298,7 +298,6 @@ func (c *FileCache) CleanNow() {
 		e := entries[i]
 		item := c.items[e.hash]
 		os.Remove(item.Path)
-		os.Remove(item.MetaPath)
 		delete(c.items, e.hash)
 	}
 }

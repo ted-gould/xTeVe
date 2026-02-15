@@ -102,6 +102,75 @@ func TestFileCacheLRU(t *testing.T) {
 	}
 }
 
+func TestFileCache_JSONPersistence(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "filecache_test_json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	Reset()
+	fc, err := GetInstance(tempDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create files exceeding the max (max default 100)
+	maxItems := getMaxCacheItems()
+	numFiles := maxItems + 5
+
+	for i := 0; i < numFiles; i++ {
+		hash := fmt.Sprintf("hash%d", i)
+		path := filepath.Join(fc.dir, hash)
+		metaPath := path + ".json"
+
+		if err := os.WriteFile(path, []byte("data"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(metaPath, []byte(`{}`), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Reload to populate items
+	Reset()
+	fc, err = GetInstance(tempDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Make older items stay old (default load time).
+	// Make newer items newer.
+	for i := 5; i < numFiles; i++ {
+		hash := fmt.Sprintf("hash%d", i)
+		fc.mutex.Lock()
+		if item, ok := fc.items[hash]; ok {
+			item.AccessTime = time.Now().Add(1 * time.Hour)
+		}
+		fc.mutex.Unlock()
+	}
+
+	// Trigger cleanup
+	fc.CleanNow()
+
+	// Verify oldest items (0-4) data file is gone, BUT json file remains
+	for i := 0; i < 5; i++ {
+		hash := fmt.Sprintf("hash%d", i)
+		path := filepath.Join(fc.dir, hash)
+		metaPath := path + ".json"
+
+		// Data file should be gone
+		if _, err := os.Stat(path); err == nil {
+			t.Errorf("Item %s data file should have been evicted", hash)
+		}
+
+		// JSON file should REMAIN
+		if _, err := os.Stat(metaPath); err != nil {
+			t.Errorf("Item %s JSON file should still exist", hash)
+		}
+	}
+}
+
 func TestConfigurableCacheSize(t *testing.T) {
 	tests := []struct {
 		name           string
