@@ -426,6 +426,25 @@ func resolveFileMetadata(ctx context.Context, hash string, stream map[string]str
 		return &mkFileInfo{name: name, size: meta.Size, modTime: mt}, nil
 	}
 
+	// 1b. Try Persistent FileCache
+	fc := getFileCache()
+	if _, meta, found := fc.Get(targetURL); found && meta != nil {
+		span.SetAttributes(
+			attribute.String("metadata.source", "filecache"),
+			attribute.Int64("file.size", meta.Size),
+		)
+
+		// Update in-memory cache
+		fileMeta := FileMeta{Size: meta.Size, ModTime: meta.ModTime}
+		updateMetadataCache(hash, targetURL, fileMeta)
+
+		mt := defaultModTime
+		if !meta.ModTime.IsZero() {
+			mt = meta.ModTime
+		}
+		return &mkFileInfo{name: name, size: meta.Size, modTime: mt}, nil
+	}
+
 	// 2. Try M3U attributes (only if this is the video stream)
 	if meta, found := resolveMetadataFromM3U(hash, stream, targetURL); found {
 		mt := defaultModTime
@@ -1340,6 +1359,15 @@ func defaultFetchRemoteMetadata(ctx context.Context, urlStr string) (FileMeta, e
 			}
 		}
 		return meta, nil
+	}
+
+	// Even if HEAD didn't give us content length, we might have got ModTime
+	if err == nil && resp.StatusCode == http.StatusOK {
+		if lastMod := resp.Header.Get("Last-Modified"); lastMod != "" {
+			if t, err := http.ParseTime(lastMod); err == nil {
+				meta.ModTime = t
+			}
+		}
 	}
 
 	// HEAD failed or returned no content length, clean up and try fallback

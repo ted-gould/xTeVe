@@ -15,6 +15,9 @@ func TestNewHTTPClient_SSRF(t *testing.T) {
 	}))
 	defer ts.Close()
 
+	originalEnv := os.Getenv("XTEVE_ALLOW_LOOPBACK")
+	defer os.Setenv("XTEVE_ALLOW_LOOPBACK", originalEnv)
+
 	t.Run("Access Localhost Blocked", func(t *testing.T) {
 		// Ensure environment variable is unset
 		os.Unsetenv("XTEVE_ALLOW_LOOPBACK")
