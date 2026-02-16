@@ -1342,6 +1342,15 @@ func defaultFetchRemoteMetadata(ctx context.Context, urlStr string) (FileMeta, e
 		return meta, nil
 	}
 
+	// Even if HEAD didn't give us content length, we might have got ModTime
+	if err == nil && resp.StatusCode == http.StatusOK {
+		if lastMod := resp.Header.Get("Last-Modified"); lastMod != "" {
+			if t, err := http.ParseTime(lastMod); err == nil {
+				meta.ModTime = t
+			}
+		}
+	}
+
 	// HEAD failed or returned no content length, clean up and try fallback
 	if err == nil {
 		resp.Body.Close()
