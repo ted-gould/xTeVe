@@ -2,6 +2,7 @@ package src
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -54,15 +55,18 @@ func TestWebDAVTimestamp(t *testing.T) {
 	}
 
 	// Create a dummy JSON file with a DIFFERENT timestamp (e.g., 1 hour ago)
-	jsonContent := "{}"
+	// AND store a specific mod_time inside the JSON (e.g., 3 hours ago)
+	jsonContentTime := time.Now().Add(-3 * time.Hour).Truncate(time.Second)
+	jsonContent := fmt.Sprintf(`{"mod_time": "%s"}`, jsonContentTime.Format(time.RFC3339))
+
 	jsonPath := filepath.Join(tempDir, hash+".json")
 	err = os.WriteFile(jsonPath, []byte(jsonContent), 0644)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	jsonTime := time.Now().Add(-1 * time.Hour).Truncate(time.Second)
-	err = os.Chtimes(jsonPath, jsonTime, jsonTime)
+	jsonFileModTime := time.Now().Add(-1 * time.Hour).Truncate(time.Second)
+	err = os.Chtimes(jsonPath, jsonFileModTime, jsonFileModTime)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,22 +100,22 @@ func TestWebDAVTimestamp(t *testing.T) {
 		}
 	}
 
-	// All checks should return the JSON timestamp, not the M3U timestamp
+	// All checks should return the JSON content timestamp, not the JSON file timestamp or M3U timestamp
 
 	// 1. Check Hash Dir
-	checkTimestamp("/" + hash, jsonTime)
+	checkTimestamp("/" + hash, jsonContentTime)
 
 	// 2. Check On Demand Dir
-	checkTimestamp("/" + hash + "/" + dirOnDemand, jsonTime)
+	checkTimestamp("/" + hash + "/" + dirOnDemand, jsonContentTime)
 
 	// 3. Check Group Dir
-	checkTimestamp("/" + hash + "/" + dirOnDemand + "/Test Group", jsonTime)
+	checkTimestamp("/" + hash + "/" + dirOnDemand + "/Test Group", jsonContentTime)
 
 	// 4. Check Individual Dir
-	checkTimestamp("/" + hash + "/" + dirOnDemand + "/Test Group/" + dirIndividual, jsonTime)
+	checkTimestamp("/" + hash + "/" + dirOnDemand + "/Test Group/" + dirIndividual, jsonContentTime)
 
 	// 5. Check File
-	checkTimestamp("/" + hash + "/" + dirOnDemand + "/Test Group/" + dirIndividual + "/Test Stream.mp4", jsonTime)
+	checkTimestamp("/" + hash + "/" + dirOnDemand + "/Test Group/" + dirIndividual + "/Test Stream.mp4", jsonContentTime)
 
 	// 6. Check Listing File
 	// Listing file is the actual M3U content, so its timestamp should be from the M3U file?
@@ -143,8 +147,8 @@ func TestWebDAVTimestamp(t *testing.T) {
     for _, info := range infos {
         if info.Name() == "Test Stream.mp4" {
             found = true
-            if !info.ModTime().Truncate(time.Second).Equal(jsonTime.Truncate(time.Second)) {
-                 t.Errorf("Readdir Timestamp for Test Stream.mp4 mismatch. Expected %v, got %v", jsonTime, info.ModTime())
+            if !info.ModTime().Truncate(time.Second).Equal(jsonContentTime.Truncate(time.Second)) {
+                 t.Errorf("Readdir Timestamp for Test Stream.mp4 mismatch. Expected %v, got %v", jsonContentTime, info.ModTime())
             }
         }
     }

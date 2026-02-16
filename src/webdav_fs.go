@@ -2,6 +2,7 @@ package src
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -1520,6 +1521,18 @@ func ensureMetadataOptimized(ctx context.Context, hash string, files []FileStrea
 
 func getM3UModTime(hash string) time.Time {
 	jsonPath := filepath.Join(System.Folder.Data, hash+".json")
+
+	// Try to read mod_time from JSON content
+	if data, err := os.ReadFile(jsonPath); err == nil {
+		var meta struct {
+			ModTime time.Time `json:"mod_time"`
+		}
+		if err := json.Unmarshal(data, &meta); err == nil && !meta.ModTime.IsZero() {
+			return meta.ModTime
+		}
+	}
+
+	// Fallback to file mod time if JSON content parsing failed or file exists but empty/invalid
 	if info, err := os.Stat(jsonPath); err == nil {
 		return info.ModTime()
 	}
