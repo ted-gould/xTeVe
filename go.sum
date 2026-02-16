@@ -1,9 +1,7 @@
-github.com/CAFxX/bytespool v0.0.1 h1:YboszqePWXNBizolxI9QYVxDnLfEofp06u2L1bahvzY=
-github.com/CAFxX/bytespool v0.0.1/go.mod h1:UeJjDzzuJ8/iiOivEKVutUOD1HNiAnPBEgR6xnAoFqE=
 github.com/avfs/avfs v0.35.0 h1:dc0noSyEoVDtAUQlhHX0uRYBfI2aFbI8nF0XPtV/Ozw=
 github.com/avfs/avfs v0.35.0/go.mod h1:LnzrUO5acMU5NCkohHcUN15YrnkxiJ/lRLQOZSp39ow=
-github.com/canonical/go-snapctl v1.0.0-beta.4 h1:l4yU/nP7uo9MnC9l023o8gdc8/5k14ZQLqjChsEmbQA=
-github.com/canonical/go-snapctl v1.0.0-beta.4/go.mod h1:ufaV5pvWELQLf+SyUIRGlVFxE+XLVCOU8tgUbXj2o58=
+github.com/canonical/go-snapctl v1.0.0-beta.5 h1:XhGTFYdC3IUyuwEfK8Dm1KnaUjnTdXDMKSzme9aNXxo=
+github.com/canonical/go-snapctl v1.0.0-beta.5/go.mod h1:ufaV5pvWELQLf+SyUIRGlVFxE+XLVCOU8tgUbXj2o58=
 github.com/cenkalti/backoff/v5 v5.0.3 h1:ZN+IMa753KfX5hd8vVaMixjnqRZ3y8CuJKRKj1xcsSM=
 github.com/cenkalti/backoff/v5 v5.0.3/go.mod h1:rkhZdG3JZukswDf7f0cwqPNk4K0sa+F97BxZthm/crw=
 github.com/cespare/xxhash/v2 v2.3.0 h1:UL815xU9SqsFlibzuggzjXhog7bL6oX9BbNZnL2UFvs=
