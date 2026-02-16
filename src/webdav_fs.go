@@ -446,19 +446,22 @@ func resolveFileMetadata(ctx context.Context, hash string, stream map[string]str
 	}
 
 	// 2. Try M3U attributes (only if this is the video stream)
-	if meta, found := resolveMetadataFromM3U(hash, stream, targetURL); found {
+	m3uMeta, m3uFound := resolveMetadataFromM3U(hash, stream, targetURL)
+	if m3uFound {
 		mt := defaultModTime
-		if !meta.ModTime.IsZero() {
-			mt = meta.ModTime
+		if !m3uMeta.ModTime.IsZero() {
+			mt = m3uMeta.ModTime
 		}
-		if meta.Size > 0 {
+		// Only return if we have BOTH size and modTime.
+		// If we only have size, we should still try to get the modTime from remote.
+		if m3uMeta.Size > 0 && !m3uMeta.ModTime.IsZero() {
 			span.SetAttributes(
 				attribute.String("metadata.source", "m3u"),
-				attribute.Int64("file.size", meta.Size),
+				attribute.Int64("file.size", m3uMeta.Size),
 			)
-			return &mkFileInfo{name: name, size: meta.Size, modTime: mt}, nil
+			return &mkFileInfo{name: name, size: m3uMeta.Size, modTime: mt}, nil
 		}
-		// Update defaultModTime with what we found (if it's not zero), but continue to remote fetch for size
+		// Update defaultModTime with what we found (if it's not zero), but continue to remote fetch
 		if !mt.IsZero() {
 			defaultModTime = mt
 		}
@@ -475,6 +478,15 @@ func resolveFileMetadata(ctx context.Context, hash string, stream map[string]str
 			mt = meta.ModTime
 		}
 		return &mkFileInfo{name: name, size: meta.Size, modTime: mt}, nil
+	}
+
+	// Fallback: If M3U had size, use it even if remote fetch failed
+	if m3uFound && m3uMeta.Size > 0 {
+		span.SetAttributes(
+			attribute.String("metadata.source", "m3u_fallback"),
+			attribute.Int64("file.size", m3uMeta.Size),
+		)
+		return &mkFileInfo{name: name, size: m3uMeta.Size, modTime: defaultModTime}, nil
 	}
 
 	span.SetAttributes(
