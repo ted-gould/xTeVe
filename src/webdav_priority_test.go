@@ -71,7 +71,9 @@ func TestWebDAVPriority(t *testing.T) {
 	}
 	// Set M3U file time (Step 6 fallback)
 	step6Time := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
-	os.Chtimes(m3uPath, step6Time, step6Time)
+	if err := os.Chtimes(m3uPath, step6Time, step6Time); err != nil {
+		t.Fatal(err)
+	}
 
 	Settings.Files.M3U = map[string]interface{}{
 		hash: map[string]interface{}{"name": "Priority Test"},
@@ -201,7 +203,9 @@ func TestWebDAVPriority(t *testing.T) {
 	t.Run("Step 1: JSON Cache Content Time", func(t *testing.T) {
 		// Create JSON cache file with specific time
 		meta := filecache.Metadata{URL: targetURL, ModTime: step1Time, Size: 999}
-		fc.WriteMetadata(targetURL, meta)
+		if err := fc.WriteMetadata(targetURL, meta); err != nil {
+			t.Fatal(err)
+		}
 
 		// Reset in-memory cache in WebDAVFS (webdavCache)?
 		// The test helper clears it.

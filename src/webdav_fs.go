@@ -512,7 +512,9 @@ func resolveFileMetadata(ctx context.Context, hash string, stream map[string]str
 
 		// Write to disk only if changed
 		if shouldWrite {
-			fc.WriteMetadata(targetURL, newMeta)
+			if err := fc.WriteMetadata(targetURL, newMeta); err != nil {
+				span.RecordError(err)
+			}
 		}
 
 		// Update in-memory cache
