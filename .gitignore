@@ -32,3 +32,4 @@ src/internal/m3u-parser/regexp2go_*.go
 
 # Test artifacts
 coverage.out
+xteve_cache
