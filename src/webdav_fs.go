@@ -6,11 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/url"
 	"os"
 	"path"
-	"maps"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -66,7 +66,7 @@ func (d *mkDirInfo) Size() int64        { return 0 }
 func (d *mkDirInfo) Mode() os.FileMode  { return os.ModeDir | 0555 }
 func (d *mkDirInfo) ModTime() time.Time { return d.modTime }
 func (d *mkDirInfo) IsDir() bool        { return true }
-func (d *mkDirInfo) Sys() interface{}   { return nil }
+func (d *mkDirInfo) Sys() any           { return nil }
 
 // mkFileInfo implements os.FileInfo for a file
 type mkFileInfo struct {
@@ -80,7 +80,7 @@ func (f *mkFileInfo) Size() int64        { return f.size }
 func (f *mkFileInfo) Mode() os.FileMode  { return 0444 }
 func (f *mkFileInfo) ModTime() time.Time { return f.modTime }
 func (f *mkFileInfo) IsDir() bool        { return false }
-func (f *mkFileInfo) Sys() interface{}   { return nil }
+func (f *mkFileInfo) Sys() any           { return nil }
 
 // Mkdir returns an error as the filesystem is read-only
 func (fs *WebDAVFS) Mkdir(ctx context.Context, name string, perm os.FileMode) error {
@@ -363,19 +363,18 @@ func (fs *WebDAVFS) Stat(ctx context.Context, name string) (_ os.FileInfo, err e
 		}
 	case 5:
 		if parts[1] == dirOnDemand && fs.groupExists(ctx, hash, parts[2]) {
-			if parts[3] == dirIndividual {
+			switch parts[3] {
+			case dirIndividual:
 				// File in Individual
 				stream, targetURL, err := findIndividualStream(ctx, hash, parts[2], parts[4])
 				if err == nil {
 					return fs.statWithMetadata(ctx, hash, stream, targetURL, parts[4], modTime)
 				}
-			} else if parts[3] == dirSeries {
+			case dirSeries:
 				// Series Dir
 				seriesList := getSeriesList(ctx, hash, parts[2])
-				for _, s := range seriesList {
-					if s == parts[4] {
-						return &mkDirInfo{name: parts[4], modTime: modTime}, nil
-					}
+				if slices.Contains(seriesList, parts[4]) {
+					return &mkDirInfo{name: parts[4], modTime: modTime}, nil
 				}
 			}
 		}
@@ -383,10 +382,8 @@ func (fs *WebDAVFS) Stat(ctx context.Context, name string) (_ os.FileInfo, err e
 		if parts[1] == dirOnDemand && fs.groupExists(ctx, hash, parts[2]) && parts[3] == dirSeries {
 			// Season Dir
 			seasons := getSeasonsList(ctx, hash, parts[2], parts[4])
-			for _, s := range seasons {
-				if s == parts[5] {
-					return &mkDirInfo{name: parts[5], modTime: modTime}, nil
-				}
+			if slices.Contains(seasons, parts[5]) {
+				return &mkDirInfo{name: parts[5], modTime: modTime}, nil
 			}
 		}
 	case 7:
@@ -419,11 +416,9 @@ func resolveFileMetadata(ctx context.Context, hash string, stream map[string]str
 			attribute.String("metadata.source", "cache"),
 			attribute.Int64("file.size", meta.Size),
 		)
-		mt := defaultModTime
-		if !meta.ModTime.IsZero() {
-			mt = meta.ModTime
-		}
-		return &mkFileInfo{name: name, size: meta.Size, modTime: mt}, nil
+		// Use cached modtime directly (even if zero), as cache contains successfully fetched metadata
+		// Only fall back to defaultModTime if we never successfully fetched metadata (handled in final fallback)
+		return &mkFileInfo{name: name, size: meta.Size, modTime: meta.ModTime}, nil
 	}
 
 	// 1b. Try Persistent FileCache
@@ -438,11 +433,8 @@ func resolveFileMetadata(ctx context.Context, hash string, stream map[string]str
 		fileMeta := FileMeta{Size: meta.Size, ModTime: meta.ModTime}
 		updateMetadataCache(hash, targetURL, fileMeta)
 
-		mt := defaultModTime
-		if !meta.ModTime.IsZero() {
-			mt = meta.ModTime
-		}
-		return &mkFileInfo{name: name, size: meta.Size, modTime: mt}, nil
+		// Use filecache modtime directly (even if zero), as filecache contains successfully fetched metadata
+		return &mkFileInfo{name: name, size: meta.Size, modTime: meta.ModTime}, nil
 	}
 
 	// 2. Try M3U attributes (only if this is the video stream)
@@ -473,11 +465,9 @@ func resolveFileMetadata(ctx context.Context, hash string, stream map[string]str
 			attribute.String("metadata.source", "remote"),
 			attribute.Int64("file.size", meta.Size),
 		)
-		mt := defaultModTime
-		if !meta.ModTime.IsZero() {
-			mt = meta.ModTime
-		}
-		return &mkFileInfo{name: name, size: meta.Size, modTime: mt}, nil
+		// Use remote modtime directly (even if zero).
+		// If remote doesn't provide Last-Modified, we should respect that, not fall back to M3U modtime.
+		return &mkFileInfo{name: name, size: meta.Size, modTime: meta.ModTime}, nil
 	}
 
 	// Fallback: If M3U had size, use it even if remote fetch failed
@@ -786,10 +776,9 @@ func (d *webdavDir) readDirOnDemandGroupSub(ctx context.Context, hash, sub, grou
 			}
 
 			size := meta.Size
-			mt := modTime
-			if !meta.ModTime.IsZero() {
-				mt = meta.ModTime
-			}
+			// Use cached modtime directly (even if zero).
+			// Don't fall back to M3U file modtime if remote didn't provide Last-Modified.
+			mt := meta.ModTime
 
 			infos = append(infos, &mkFileInfo{name: f.Name, size: size, modTime: mt})
 		}
@@ -816,7 +805,7 @@ func (d *webdavDir) readDirSeries(ctx context.Context, hash, sub, group, series 
 	return infos, nil
 }
 
-func (d *webdavDir) readDirSeason(ctx context.Context, hash, sub, group, series, season string, modTime time.Time) ([]os.FileInfo, error) {
+func (d *webdavDir) readDirSeason(ctx context.Context, hash, sub, group, series, season string, _ time.Time) ([]os.FileInfo, error) {
 	if sub != dirOnDemand {
 		return nil, nil
 	}
@@ -851,10 +840,9 @@ func (d *webdavDir) readDirSeason(ctx context.Context, hash, sub, group, series,
 		}
 
 		size := meta.Size
-		mt := modTime
-		if !meta.ModTime.IsZero() {
-			mt = meta.ModTime
-		}
+		// Use cached modtime directly (even if zero).
+		// Don't fall back to M3U file modtime if remote didn't provide Last-Modified.
+		mt := meta.ModTime
 
 		infos = append(infos, &mkFileInfo{name: f.Name, size: size, modTime: mt})
 	}
@@ -946,9 +934,14 @@ func (s *webdavStream) Read(p []byte) (n int, err error) {
 	// For now we instrument it as requested.
 	_, span := otel.Tracer("webdav").Start(s.ctx, "Read")
 	defer span.End()
-	span.SetAttributes(attribute.String("webdav.stream_name", s.name))
+	span.SetAttributes(
+		attribute.String("webdav.stream_name", s.name),
+		attribute.Int64("s.pos_at_start", s.pos),
+		attribute.Bool("readCloser_nil", s.readCloser == nil),
+	)
 
 	if s.readCloser == nil {
+		span.AddEvent("calling_openStream_from_read_start")
 		if err := s.openStream(s.pos); err != nil {
 			span.RecordError(err)
 			return 0, err
@@ -990,6 +983,10 @@ func (s *webdavStream) Read(p []byte) (n int, err error) {
 
 	if err != nil && err != io.EOF {
 		span.RecordError(err)
+		span.AddEvent("entering_retry_loop", trace.WithAttributes(
+			attribute.Int("bytes_read", n),
+			attribute.Int64("s.pos", s.pos),
+		))
 		// Attempt to retry
 		const maxRetries = 3
 		for i := 0; i < maxRetries; i++ {
@@ -1002,6 +999,10 @@ func (s *webdavStream) Read(p []byte) (n int, err error) {
 			}
 
 			// Re-open stream at current position
+			span.AddEvent("retry_calling_openStream", trace.WithAttributes(
+				attribute.Int("retry_iteration", i),
+				attribute.Int64("offset_param", s.pos),
+			))
 			if openErr := s.openStream(s.pos); openErr != nil {
 				continue // Retry open
 			}
@@ -1102,8 +1103,17 @@ func (s *webdavStream) openStream(offset int64) (err error) {
 
 	span.SetAttributes(
 		attribute.Int64("offset", offset),
+		attribute.Int64("s.pos", s.pos),
 		attribute.String("webdav.stream_name", s.name),
 	)
+
+	// Debug: log offset vs s.pos mismatch
+	if offset != s.pos {
+		span.AddEvent("offset_mismatch", trace.WithAttributes(
+			attribute.Int64("offset_param", offset),
+			attribute.Int64("s.pos_field", s.pos),
+		))
+	}
 
 	url := s.targetURL
 	if url == "" {
@@ -1138,8 +1148,9 @@ func (s *webdavStream) openStream(offset int64) (err error) {
 		}
 	}
 
-	if !exists {
-		// Trigger cache download
+	if !exists && offset == 0 && os.Getenv("XTEVE_DISABLE_CACHE") == "" {
+		// Trigger cache download (only from beginning, not for mid-stream seeks)
+		// Skip caching if XTEVE_DISABLE_CACHE is set (for retry logic tests)
 		client := NewHTTPClient()
 		fc.StartCaching(url, client, Settings.UserAgent)
 	}
@@ -1154,8 +1165,9 @@ func (s *webdavStream) openStream(offset int64) (err error) {
 	}
 
 	// Handle Range header for seeking
-	if s.pos > 0 {
-		req.Header.Set("Range", fmt.Sprintf("bytes=%d-", s.pos))
+	if offset > 0 {
+		req.Header.Set("Range", fmt.Sprintf("bytes=%d-", offset))
+		span.SetAttributes(attribute.String("http.range_header", fmt.Sprintf("bytes=%d-", offset)))
 	}
 
 	req.Header.Set("User-Agent", Settings.UserAgent)
@@ -1173,18 +1185,18 @@ func (s *webdavStream) openStream(offset int64) (err error) {
 		return fmt.Errorf("upstream returned status %d", resp.StatusCode)
 	}
 
-	// Robustness: If we requested a range (s.pos > 0) but got 200 OK, the server
+	// Robustness: If we requested a range (offset > 0) but got 200 OK, the server
 	// ignored the Range header (or dropped it on redirect). We must manually skip bytes.
-	if s.pos > 0 && resp.StatusCode == http.StatusOK {
+	if offset > 0 && resp.StatusCode == http.StatusOK {
 		span.AddEvent("webdav.range_ignored_by_upstream", trace.WithAttributes(
-			attribute.Int64("bytes_to_skip", s.pos),
+			attribute.Int64("bytes_to_skip", offset),
 		))
 		// Discard the prefix we didn't want
-		_, err := io.CopyN(io.Discard, resp.Body, s.pos)
+		_, err := io.CopyN(io.Discard, resp.Body, offset)
 		if err != nil {
 			resp.Body.Close()
 			span.RecordError(err)
-			return fmt.Errorf("failed to skip %d bytes: %w", s.pos, err)
+			return fmt.Errorf("failed to skip %d bytes: %w", offset, err)
 		}
 	}
 
@@ -1241,11 +1253,11 @@ var (
 
 type HashCache struct {
 	Groups          []string
-	Series          map[string][]string              // Key: Group
-	Seasons         map[seasonKey][]string           // Key: Group, Series
+	Series          map[string][]string                // Key: Group
+	Seasons         map[seasonKey][]string             // Key: Group, Series
 	SeasonFiles     map[seasonFileKey][]FileStreamInfo // Key: Group, Series, Season
-	IndividualFiles map[string][]FileStreamInfo      // Key: Group
-	FileMetadata    map[string]FileMeta              // Key: Stream URL
+	IndividualFiles map[string][]FileStreamInfo        // Key: Group
+	FileMetadata    map[string]FileMeta                // Key: Stream URL
 }
 
 type FileMeta struct {
@@ -1414,9 +1426,10 @@ func defaultFetchRemoteMetadata(ctx context.Context, urlStr string) (FileMeta, e
 	defer resp.Body.Close()
 
 	// 3. Check response
-	if resp.StatusCode == http.StatusOK {
+	switch resp.StatusCode {
+	case http.StatusOK:
 		meta.Size = resp.ContentLength
-	} else if resp.StatusCode == http.StatusPartialContent {
+	case http.StatusPartialContent:
 		// Parse Content-Range: bytes start-end/total
 		cr := resp.Header.Get("Content-Range")
 		parts := strings.Split(cr, "/")

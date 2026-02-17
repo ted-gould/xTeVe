@@ -9,6 +9,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -16,6 +17,8 @@ import (
 func TestWebDAVRetryLogic(t *testing.T) {
 	os.Setenv("XTEVE_ALLOW_LOOPBACK", "true")
 	defer os.Unsetenv("XTEVE_ALLOW_LOOPBACK")
+	os.Setenv("XTEVE_DISABLE_CACHE", "true")
+	defer os.Unsetenv("XTEVE_DISABLE_CACHE")
 
 	// Setup a test server that simulates a dropped connection
 	fullContent := "0123456789"
@@ -98,15 +101,28 @@ func TestWebDAVRetryLogic(t *testing.T) {
 
 	// Save original global state
 	origFolderData := System.Folder.Data
+	origFolderCache := System.Folder.Cache
+	origFolderTemp := System.Folder.Temp
 	origFilesM3U := Settings.Files.M3U
 	origStreamsAll := Data.Streams.All
 	defer func() {
 		System.Folder.Data = origFolderData
+		System.Folder.Cache = origFolderCache
+		System.Folder.Temp = origFolderTemp
 		Settings.Files.M3U = origFilesM3U
 		Data.Streams.All = origStreamsAll
+		// Reset global file cache so next test gets a fresh instance
+		globalFileCache = nil
+		globalFileCacheOnce = sync.Once{}
 	}()
 
 	System.Folder.Data = tempDir
+	// Use a non-existent directory for cache to effectively disable caching
+	System.Folder.Cache = tempDir + "/no-cache"
+	System.Folder.Temp = tempDir + "/no-cache"
+	// Reset global file cache to use new temp directory
+	globalFileCache = nil
+	globalFileCacheOnce = sync.Once{}
 	Settings.Files.M3U = make(map[string]interface{})
 	hash := "retryhash"
 	Settings.Files.M3U[hash] = map[string]interface{}{"name": "Retry Playlist"}
@@ -143,8 +159,6 @@ func TestWebDAVRetryLogic(t *testing.T) {
 	defer f.Close()
 
 	// Read from it
-	// We use a small buffer to force multiple reads if necessary, though ReadAll handles that.
-	// But ReadAll is fine.
 	start := time.Now()
 	content, err := io.ReadAll(f)
 	if err != nil {

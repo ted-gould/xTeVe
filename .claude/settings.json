@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(/tmp/webdav_test.bin -test.v -test.run \"TestWebDAVTimestamp|TestWebDAVFS_ZeroSize|TestWebDAVFS_SizeFallback\")"
+    ]
+  }
+}

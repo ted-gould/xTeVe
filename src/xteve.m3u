@@ -1,0 +1,3 @@
+#EXTM3U url-tvg="http://localhost:34400/xmltv/xteve.xml" x-tvg-url="http://localhost:34400/xmltv/xteve.xml"
+#EXTINF:0 channelID="1000" tvg-chno="1000" tvg-name="Channel 1" tvg-id="channel1.tv" tvg-logo="logo1.png" group-title="Group 1",Channel 1
+://localhost:34400/stream/0e2dc4adf63c7a9afdb81ea40d5ea63d

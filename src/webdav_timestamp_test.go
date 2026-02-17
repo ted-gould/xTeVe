@@ -12,9 +12,12 @@ import (
 func TestWebDAVTimestamp(t *testing.T) {
 	// Mock fetchRemoteMetadataFunc
 	origFetchRemoteMetadataFunc := fetchRemoteMetadataFunc
+
+	// Set a specific remote modtime (e.g., 4 hours ago) to simulate Last-Modified from remote
+	remoteModTime := time.Now().Add(-4 * time.Hour).Truncate(time.Second)
 	fetchRemoteMetadataFunc = func(ctx context.Context, urlStr string) (FileMeta, error) {
-		// Return zero time so that the FS uses the defaultModTime (from JSON/M3U)
-		return FileMeta{Size: 1024, ModTime: time.Time{}}, nil
+		// Return remote modtime (simulating Last-Modified header from remote server)
+		return FileMeta{Size: 1024, ModTime: remoteModTime}, nil
 	}
 	defer func() { fetchRemoteMetadataFunc = origFetchRemoteMetadataFunc }()
 
@@ -100,22 +103,23 @@ func TestWebDAVTimestamp(t *testing.T) {
 		}
 	}
 
-	// All checks should return the JSON content timestamp, not the JSON file timestamp or M3U timestamp
+	// All checks should return the remote timestamp when available, not the JSON/M3U timestamp
+	// This ensures we use Last-Modified from remote servers instead of falling back to M3U modtime
 
-	// 1. Check Hash Dir
+	// 1. Check Hash Dir - uses JSON content timestamp for directory itself
 	checkTimestamp("/" + hash, jsonContentTime)
 
-	// 2. Check On Demand Dir
+	// 2. Check On Demand Dir - uses JSON content timestamp for directory itself
 	checkTimestamp("/" + hash + "/" + dirOnDemand, jsonContentTime)
 
-	// 3. Check Group Dir
+	// 3. Check Group Dir - uses JSON content timestamp for directory itself
 	checkTimestamp("/" + hash + "/" + dirOnDemand + "/Test Group", jsonContentTime)
 
-	// 4. Check Individual Dir
+	// 4. Check Individual Dir - uses JSON content timestamp for directory itself
 	checkTimestamp("/" + hash + "/" + dirOnDemand + "/Test Group/" + dirIndividual, jsonContentTime)
 
-	// 5. Check File
-	checkTimestamp("/" + hash + "/" + dirOnDemand + "/Test Group/" + dirIndividual + "/Test Stream.mp4", jsonContentTime)
+	// 5. Check File - should use REMOTE timestamp, not JSON timestamp
+	checkTimestamp("/" + hash + "/" + dirOnDemand + "/Test Group/" + dirIndividual + "/Test Stream.mp4", remoteModTime)
 
 	// 6. Check Listing File
 	// Listing file is the actual M3U content, so its timestamp should be from the M3U file?
@@ -133,7 +137,7 @@ func TestWebDAVTimestamp(t *testing.T) {
 	// So listing file will use M3U time. I'll assert M3U time for listing file, and JSON time for dirs.
 	checkTimestamp("/" + hash + "/" + fileListing, m3uTime)
 
-    // Check Readdir timestamps
+    // Check Readdir timestamps - should use remote timestamp
     f, err := fs.OpenFile(ctx, "/" + hash + "/" + dirOnDemand + "/Test Group/" + dirIndividual, os.O_RDONLY, 0)
     if err != nil {
         t.Fatalf("Failed to open Individual dir: %v", err)
@@ -147,8 +151,8 @@ func TestWebDAVTimestamp(t *testing.T) {
     for _, info := range infos {
         if info.Name() == "Test Stream.mp4" {
             found = true
-            if !info.ModTime().Truncate(time.Second).Equal(jsonContentTime.Truncate(time.Second)) {
-                 t.Errorf("Readdir Timestamp for Test Stream.mp4 mismatch. Expected %v, got %v", jsonContentTime, info.ModTime())
+            if !info.ModTime().Truncate(time.Second).Equal(remoteModTime.Truncate(time.Second)) {
+                 t.Errorf("Readdir Timestamp for Test Stream.mp4 mismatch. Expected %v (remote), got %v", remoteModTime, info.ModTime())
             }
         }
     }
