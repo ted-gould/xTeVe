@@ -25,6 +25,15 @@ This file consolidates critical learnings, architectural decisions, security gui
 * **WebDAV**:
     * **Plex Naming**: `generateFileStreamInfos` enforces strict naming (`Series - SXXEXX`) and sanitizes filenames (spaces preserved, slashes replaced).
     * **Image Handling**: `uploadLogo` validates extensions against an allowlist and uses `filepath.Base` for sanitization.
+    * **Modification Time Logic**:
+        * **Priority Order**:
+            1. **JSON Cache**: Check the `mod_time` in the `filecache` JSON sidecar file.
+            2. **M3U Internal**: Check M3U attributes (e.g., `time`, `date`, `mtime`).
+            3. **HTTP HEAD**: Perform a HEAD request to the stream URL.
+            4. **HTTP GET (Partial)**: Perform a partial GET request (first 1MB) and check headers.
+            5. **JSON File Stat**: Use the modification time of the `filecache` JSON file itself.
+            6. **M3U File Stat**: Use the modification time of the source M3U file.
+        * **Persistence**: The determined modification time is always written back to the JSON cache file to ensure consistency.
 * **M3U8 Parser**:
     * **Pre-allocation**: `ParseM3U8` uses `strings.Count` to estimate segment count and pre-allocate slices.
 * **Concurrency**:
