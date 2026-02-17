@@ -410,80 +410,121 @@ func resolveFileMetadata(ctx context.Context, hash string, stream map[string]str
 	defer span.End()
 	span.SetAttributes(attribute.String("target_url", targetURL))
 
-	// 1. Try Cache
+	// Step 0: Try In-Memory Cache (Optimization)
 	if meta, found := resolveMetadataFromCache(hash, targetURL); found {
 		span.SetAttributes(
-			attribute.String("metadata.source", "cache"),
+			attribute.String("metadata.source", "memory_cache"),
 			attribute.Int64("file.size", meta.Size),
 		)
-		// Use cached modtime directly (even if zero), as cache contains successfully fetched metadata
-		// Only fall back to defaultModTime if we never successfully fetched metadata (handled in final fallback)
 		return &mkFileInfo{name: name, size: meta.Size, modTime: meta.ModTime}, nil
 	}
 
-	// 1b. Try Persistent FileCache
 	fc := getFileCache()
-	if _, meta, found := fc.Get(targetURL); found && meta != nil {
-		span.SetAttributes(
-			attribute.String("metadata.source", "filecache"),
-			attribute.Int64("file.size", meta.Size),
-		)
+	var finalModTime time.Time
+	var finalSize int64
+	var source string
+	var metaFromCache *filecache.Metadata
+	var foundInCache bool
+
+	// Step 1: Check JSON Cache File
+	cacheMeta, jsonInfo, jsonExists := fc.GetMetadata(targetURL)
+	if jsonExists && cacheMeta != nil {
+		metaFromCache = cacheMeta
+		foundInCache = true
+		if !cacheMeta.ModTime.IsZero() {
+			finalModTime = cacheMeta.ModTime
+			finalSize = cacheMeta.Size
+			source = "json_cache"
+		}
+	}
+
+	// Step 2: Check M3U File Internal
+	if finalModTime.IsZero() {
+		m3uMeta, m3uFound := resolveMetadataFromM3U(hash, stream, targetURL)
+		if m3uFound {
+			if !m3uMeta.ModTime.IsZero() {
+				finalModTime = m3uMeta.ModTime
+				source = "m3u_internal"
+			}
+			// Use size from M3U if we don't have it yet
+			if finalSize == 0 && m3uMeta.Size > 0 {
+				finalSize = m3uMeta.Size
+			}
+		}
+	}
+
+	// Step 3 & 4: Remote Request (HEAD / GET)
+	if finalModTime.IsZero() {
+		remoteMeta, err := resolveMetadataFromRemote(ctx, hash, targetURL)
+		if err == nil {
+			if !remoteMeta.ModTime.IsZero() {
+				finalModTime = remoteMeta.ModTime
+				source = "remote"
+			}
+			if finalSize == 0 && remoteMeta.Size > 0 {
+				finalSize = remoteMeta.Size
+			}
+		}
+	}
+
+	// Step 5: JSON File Creation Time
+	if finalModTime.IsZero() && jsonExists && jsonInfo != nil {
+		finalModTime = jsonInfo.ModTime()
+		source = "json_file_stat"
+	}
+
+	// Step 6: M3U File Modification Time
+	if finalModTime.IsZero() {
+		finalModTime = defaultModTime
+		source = "m3u_file_stat"
+	}
+
+	// "In any of the cases the modification time should be written into the JSON file."
+	if !finalModTime.IsZero() {
+		// Prepare metadata to write
+		newMeta := filecache.Metadata{
+			URL:     targetURL,
+			ModTime: finalModTime,
+			Size:    finalSize,
+		}
+
+		shouldWrite := !foundInCache
+
+		// If we had existing metadata, preserve other fields?
+		if foundInCache && metaFromCache != nil {
+			newMeta = *metaFromCache
+			newMeta.ModTime = finalModTime
+			if finalSize > 0 {
+				newMeta.Size = finalSize
+			}
+
+			// Check if changed
+			if !finalModTime.Equal(metaFromCache.ModTime) {
+				shouldWrite = true
+			}
+			if finalSize > 0 && finalSize != metaFromCache.Size {
+				shouldWrite = true
+			}
+		} else {
+			newMeta.CachedAt = time.Now()
+			shouldWrite = true
+		}
+
+		// Write to disk only if changed
+		if shouldWrite {
+			fc.WriteMetadata(targetURL, newMeta)
+		}
 
 		// Update in-memory cache
-		fileMeta := FileMeta{Size: meta.Size, ModTime: meta.ModTime}
-		updateMetadataCache(hash, targetURL, fileMeta)
-
-		// Use filecache modtime directly (even if zero), as filecache contains successfully fetched metadata
-		return &mkFileInfo{name: name, size: meta.Size, modTime: meta.ModTime}, nil
-	}
-
-	// 2. Try M3U attributes (only if this is the video stream)
-	m3uMeta, m3uFound := resolveMetadataFromM3U(hash, stream, targetURL)
-	if m3uFound {
-		mt := defaultModTime
-		if !m3uMeta.ModTime.IsZero() {
-			mt = m3uMeta.ModTime
-		}
-		// Only return if we have BOTH size and modTime.
-		// If we only have size, we should still try to get the modTime from remote.
-		if m3uMeta.Size > 0 && !m3uMeta.ModTime.IsZero() {
-			span.SetAttributes(
-				attribute.String("metadata.source", "m3u"),
-				attribute.Int64("file.size", m3uMeta.Size),
-			)
-			return &mkFileInfo{name: name, size: m3uMeta.Size, modTime: mt}, nil
-		}
-		// Update defaultModTime with what we found (if it's not zero), but continue to remote fetch
-		if !mt.IsZero() {
-			defaultModTime = mt
-		}
-	}
-
-	// 3. Remote fetch
-	if meta, err := resolveMetadataFromRemote(ctx, hash, targetURL); err == nil {
-		span.SetAttributes(
-			attribute.String("metadata.source", "remote"),
-			attribute.Int64("file.size", meta.Size),
-		)
-		// Use remote modtime directly (even if zero).
-		// If remote doesn't provide Last-Modified, we should respect that, not fall back to M3U modtime.
-		return &mkFileInfo{name: name, size: meta.Size, modTime: meta.ModTime}, nil
-	}
-
-	// Fallback: If M3U had size, use it even if remote fetch failed
-	if m3uFound && m3uMeta.Size > 0 {
-		span.SetAttributes(
-			attribute.String("metadata.source", "m3u_fallback"),
-			attribute.Int64("file.size", m3uMeta.Size),
-		)
-		return &mkFileInfo{name: name, size: m3uMeta.Size, modTime: defaultModTime}, nil
+		updateMetadataCache(hash, targetURL, FileMeta{Size: finalSize, ModTime: finalModTime})
 	}
 
 	span.SetAttributes(
-		attribute.String("metadata.source", "none"),
-		attribute.Int64("file.size", 0),
+		attribute.String("metadata.source", source),
+		attribute.Int64("file.size", finalSize),
 	)
-	return &mkFileInfo{name: name, size: 0, modTime: defaultModTime}, nil
+
+	return &mkFileInfo{name: name, size: finalSize, modTime: finalModTime}, nil
 }
 
 func resolveMetadataFromCache(hash, targetURL string) (FileMeta, bool) {

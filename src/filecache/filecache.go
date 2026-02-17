@@ -152,6 +152,50 @@ func (c *FileCache) Get(url string) (string, *Metadata, bool) {
 	return item.Path, &meta, true
 }
 
+// GetMetadata returns the metadata and file info of the JSON file, even if content is missing.
+func (c *FileCache) GetMetadata(url string) (*Metadata, os.FileInfo, bool) {
+	hash := HashURL(url)
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	// Construct path to JSON file
+	metaPath := filepath.Join(c.dir, hash+".json")
+
+	info, err := os.Stat(metaPath)
+	if err != nil {
+		return nil, nil, false
+	}
+
+	data, err := os.ReadFile(metaPath)
+	if err != nil {
+		return nil, info, true
+	}
+
+	var meta Metadata
+	if err := json.Unmarshal(data, &meta); err != nil {
+		return nil, info, true
+	}
+
+	return &meta, info, true
+}
+
+// WriteMetadata writes the metadata to the JSON cache file.
+func (c *FileCache) WriteMetadata(url string, meta Metadata) error {
+	hash := HashURL(url)
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	meta.URL = url
+	metaPath := filepath.Join(c.dir, hash+".json")
+
+	data, err := json.Marshal(meta)
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(metaPath, data, 0644)
+}
+
 // StartCaching triggers a background download if the file is not already cached.
 func (c *FileCache) StartCaching(url string, client *http.Client, userAgent string) {
 	hash := HashURL(url)
