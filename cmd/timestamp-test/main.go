@@ -24,6 +24,7 @@ var (
 	XTeVePort        = 34400
 	MountPoint       = "./mnt_xteve"
 	ConfigDir        = ".xteve_ts_test"
+	RcloneConfigFile = "rclone.conf"
 )
 
 type WebSocketResponse struct {
@@ -91,6 +92,7 @@ func cleanup() {
 	os.RemoveAll(ConfigDir)
 	unmountRclone()
 	os.RemoveAll(MountPoint)
+	os.Remove(RcloneConfigFile)
 }
 
 func startMockServer() {
@@ -214,6 +216,9 @@ func configureXteve(m3uPath string) error {
 		return fmt.Errorf("failed to trigger update: %w", err)
 	}
 
+	// Wait a bit for processing before WebDAV access
+	time.Sleep(2 * time.Second)
+
 	return nil
 }
 
@@ -237,18 +242,33 @@ func sendRequest(conn *websocket.Conn, request map[string]interface{}) error {
 	return nil
 }
 
+func createRcloneConfig() error {
+	content := fmt.Sprintf(`[xteve]
+type = webdav
+url = http://localhost:%d/dav/
+vendor = other
+`, XTeVePort)
+	return os.WriteFile(RcloneConfigFile, []byte(content), 0644)
+}
+
 func mountRclone() error {
 	if err := os.MkdirAll(MountPoint, 0755); err != nil {
 		return err
 	}
 
+	if err := createRcloneConfig(); err != nil {
+		return fmt.Errorf("failed to create rclone config: %w", err)
+	}
+
 	fmt.Println("Mounting WebDAV via rclone...")
-	webdavURL := fmt.Sprintf("http://localhost:%d/webdav/", XTeVePort)
+
 	args := []string{
 		"mount",
-		":webdav,url=" + webdavURL + ":",
+		"xteve:",
 		MountPoint,
+		"--config", RcloneConfigFile,
 		"--vfs-cache-mode", "off",
+		// "--read-only", // Optional, but WebDAV here is effectively read-only
 	}
 
 	cmd := exec.Command("rclone", args...)
@@ -302,7 +322,8 @@ func verifyFiles() error {
 			if err := checkFiles(); err == nil {
 				return nil
 			} else {
-				// Keep trying
+				// Keep trying, maybe log failure but not return
+				// fmt.Printf("Check failed, retrying... (%v)\n", err)
 			}
 		}
 	}
