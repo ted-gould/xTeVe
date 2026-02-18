@@ -317,6 +317,8 @@ func verifyFiles() error {
 	for {
 		select {
 		case <-timeout:
+			// Debug: List directory contents on failure
+			debugListDir(MountPoint)
 			return fmt.Errorf("timeout waiting for files verification")
 		case <-ticker.C:
 			if err := checkFiles(); err == nil {
@@ -329,14 +331,48 @@ func verifyFiles() error {
 	}
 }
 
+func debugListDir(root string) {
+	fmt.Println("DEBUG: Listing mounted directory:")
+	filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			fmt.Printf("Error accessing %s: %v\n", path, err)
+			return nil
+		}
+		fmt.Printf("%s (IsDir: %v, Size: %d, ModTime: %s)\n", path, info.IsDir(), info.Size(), info.ModTime())
+		return nil
+	})
+}
+
 func checkFiles() error {
 	// Expected paths
-	// On Demand/TestGroup/Internal Time.mp4
-	// On Demand/TestGroup/Remote Time.mp4
-	// On Demand/TestGroup/Fallback Time.mp4
+	// Root will contain the hash of the M3U file
+	// Then On Demand, then TestGroup...
 
-	groupDir := filepath.Join(MountPoint, "On Demand", "TestGroup")
-	entries, err := os.ReadDir(groupDir)
+	// We need to find the hash directory first
+	entries, err := os.ReadDir(MountPoint)
+	if err != nil {
+		return err
+	}
+
+	var hashDir string
+	for _, e := range entries {
+		if e.IsDir() && e.Name() != "On Demand" { // Assuming hash is not "On Demand"
+			// Actually, "On Demand" is inside the hash directory in WebDAV implementation?
+			// WebDAVFS OpenFile:
+			// parts[0] is hash
+			// parts[1] is "On Demand"
+			// So structure is /<hash>/On Demand/<Group>/...
+			hashDir = e.Name()
+			break
+		}
+	}
+
+	if hashDir == "" {
+		return fmt.Errorf("could not find hash directory in root")
+	}
+
+	groupDir := filepath.Join(MountPoint, hashDir, "On Demand", "TestGroup")
+	entries, err = os.ReadDir(groupDir)
 	if err != nil {
 		return fmt.Errorf("failed to read group dir %s: %w", groupDir, err)
 	}
