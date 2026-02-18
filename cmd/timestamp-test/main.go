@@ -121,16 +121,18 @@ func startMockServer() {
 }
 
 func createM3UFile() (string, error) {
+	// Use 127.0.0.1 explicitly to avoid localhost resolution issues in some environments
+	// xTeVe might not like 'localhost' if strict parsing is used somewhere
 	content := fmt.Sprintf(`#EXTM3U
 
 #EXTINF:0 time="%s" size="1000" group-title="TestGroup",Internal Time
-http://localhost:%d/no-time/internal.mp4
+http://127.0.0.1:%d/no-time/internal.mp4
 
 #EXTINF:0 size="2000" group-title="TestGroup",Remote Time
-http://localhost:%d/remote-time/remote.mp4
+http://127.0.0.1:%d/remote-time/remote.mp4
 
 #EXTINF:0 size="3000" group-title="TestGroup",Fallback Time
-http://localhost:%d/no-time/fallback.mp4
+http://127.0.0.1:%d/no-time/fallback.mp4
 `, InternalTime.Format(time.RFC3339), MockServerPort, MockServerPort, MockServerPort)
 
 	cwd, _ := os.Getwd()
@@ -149,7 +151,6 @@ http://localhost:%d/no-time/fallback.mp4
 
 func startXteve() (*exec.Cmd, error) {
 	fmt.Println("Starting xteve server...")
-	// Build the xteve binary first. Using "." to build the package in current directory.
 	buildCmd := exec.Command("go", "build", "-o", "xteve_ts_binary", ".")
 	buildOutput, err := buildCmd.CombinedOutput()
 	if err != nil {
@@ -170,7 +171,6 @@ func stopXteve(cmd *exec.Cmd) {
 		fmt.Println("Stopping xteve server...")
 		cmd.Process.Kill()
 	}
-	// Ensure process named xteve_ts_binary is killed
 	exec.Command("pkill", "xteve_ts_binary").Run()
 }
 
@@ -226,7 +226,6 @@ func sendRequest(conn *websocket.Conn, request map[string]interface{}) error {
 	if err := conn.WriteJSON(request); err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
 	}
-	// We expect a response, usually status: true
 	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 	_, msg, err := conn.ReadMessage()
 	if err != nil {
@@ -268,7 +267,6 @@ func mountRclone() error {
 		MountPoint,
 		"--config", RcloneConfigFile,
 		"--vfs-cache-mode", "off",
-		// "--read-only", // Optional, but WebDAV here is effectively read-only
 	}
 
 	cmd := exec.Command("rclone", args...)
@@ -317,15 +315,13 @@ func verifyFiles() error {
 	for {
 		select {
 		case <-timeout:
-			// Debug: List directory contents on failure
 			debugListDir(MountPoint)
 			return fmt.Errorf("timeout waiting for files verification")
 		case <-ticker.C:
 			if err := checkFiles(); err == nil {
 				return nil
 			} else {
-				// Keep trying, maybe log failure but not return
-				// fmt.Printf("Check failed, retrying... (%v)\n", err)
+				// Keep trying
 			}
 		}
 	}
@@ -344,11 +340,7 @@ func debugListDir(root string) {
 }
 
 func checkFiles() error {
-	// Expected paths
-	// Root will contain the hash of the M3U file
-	// Then On Demand, then TestGroup...
-
-	// We need to find the hash directory first
+	// Find hash directory
 	entries, err := os.ReadDir(MountPoint)
 	if err != nil {
 		return err
@@ -356,12 +348,7 @@ func checkFiles() error {
 
 	var hashDir string
 	for _, e := range entries {
-		if e.IsDir() && e.Name() != "On Demand" { // Assuming hash is not "On Demand"
-			// Actually, "On Demand" is inside the hash directory in WebDAV implementation?
-			// WebDAVFS OpenFile:
-			// parts[0] is hash
-			// parts[1] is "On Demand"
-			// So structure is /<hash>/On Demand/<Group>/...
+		if e.IsDir() && e.Name() != "On Demand" {
 			hashDir = e.Name()
 			break
 		}
@@ -371,10 +358,26 @@ func checkFiles() error {
 		return fmt.Errorf("could not find hash directory in root")
 	}
 
-	groupDir := filepath.Join(MountPoint, hashDir, "On Demand", "TestGroup")
+	// Path structure: /<hash>/On Demand/TestGroup/Individual/
+	groupDir := filepath.Join(MountPoint, hashDir, "On Demand", "TestGroup", "Individual")
 	entries, err = os.ReadDir(groupDir)
 	if err != nil {
-		return fmt.Errorf("failed to read group dir %s: %w", groupDir, err)
+		// Try without "Individual" if grouping is different, but for M3U it defaults to Individual if not Series
+		// Let's list the TestGroup dir to be safe
+		groupDir = filepath.Join(MountPoint, hashDir, "On Demand", "TestGroup")
+		entries, err = os.ReadDir(groupDir)
+		if err != nil {
+			return fmt.Errorf("failed to read group dir %s: %w", groupDir, err)
+		}
+
+		// If "Individual" exists, traverse into it
+		for _, e := range entries {
+			if e.IsDir() && e.Name() == "Individual" {
+				groupDir = filepath.Join(groupDir, "Individual")
+				entries, _ = os.ReadDir(groupDir)
+				break
+			}
+		}
 	}
 
 	if len(entries) == 0 {
@@ -411,15 +414,40 @@ func checkFiles() error {
 		return nil
 	}
 
+	// Internal Time: Should be correct (2021-02-02)
 	if err := verify("Internal Time.mp4", InternalTime, 2*time.Second); err != nil {
 		return err
 	}
 
+	// Remote Time: Should be correct (2022-03-03)
 	if err := verify("Remote Time.mp4", RemoteTime, 2*time.Second); err != nil {
 		return err
 	}
 
+	// Fallback Time: This was failing.
+	// xTeVe creates a new file.json for the m3u. The modification time of the M3U FILE itself might be preserved
+	// IF xTeVe reads it. But xTeVe might not have access to the original file mod time if it downloads it via HTTP?
+	// Oh, in this test we pass a local file path to xTeVe via `url: m3uPath`.
+	// However, if xTeVe treats it as a URL (file:// or just path), it might stat it.
+	// BUT, if it fails to resolve remote metadata, it falls back to:
+	// Step 6: M3U File Modification Time.
+	// In the failing run, we saw: ModTime: 1754-08-30...
+	// This is often a zero value or uninitialized value issue.
+	// Or maybe it's just defaulting to Now() but printed weirdly? No, that date is very specific.
+	// Wait, 1754? That's weird.
+	// Let's relax the check for Fallback Time for now to just "not zero" or "recent"
+	// until we debug why it's weird.
+	// Update: Wait, if the file is local, xTeVe might update the M3U content locally in its data dir.
+	// Let's just check if it matches M3UFileTime OR is recent (created now).
+
+	// For now, let's keep strict check to debug, but maybe tolerate if it's "now".
+
+	// Actually, the log showed 1754. That looks like a zero time + offset or something.
+	// The debug print will help.
+	// For now, let's accept M3UFileTime.
+
 	if err := verify("Fallback Time.mp4", M3UFileTime, 2*time.Second); err != nil {
+		// Log but don't fail immediately to see other checks? No, fail.
 		return err
 	}
 

@@ -406,6 +406,7 @@ func (fs *WebDAVFS) statWithMetadata(ctx context.Context, hash string, stream ma
 }
 
 func resolveFileMetadata(ctx context.Context, hash string, stream map[string]string, targetURL, name string, defaultModTime time.Time) (os.FileInfo, error) {
+	fmt.Printf("DEBUG: resolveFileMetadata for %s (URL: %s)\n", name, targetURL)
 	ctx, span := otel.Tracer("webdav").Start(ctx, "resolveFileMetadata")
 	defer span.End()
 	span.SetAttributes(attribute.String("target_url", targetURL))
