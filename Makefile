@@ -68,6 +68,10 @@ e2e-streaming-test: build build-streamer
 	@echo "--- Running E2E streaming tests ---"
 	$(GO) run cmd/e2e-streaming-test/main.go
 
+timestamp-test: build
+	@echo "--- Running Timestamp Integration Test ---"
+	$(GO) run cmd/timestamp-test/main.go
+
 build-streamer:
 	@echo "--- Building E2E streamer ---"
 	$(GO) build -o streamer_binary ./cmd/e2e-streaming-test/streamer
