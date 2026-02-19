@@ -151,6 +151,7 @@ http://127.0.0.1:%d/no-time/fallback.mp4
 
 func startXteve() (*exec.Cmd, error) {
 	fmt.Println("Starting xteve server...")
+	// Build the xteve binary first. Using "." to build the package in current directory.
 	buildCmd := exec.Command("go", "build", "-o", "xteve_ts_binary", ".")
 	buildOutput, err := buildCmd.CombinedOutput()
 	if err != nil {
@@ -158,6 +159,8 @@ func startXteve() (*exec.Cmd, error) {
 	}
 
 	cmd := exec.Command("./xteve_ts_binary", fmt.Sprintf("-port=%d", XTeVePort), fmt.Sprintf("-config=%s", ConfigDir))
+	// Set XTEVE_ALLOW_LOOPBACK to true to bypass SSRF protection for test mock server
+	cmd.Env = append(os.Environ(), "XTEVE_ALLOW_LOOPBACK=true")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Start(); err != nil {
@@ -171,6 +174,7 @@ func stopXteve(cmd *exec.Cmd) {
 		fmt.Println("Stopping xteve server...")
 		cmd.Process.Kill()
 	}
+	// Ensure process named xteve_ts_binary is killed
 	exec.Command("pkill", "xteve_ts_binary").Run()
 }
 
@@ -226,6 +230,7 @@ func sendRequest(conn *websocket.Conn, request map[string]interface{}) error {
 	if err := conn.WriteJSON(request); err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
 	}
+	// We expect a response, usually status: true
 	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 	_, msg, err := conn.ReadMessage()
 	if err != nil {
@@ -424,30 +429,13 @@ func checkFiles() error {
 		return err
 	}
 
-	// Fallback Time: This was failing.
-	// xTeVe creates a new file.json for the m3u. The modification time of the M3U FILE itself might be preserved
-	// IF xTeVe reads it. But xTeVe might not have access to the original file mod time if it downloads it via HTTP?
-	// Oh, in this test we pass a local file path to xTeVe via `url: m3uPath`.
-	// However, if xTeVe treats it as a URL (file:// or just path), it might stat it.
-	// BUT, if it fails to resolve remote metadata, it falls back to:
-	// Step 6: M3U File Modification Time.
-	// In the failing run, we saw: ModTime: 1754-08-30...
-	// This is often a zero value or uninitialized value issue.
-	// Or maybe it's just defaulting to Now() but printed weirdly? No, that date is very specific.
-	// Wait, 1754? That's weird.
-	// Let's relax the check for Fallback Time for now to just "not zero" or "recent"
-	// until we debug why it's weird.
-	// Update: Wait, if the file is local, xTeVe might update the M3U content locally in its data dir.
-	// Let's just check if it matches M3UFileTime OR is recent (created now).
-
-	// For now, let's keep strict check to debug, but maybe tolerate if it's "now".
-
-	// Actually, the log showed 1754. That looks like a zero time + offset or something.
-	// The debug print will help.
-	// For now, let's accept M3UFileTime.
+	// Fallback Time: This will still be M3UFileTime because we passed it as a local file,
+	// BUT xTeVe fails to fetch it via loopback too (unless we allow it).
+	// With ALLOW_LOOPBACK, it should fetch metadata (fails, because no-time endpoint gives no time)
+	// and fall back to M3U file stat.
+	// We expect M3UFileTime.
 
 	if err := verify("Fallback Time.mp4", M3UFileTime, 2*time.Second); err != nil {
-		// Log but don't fail immediately to see other checks? No, fail.
 		return err
 	}
 
