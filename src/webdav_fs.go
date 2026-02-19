@@ -406,13 +406,14 @@ func (fs *WebDAVFS) statWithMetadata(ctx context.Context, hash string, stream ma
 }
 
 func resolveFileMetadata(ctx context.Context, hash string, stream map[string]string, targetURL, name string, defaultModTime time.Time) (os.FileInfo, error) {
-	fmt.Printf("DEBUG: resolveFileMetadata for %s (URL: %s)\n", name, targetURL)
+	fmt.Printf("DEBUG: resolveFileMetadata START for %s (URL: %s)\n", name, targetURL)
 	ctx, span := otel.Tracer("webdav").Start(ctx, "resolveFileMetadata")
 	defer span.End()
 	span.SetAttributes(attribute.String("target_url", targetURL))
 
 	// Step 0: Try In-Memory Cache (Optimization)
 	if meta, found := resolveMetadataFromCache(hash, targetURL); found {
+		fmt.Printf("DEBUG: Found in memory cache: Size=%d, ModTime=%s\n", meta.Size, meta.ModTime)
 		span.SetAttributes(
 			attribute.String("metadata.source", "memory_cache"),
 			attribute.Int64("file.size", meta.Size),
@@ -436,6 +437,7 @@ func resolveFileMetadata(ctx context.Context, hash string, stream map[string]str
 			finalModTime = cacheMeta.ModTime
 			finalSize = cacheMeta.Size
 			source = "json_cache"
+			fmt.Printf("DEBUG: Found in JSON cache: Size=%d, ModTime=%s\n", finalSize, finalModTime)
 		}
 	}
 
@@ -446,6 +448,7 @@ func resolveFileMetadata(ctx context.Context, hash string, stream map[string]str
 			if !m3uMeta.ModTime.IsZero() {
 				finalModTime = m3uMeta.ModTime
 				source = "m3u_internal"
+				fmt.Printf("DEBUG: Found in M3U internal: ModTime=%s\n", finalModTime)
 			}
 			// Use size from M3U if we don't have it yet
 			if finalSize == 0 && m3uMeta.Size > 0 {
@@ -461,10 +464,15 @@ func resolveFileMetadata(ctx context.Context, hash string, stream map[string]str
 			if !remoteMeta.ModTime.IsZero() {
 				finalModTime = remoteMeta.ModTime
 				source = "remote"
+				fmt.Printf("DEBUG: Found in REMOTE: Size=%d, ModTime=%s\n", remoteMeta.Size, remoteMeta.ModTime)
+			} else {
+				fmt.Printf("DEBUG: Remote returned NO ModTime, Size=%d\n", remoteMeta.Size)
 			}
 			if finalSize == 0 && remoteMeta.Size > 0 {
 				finalSize = remoteMeta.Size
 			}
+		} else {
+			fmt.Printf("DEBUG: Remote fetch ERROR: %v\n", err)
 		}
 	}
 
@@ -472,12 +480,14 @@ func resolveFileMetadata(ctx context.Context, hash string, stream map[string]str
 	if finalModTime.IsZero() && jsonExists && jsonInfo != nil {
 		finalModTime = jsonInfo.ModTime()
 		source = "json_file_stat"
+		fmt.Printf("DEBUG: Using JSON file stat: %s\n", finalModTime)
 	}
 
 	// Step 6: M3U File Modification Time
 	if finalModTime.IsZero() {
 		finalModTime = defaultModTime
 		source = "m3u_file_stat"
+		fmt.Printf("DEBUG: Using M3U file stat (default): %s\n", finalModTime)
 	}
 
 	// "In any of the cases the modification time should be written into the JSON file."
