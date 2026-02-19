@@ -134,9 +134,9 @@ func TestWebDAVFS_Filtering(t *testing.T) {
 		t.Errorf("Expected 'Good Video.mp4' to be listed")
 	}
 
-	// 2. Bad Video.mp4 -> Absent
-	if files["Bad Video.mp4"] {
-		t.Errorf("Expected 'Bad Video.mp4' to NOT be listed")
+	// 2. Bad Video.mp4 -> Present (Fallback behavior)
+	if !files["Bad Video.mp4"] {
+		t.Errorf("Expected 'Bad Video.mp4' to be listed (fallback)")
 	}
 
 	// 3. Good with Good Logo.mp4 -> Present
@@ -148,21 +148,21 @@ func TestWebDAVFS_Filtering(t *testing.T) {
 		t.Errorf("Expected 'Good with Good Logo.jpg' to be listed")
 	}
 
-	// 4. Bad with Good Logo.mp4 -> Absent
-	if files["Bad with Good Logo.mp4"] {
-		t.Errorf("Expected 'Bad with Good Logo.mp4' to NOT be listed")
+	// 4. Bad with Good Logo.mp4 -> Present (Fallback behavior)
+	if !files["Bad with Good Logo.mp4"] {
+		t.Errorf("Expected 'Bad with Good Logo.mp4' to be listed (fallback)")
 	}
-	// 4. Bad with Good Logo.jpg -> Absent (Because video is bad)
-	if files["Bad with Good Logo.jpg"] {
-		t.Errorf("Expected 'Bad with Good Logo.jpg' to NOT be listed (because video is bad)")
+	// 4. Bad with Good Logo.jpg -> Present (Because video is now listed)
+	if !files["Bad with Good Logo.jpg"] {
+		t.Errorf("Expected 'Bad with Good Logo.jpg' to be listed")
 	}
 
 	// 5. Good with Bad Logo.mp4 -> Present
 	if !files["Good with Bad Logo.mp4"] {
 		t.Errorf("Expected 'Good with Bad Logo.mp4' to be listed")
 	}
-	// 5. Good with Bad Logo.jpg -> Absent
-	if files["Good with Bad Logo.jpg"] {
-		t.Errorf("Expected 'Good with Bad Logo.jpg' to NOT be listed")
+	// 5. Good with Bad Logo.jpg -> Present (Fallback behavior)
+	if !files["Good with Bad Logo.jpg"] {
+		t.Errorf("Expected 'Good with Bad Logo.jpg' to be listed (fallback)")
 	}
 }

@@ -500,7 +500,7 @@ func resolveFileMetadata(ctx context.Context, hash string, stream map[string]str
 	}
 
 	// "In any of the cases the modification time should be written into the JSON file."
-	if !finalModTime.IsZero() {
+	if !finalModTime.IsZero() && finalSize > 0 {
 		// Prepare metadata to write
 		newMeta := filecache.Metadata{
 			URL:     targetURL,
@@ -545,6 +545,10 @@ func resolveFileMetadata(ctx context.Context, hash string, stream map[string]str
 		attribute.String("metadata.source", source),
 		attribute.Int64("file.size", finalSize),
 	)
+
+	if finalSize <= 0 {
+		finalSize = 100 * 1024 * 1024 * 1024 // 100GB
+	}
 
 	return &mkFileInfo{name: name, size: finalSize, modTime: finalModTime}, nil
 }
@@ -822,26 +826,26 @@ func (d *webdavDir) readDirOnDemandGroupSub(ctx context.Context, hash, sub, grou
 				continue
 			}
 
-			// Check video stream metadata (if video is unreachable, hide everything related)
-			videoURL := f.Stream["url"]
-			if _, ok := hc.FileMetadata[videoURL]; !ok {
-				continue
-			}
-
 			// Check file metadata
 			if f.TargetURL == "" {
 				continue
 			}
 
-			meta, ok := hc.FileMetadata[f.TargetURL]
-			if !ok {
-				continue
-			}
+			var size int64
+			var mt time.Time
 
-			size := meta.Size
-			// Use cached modtime directly (even if zero).
-			// Don't fall back to M3U file modtime if remote didn't provide Last-Modified.
-			mt := meta.ModTime
+			meta, ok := hc.FileMetadata[f.TargetURL]
+			if ok {
+				size = meta.Size
+				// Use cached modtime directly (even if zero).
+				// Don't fall back to M3U file modtime if remote didn't provide Last-Modified.
+				mt = meta.ModTime
+			} else {
+				// Fallback if metadata is missing (e.g. initial scan failed or pending)
+				// We assume it exists and report large size to allow playback attempt
+				size = 100 * 1024 * 1024 * 1024 // 100GB
+				mt = modTime
+			}
 
 			infos = append(infos, &mkFileInfo{name: f.Name, size: size, modTime: mt})
 		}
@@ -868,7 +872,7 @@ func (d *webdavDir) readDirSeries(ctx context.Context, hash, sub, group, series 
 	return infos, nil
 }
 
-func (d *webdavDir) readDirSeason(ctx context.Context, hash, sub, group, series, season string, _ time.Time) ([]os.FileInfo, error) {
+func (d *webdavDir) readDirSeason(ctx context.Context, hash, sub, group, series, season string, modTime time.Time) ([]os.FileInfo, error) {
 	if sub != dirOnDemand {
 		return nil, nil
 	}
@@ -886,26 +890,26 @@ func (d *webdavDir) readDirSeason(ctx context.Context, hash, sub, group, series,
 			continue
 		}
 
-		// Check video stream metadata (if video is unreachable, hide everything related)
-		videoURL := f.Stream["url"]
-		if _, ok := hc.FileMetadata[videoURL]; !ok {
-			continue
-		}
-
 		// Check file metadata
 		if f.TargetURL == "" {
 			continue
 		}
 
-		meta, ok := hc.FileMetadata[f.TargetURL]
-		if !ok {
-			continue
-		}
+		var size int64
+		var mt time.Time
 
-		size := meta.Size
-		// Use cached modtime directly (even if zero).
-		// Don't fall back to M3U file modtime if remote didn't provide Last-Modified.
-		mt := meta.ModTime
+		meta, ok := hc.FileMetadata[f.TargetURL]
+		if ok {
+			size = meta.Size
+			// Use cached modtime directly (even if zero).
+			// Don't fall back to M3U file modtime if remote didn't provide Last-Modified.
+			mt = meta.ModTime
+		} else {
+			// Fallback if metadata is missing (e.g. initial scan failed or pending)
+			// We assume it exists and report large size to allow playback attempt
+			size = 100 * 1024 * 1024 * 1024 // 100GB
+			mt = modTime
+		}
 
 		infos = append(infos, &mkFileInfo{name: f.Name, size: size, modTime: mt})
 	}
