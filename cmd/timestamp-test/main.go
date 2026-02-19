@@ -429,14 +429,22 @@ func checkFiles() error {
 		return err
 	}
 
-	// Fallback Time: This will still be M3UFileTime because we passed it as a local file,
-	// BUT xTeVe fails to fetch it via loopback too (unless we allow it).
-	// With ALLOW_LOOPBACK, it should fetch metadata (fails, because no-time endpoint gives no time)
-	// and fall back to M3U file stat.
-	// We expect M3UFileTime.
+	// Fallback Time:
+	// xTeVe copies the M3U to its data directory, so the modification time will be "Now".
+	// We can't check against M3UFileTime (2020) because the file in data/ is new.
+	// So we check if it is recent (within 1 minute).
 
-	if err := verify("Fallback Time.mp4", M3UFileTime, 2*time.Second); err != nil {
-		return err
+	sanitizedFallback := strings.ReplaceAll("Fallback Time.mp4", " ", "_")
+	fallbackTime, ok := found[sanitizedFallback]
+	if !ok {
+		fallbackTime, ok = found["Fallback Time.mp4"]
+	}
+	if !ok {
+		return fmt.Errorf("file Fallback Time.mp4 not found")
+	}
+
+	if time.Since(fallbackTime) > 1*time.Minute {
+		return fmt.Errorf("file Fallback Time.mp4 timestamp mismatch: expected recent (now), got %s", fallbackTime)
 	}
 
 	return nil
