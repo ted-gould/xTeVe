@@ -414,11 +414,35 @@ func resolveFileMetadata(ctx context.Context, hash string, stream map[string]str
 	// Step 0: Try In-Memory Cache (Optimization)
 	if meta, found := resolveMetadataFromCache(hash, targetURL); found {
 		fmt.Printf("DEBUG: Found in memory cache: Size=%d, ModTime=%s\n", meta.Size, meta.ModTime)
-		span.SetAttributes(
-			attribute.String("metadata.source", "memory_cache"),
-			attribute.Int64("file.size", meta.Size),
-		)
-		return &mkFileInfo{name: name, size: meta.Size, modTime: meta.ModTime}, nil
+		// If ModTime is present, we are done
+		if !meta.ModTime.IsZero() {
+			span.SetAttributes(
+				attribute.String("metadata.source", "memory_cache"),
+				attribute.Int64("file.size", meta.Size),
+			)
+			return &mkFileInfo{name: name, size: meta.Size, modTime: meta.ModTime}, nil
+		}
+		// If ModTime is zero, we must continue to fallbacks (local file times)
+		// but we can use the cached size.
+		// However, the original code returned immediately if found.
+		// We can't rely on zero ModTime from cache if we want fallback.
+		// Let's treat it as found but with unknown time.
+		// BUT we can't easily jump to Step 5 without modifying flow.
+		// Let's just NOT return if ModTime is zero.
+		// We still benefit from knowing size if we update finalSize?
+		// No, `resolveMetadataFromCache` returns a copy. We need to set `finalSize`.
+		// However, the function structure below uses `finalSize` only if `finalModTime` is found
+		// in Steps 1-4.
+		// So let's just proceed.
+		// Use the cached size if known, but continue to find ModTime
+		if meta.Size > 0 {
+			// Pre-fill size, but we need to pass this to later steps?
+			// The current logic doesn't easily allow passing `finalSize` from step 0 to step 5.
+			// But Step 1-4 assign `finalSize`.
+			// Let's rely on Step 1 (JSON Cache) or Step 3 (Remote) to confirm size again?
+			// No, that defeats the purpose of memory cache.
+			// We should initialize `finalSize` here.
+		}
 	}
 
 	fc := getFileCache()
@@ -427,6 +451,11 @@ func resolveFileMetadata(ctx context.Context, hash string, stream map[string]str
 	var source string
 	var metaFromCache *filecache.Metadata
 	var foundInCache bool
+
+	// Step 0b: Use memory cache size if available
+	if meta, found := resolveMetadataFromCache(hash, targetURL); found && meta.Size > 0 {
+		finalSize = meta.Size
+	}
 
 	// Step 1: Check JSON Cache File
 	cacheMeta, jsonInfo, jsonExists := fc.GetMetadata(targetURL)
