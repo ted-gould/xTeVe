@@ -93,6 +93,7 @@ func cleanup() {
 	unmountRclone()
 	os.RemoveAll(MountPoint)
 	os.Remove(RcloneConfigFile)
+	os.Remove("xteve_ts_binary")
 }
 
 func startMockServer() {

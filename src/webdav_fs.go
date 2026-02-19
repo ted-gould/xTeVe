@@ -49,6 +49,7 @@ const (
 	fileListing   = "listing.m3u"
 	dirSeries     = "Series"
 	dirIndividual = "Individual"
+	FallbackSize  = 100 * 1024 * 1024 * 1024 // 100GB
 )
 
 // WebDAVFS implements the webdav.FileSystem interface
@@ -412,8 +413,8 @@ func resolveFileMetadata(ctx context.Context, hash string, stream map[string]str
 
 	// Step 0: Try In-Memory Cache (Optimization)
 	if meta, found := resolveMetadataFromCache(hash, targetURL); found {
-		// If ModTime is present, we are done
-		if !meta.ModTime.IsZero() {
+		// If ModTime is present and Size is not the fallback, we are done
+		if !meta.ModTime.IsZero() && meta.Size != FallbackSize {
 			span.SetAttributes(
 				attribute.String("metadata.source", "memory_cache"),
 				attribute.Int64("file.size", meta.Size),
@@ -441,8 +442,8 @@ func resolveFileMetadata(ctx context.Context, hash string, stream map[string]str
 	var metaFromCache *filecache.Metadata
 	var foundInCache bool
 
-	// Step 0b: Use memory cache size if available
-	if meta, found := resolveMetadataFromCache(hash, targetURL); found && meta.Size > 0 {
+	// Step 0b: Use memory cache size if available (unless it's fallback size)
+	if meta, found := resolveMetadataFromCache(hash, targetURL); found && meta.Size > 0 && meta.Size != FallbackSize {
 		finalSize = meta.Size
 	}
 
@@ -547,7 +548,7 @@ func resolveFileMetadata(ctx context.Context, hash string, stream map[string]str
 	)
 
 	if finalSize <= 0 {
-		finalSize = 100 * 1024 * 1024 * 1024 // 100GB
+		finalSize = FallbackSize
 	}
 
 	return &mkFileInfo{name: name, size: finalSize, modTime: finalModTime}, nil
@@ -843,7 +844,7 @@ func (d *webdavDir) readDirOnDemandGroupSub(ctx context.Context, hash, sub, grou
 			} else {
 				// Fallback if metadata is missing (e.g. initial scan failed or pending)
 				// We assume it exists and report large size to allow playback attempt
-				size = 100 * 1024 * 1024 * 1024 // 100GB
+				size = FallbackSize
 				mt = modTime
 			}
 
@@ -907,7 +908,7 @@ func (d *webdavDir) readDirSeason(ctx context.Context, hash, sub, group, series,
 		} else {
 			// Fallback if metadata is missing (e.g. initial scan failed or pending)
 			// We assume it exists and report large size to allow playback attempt
-			size = 100 * 1024 * 1024 * 1024 // 100GB
+			size = FallbackSize
 			mt = modTime
 		}
 
@@ -1584,8 +1585,8 @@ func ensureMetadataOptimized(ctx context.Context, hash string, files []FileStrea
 			continue
 		}
 
-		// If already in cache, skip
-		if _, exists := hc.FileMetadata[urlStr]; exists {
+		// If already in cache and not a fallback size, skip
+		if meta, exists := hc.FileMetadata[urlStr]; exists && meta.Size != FallbackSize {
 			continue
 		}
 
