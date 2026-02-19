@@ -2,8 +2,10 @@ package src
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -403,6 +405,120 @@ func TestParseSeriesUserScenario(t *testing.T) {
 				t.Errorf("Input: %s, Expected season: %d, got: %d", tc.input, tc.expectedSeason, season)
 			}
 		}
+	}
+}
+
+func TestWebDAVFS_NoSizeFallback(t *testing.T) {
+	// Mock fetchRemoteMetadataFunc
+	origFetchRemoteMetadataFunc := fetchRemoteMetadataFunc
+
+	var callCount int32
+	fetchRemoteMetadataFunc = func(ctx context.Context, urlStr string) (FileMeta, error) {
+		atomic.AddInt32(&callCount, 1)
+		if urlStr == "http://test.com/nosize.mp4" {
+			// Simulate failure to determine size
+			return FileMeta{}, errors.New("failed to determine file size")
+		}
+		return FileMeta{Size: 1024, ModTime: time.Now()}, nil
+	}
+	defer func() { fetchRemoteMetadataFunc = origFetchRemoteMetadataFunc }()
+
+	// Setup
+	tempDir, err := os.MkdirTemp("", "xteve_webdav_nosize_test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Save original values
+	origFolderData := System.Folder.Data
+	origFilesM3U := Settings.Files.M3U
+	origStreamsAll := Data.Streams.All
+	defer func() {
+		System.Folder.Data = origFolderData
+		Settings.Files.M3U = origFilesM3U
+		Data.Streams.All = origStreamsAll
+	}()
+
+	System.Folder.Data = tempDir
+	Settings.Files.M3U = make(map[string]interface{})
+
+	hash := "nosizehash"
+	ClearWebDAVCache(hash)
+	Settings.Files.M3U[hash] = map[string]interface{}{"name": "Test Playlist"}
+
+	// Create dummy M3U file
+	err = os.WriteFile(filepath.Join(tempDir, hash+".m3u"), []byte("#EXTM3U"), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	Data.Streams.All = []interface{}{
+		map[string]string{
+			"_file.m3u.id": hash,
+			"group-title":  "No Size Group",
+			"name":         "No Size Stream",
+			"url":          "http://test.com/nosize.mp4",
+			"_duration":    "3600", // VOD
+		},
+	}
+
+	fs := &WebDAVFS{}
+	ctx := context.Background()
+
+	// Path: /dav/<hash>/On Demand/No Size Group/Individual/
+	path := "/" + hash + "/" + dirOnDemand + "/No Size Group/" + dirIndividual
+
+	// First Access
+	f, err := fs.OpenFile(ctx, path, os.O_RDONLY, 0)
+	if err != nil {
+		t.Fatalf("Failed to open dir: %v", err)
+	}
+	infos, err := f.Readdir(-1)
+	f.Close()
+	if err != nil {
+		t.Fatalf("Failed to read dir: %v", err)
+	}
+
+	// Verify presence and size
+	if len(infos) != 1 {
+		t.Fatalf("Expected 1 file, got %d", len(infos))
+	}
+
+	fileInfo := infos[0]
+	expectedSize := int64(100 * 1024 * 1024 * 1024)
+	if fileInfo.Size() != expectedSize {
+		t.Errorf("Expected size %d, got %d", expectedSize, fileInfo.Size())
+	}
+
+	// Verify call count (should be at least 1)
+	count1 := atomic.LoadInt32(&callCount)
+	if count1 < 1 {
+		t.Errorf("Expected at least 1 call to fetchRemoteMetadataFunc, got %d", count1)
+	}
+
+	// Second Access
+	f, err = fs.OpenFile(ctx, path, os.O_RDONLY, 0)
+	if err != nil {
+		t.Fatalf("Failed to open dir: %v", err)
+	}
+	infos2, err := f.Readdir(-1)
+	if err != nil {
+		t.Fatalf("Failed to read dir (2nd attempt): %v", err)
+	}
+	f.Close()
+
+	count2 := atomic.LoadInt32(&callCount)
+	if count2 <= count1 {
+		t.Errorf("Expected call count to increase (cached failure?), got %d (was %d)", count2, count1)
+	}
+
+	if len(infos2) != 1 {
+		t.Fatalf("Expected 1 file (2nd attempt), got %d", len(infos2))
+	}
+	fileInfo2 := infos2[0]
+	if fileInfo2.Size() != expectedSize {
+		t.Errorf("Expected size %d (2nd attempt), got %d", expectedSize, fileInfo2.Size())
 	}
 }
 

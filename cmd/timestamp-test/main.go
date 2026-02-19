@@ -93,6 +93,7 @@ func cleanup() {
 	unmountRclone()
 	os.RemoveAll(MountPoint)
 	os.Remove(RcloneConfigFile)
+	os.Remove("xteve_ts_binary")
 }
 
 func startMockServer() {
@@ -116,6 +117,10 @@ func startMockServer() {
 			log.Printf("mock server write error: %v", err)
 		}
 	})
+	mux.HandleFunc("/no-size/", func(w http.ResponseWriter, r *http.Request) {
+		// Return 500 to force metadata fetch failure
+		w.WriteHeader(http.StatusInternalServerError)
+	})
 
 	addr := fmt.Sprintf(":%d", MockServerPort)
 	fmt.Printf("Starting mock server on %s\n", addr)
@@ -137,7 +142,10 @@ http://127.0.0.1:%d/remote-time/remote.mp4
 
 #EXTINF:0 size="3000" group-title="TestGroup",Fallback Time
 http://127.0.0.1:%d/no-time/fallback.mp4
-`, InternalTime.Format(time.RFC3339), MockServerPort, MockServerPort, MockServerPort)
+
+#EXTINF:0 group-title="TestGroup",No Size
+http://127.0.0.1:%d/no-size/nosize.mp4
+`, InternalTime.Format(time.RFC3339), MockServerPort, MockServerPort, MockServerPort, MockServerPort)
 
 	cwd, _ := os.Getwd()
 	path := filepath.Join(cwd, "test.m3u")
@@ -459,6 +467,44 @@ func checkFiles() error {
 
 	if time.Since(fallbackTime) > 1*time.Minute {
 		return fmt.Errorf("file Fallback Time.mp4 timestamp mismatch: expected recent (now), got %s", fallbackTime)
+	}
+
+	// No Size: Should be present and have 100GB size
+	noSizeFile := "No_Size.mp4"
+	noSizeInfo, ok := found[noSizeFile]
+	if !ok {
+		// Maybe it has spaces? The verify logic handles it, but here we check 'found' directly.
+		noSizeFile = "No Size.mp4"
+		noSizeInfo, ok = found[noSizeFile]
+	}
+	if !ok {
+		return fmt.Errorf("file No Size.mp4 not found")
+	}
+
+	// Check size manually
+	// Need to re-read entry info because 'found' only stores ModTime
+	// Let's just find it in entries
+	var noSizeEntry os.DirEntry
+	for _, e := range entries {
+		if e.Name() == "No Size.mp4" || e.Name() == "No_Size.mp4" {
+			noSizeEntry = e
+			break
+		}
+	}
+	if noSizeEntry == nil {
+		return fmt.Errorf("file No Size.mp4 entry not found (should not happen)")
+	}
+	info, err := noSizeEntry.Info()
+	if err != nil {
+		return err
+	}
+	expectedSize := int64(100 * 1024 * 1024 * 1024)
+	if info.Size() != expectedSize {
+		return fmt.Errorf("file No Size.mp4 size mismatch: expected %d, got %d", expectedSize, info.Size())
+	}
+	// ModTime should be recent (fallback to M3U time which is 'now' for the copy)
+	if time.Since(noSizeInfo) > 1*time.Minute {
+		return fmt.Errorf("file No Size.mp4 timestamp mismatch: expected recent (now), got %s", noSizeInfo)
 	}
 
 	return nil
