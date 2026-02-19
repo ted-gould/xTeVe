@@ -118,13 +118,8 @@ func startMockServer() {
 		}
 	})
 	mux.HandleFunc("/no-size/", func(w http.ResponseWriter, r *http.Request) {
-		// No Content-Length
-		content := "video content"
-		// w.Header().Set("Content-Length", ...) // Intentionally omitted
-		w.WriteHeader(http.StatusOK)
-		if _, err := w.Write([]byte(content)); err != nil {
-			log.Printf("mock server write error: %v", err)
-		}
+		// Return 500 to force metadata fetch failure
+		w.WriteHeader(http.StatusInternalServerError)
 	})
 
 	addr := fmt.Sprintf(":%d", MockServerPort)
