@@ -503,6 +503,9 @@ func TestWebDAVFS_NoSizeFallback(t *testing.T) {
 		t.Fatalf("Failed to open dir: %v", err)
 	}
 	infos2, err := f.Readdir(-1)
+	if err != nil {
+		t.Fatalf("Failed to read dir (2nd attempt): %v", err)
+	}
 	f.Close()
 
 	count2 := atomic.LoadInt32(&callCount)
