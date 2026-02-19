@@ -432,15 +432,6 @@ func resolveFileMetadata(ctx context.Context, hash string, stream map[string]str
 		// However, the function structure below uses `finalSize` only if `finalModTime` is found
 		// in Steps 1-4.
 		// So let's just proceed.
-		// Use the cached size if known, but continue to find ModTime
-		if meta.Size > 0 {
-			// Pre-fill size, but we need to pass this to later steps?
-			// The current logic doesn't easily allow passing `finalSize` from step 0 to step 5.
-			// But Step 1-4 assign `finalSize`.
-			// Let's rely on Step 1 (JSON Cache) or Step 3 (Remote) to confirm size again?
-			// No, that defeats the purpose of memory cache.
-			// We should initialize `finalSize` here.
-		}
 	}
 
 	fc := getFileCache()

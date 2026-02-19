@@ -102,7 +102,9 @@ func startMockServer() {
 		content := "video content"
 		w.Header().Set("Content-Length", fmt.Sprintf("%d", len(content)))
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(content))
+		if _, err := w.Write([]byte(content)); err != nil {
+			log.Printf("mock server write error: %v", err)
+		}
 	})
 	mux.HandleFunc("/remote-time/", func(w http.ResponseWriter, r *http.Request) {
 		// Content-Length AND Last-Modified
@@ -110,7 +112,9 @@ func startMockServer() {
 		w.Header().Set("Content-Length", fmt.Sprintf("%d", len(content)))
 		w.Header().Set("Last-Modified", RemoteTime.Format(http.TimeFormat))
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(content))
+		if _, err := w.Write([]byte(content)); err != nil {
+			log.Printf("mock server write error: %v", err)
+		}
 	})
 
 	addr := fmt.Sprintf(":%d", MockServerPort)
@@ -172,10 +176,14 @@ func startXteve() (*exec.Cmd, error) {
 func stopXteve(cmd *exec.Cmd) {
 	if cmd != nil && cmd.Process != nil {
 		fmt.Println("Stopping xteve server...")
-		cmd.Process.Kill()
+		if err := cmd.Process.Kill(); err != nil {
+			log.Printf("failed to kill xteve process: %v", err)
+		}
 	}
-	// Ensure process named xteve_ts_binary is killed
-	exec.Command("pkill", "xteve_ts_binary").Run()
+	if err := exec.Command("pkill", "xteve_ts_binary").Run(); err != nil {
+		// Ignore error if process not found
+		_ = err
+	}
 }
 
 func waitForServerReady(url string) error {
@@ -231,7 +239,9 @@ func sendRequest(conn *websocket.Conn, request map[string]interface{}) error {
 		return fmt.Errorf("failed to send request: %w", err)
 	}
 	// We expect a response, usually status: true
-	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	if err := conn.SetReadDeadline(time.Now().Add(5 * time.Second)); err != nil {
+		return fmt.Errorf("failed to set read deadline: %w", err)
+	}
 	_, msg, err := conn.ReadMessage()
 	if err != nil {
 		return fmt.Errorf("failed to read response: %w", err)
@@ -306,8 +316,12 @@ func isMounted(path string) bool {
 
 func unmountRclone() {
 	fmt.Println("Unmounting...")
-	exec.Command("fusermount", "-u", MountPoint).Run()
-	exec.Command("umount", MountPoint).Run()
+	if err := exec.Command("fusermount", "-u", MountPoint).Run(); err != nil {
+		log.Printf("fusermount error (ignorable): %v", err)
+	}
+	if err := exec.Command("umount", MountPoint).Run(); err != nil {
+		log.Printf("umount error (ignorable): %v", err)
+	}
 }
 
 func verifyFiles() error {
@@ -325,8 +339,6 @@ func verifyFiles() error {
 		case <-ticker.C:
 			if err := checkFiles(); err == nil {
 				return nil
-			} else {
-				// Keep trying
 			}
 		}
 	}
@@ -334,14 +346,16 @@ func verifyFiles() error {
 
 func debugListDir(root string) {
 	fmt.Println("DEBUG: Listing mounted directory:")
-	filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+	if err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			fmt.Printf("Error accessing %s: %v\n", path, err)
 			return nil
 		}
 		fmt.Printf("%s (IsDir: %v, Size: %d, ModTime: %s)\n", path, info.IsDir(), info.Size(), info.ModTime())
 		return nil
-	})
+	}); err != nil {
+		fmt.Printf("Walk error: %v\n", err)
+	}
 }
 
 func checkFiles() error {
