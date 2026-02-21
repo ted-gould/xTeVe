@@ -56,7 +56,7 @@ func TestBuildM3U_Sorting(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	Data.Cache.Images, err = imgcache.New(tempDir, "", false)
+	Data.Cache.Images, err = imgcache.New(tempDir, "", false, NewHTTPClient())
 	if err != nil {
 		t.Fatalf("Failed to init imgcache: %v", err)
 	}
