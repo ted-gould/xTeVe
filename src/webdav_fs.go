@@ -8,7 +8,6 @@ import (
 	"io"
 	"maps"
 	"net/http"
-	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -30,6 +29,15 @@ import (
 var (
 	globalFileCache     *filecache.FileCache
 	globalFileCacheOnce sync.Once
+
+	// Optimization: Pre-allocate maps for O(1) extension lookup
+	vodExtensions = map[string]struct{}{
+		".mp4": {}, ".mkv": {}, ".avi": {}, ".mov": {}, ".wmv": {},
+		".flv": {}, ".webm": {}, ".mpg": {}, ".mpeg": {}, ".m4v": {},
+	}
+	streamExtensions = map[string]struct{}{
+		".m3u8": {}, ".ts": {}, ".php": {}, ".pl": {},
+	}
 )
 
 func getFileCache() *filecache.FileCache {
@@ -1710,11 +1718,22 @@ func sanitizeGroupName(name string) string {
 }
 
 func getExtensionFromURL(urlStr string) string {
-	u, err := url.Parse(urlStr)
-	if err != nil {
-		return path.Ext(urlStr)
+	// Optimization: Avoid url.Parse which allocates.
+	// Strip query parameters and fragments manually.
+	if idx := strings.IndexAny(urlStr, "?#"); idx != -1 {
+		urlStr = urlStr[:idx]
 	}
-	return path.Ext(u.Path)
+
+	// Skip scheme and host to avoid misinterpreting dots in host/IP as extensions
+	if idx := strings.Index(urlStr, "://"); idx != -1 {
+		// Find first '/' after "://"
+		if slash := strings.IndexByte(urlStr[idx+3:], '/'); slash != -1 {
+			return path.Ext(urlStr[idx+3+slash:])
+		}
+		return ""
+	}
+
+	return path.Ext(urlStr)
 }
 
 func getStreamsForGroup(ctx context.Context, hash, group string) []map[string]string {
@@ -2135,15 +2154,12 @@ func isVOD(stream map[string]string) bool {
 	urlStr := stream["url"]
 	ext := strings.ToLower(getExtensionFromURL(urlStr))
 
-	// List of extensions typically associated with VOD
-	vodExts := []string{".mp4", ".mkv", ".avi", ".mov", ".wmv", ".flv", ".webm", ".mpg", ".mpeg", ".m4v"}
-	if slices.Contains(vodExts, ext) {
+	// Optimization: Use O(1) map lookup instead of O(N) slice search
+	if _, ok := vodExtensions[ext]; ok {
 		return true // Is VOD
 	}
 
-	// List of extensions typically associated with streams
-	streamExts := []string{".m3u8", ".ts", ".php", ".pl"} // .php/pl often used for live stream redirects
-	if slices.Contains(streamExts, ext) {
+	if _, ok := streamExtensions[ext]; ok {
 		return false // Is Live
 	}
 
