@@ -464,20 +464,13 @@ func (c *FileCache) RemoveAll() {
 	c.db.Close()
 	os.RemoveAll(c.dir)
 	// Check MkdirAll error
-	if err := os.MkdirAll(c.dir, 0755); err != nil {
-		// If we can't recreate dir, we are in trouble, but this is mainly for tests.
-		// Panic might be acceptable or just return.
-		// Since signature is void, we just log/ignore or panic.
-		// Tests will fail on next step.
-	}
+	_ = os.MkdirAll(c.dir, 0755)
 
 	// Re-init DB
 	dbPath := filepath.Join(c.dir, "cache.db")
 	db, _ := sql.Open("sqlite", dbPath)
 	// Check Exec error
-	if _, err := db.Exec("PRAGMA journal_mode=WAL;"); err != nil {
-		// Handle error?
-	}
+	_, _ = db.Exec("PRAGMA journal_mode=WAL;")
 	c.db = db
 
 	// Create tables again
@@ -500,7 +493,5 @@ func (c *FileCache) RemoveAll() {
 	);
 	`
 	// Check Exec error
-	if _, err := c.db.Exec(query); err != nil {
-		// Handle error?
-	}
+	_, _ = c.db.Exec(query)
 }
