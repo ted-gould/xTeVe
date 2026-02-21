@@ -2,16 +2,18 @@ package filecache
 
 import (
 	"crypto/md5"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
-	"slices"
 	"strconv"
 	"sync"
 	"time"
+
+	_ "modernc.org/sqlite"
 )
 
 const (
@@ -30,16 +32,9 @@ type Metadata struct {
 	Complete    bool      `json:"complete"`
 }
 
-type CacheItem struct {
-	Hash       string
-	Path       string
-	MetaPath   string
-	AccessTime time.Time
-}
-
 type FileCache struct {
 	dir   string
-	items map[string]*CacheItem
+	db    *sql.DB
 	mutex sync.RWMutex
 }
 
@@ -69,11 +64,49 @@ func GetInstance(baseDir string) (*FileCache, error) {
 		return nil, err
 	}
 
-	instance = &FileCache{
-		dir:   cacheDir,
-		items: make(map[string]*CacheItem),
+	dbPath := filepath.Join(cacheDir, "cache.db")
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		return nil, err
 	}
-	instance.loadCache()
+
+	// Enable WAL mode for better concurrency
+	if _, err := db.Exec("PRAGMA journal_mode=WAL;"); err != nil {
+		db.Close()
+		return nil, err
+	}
+
+	// Create tables
+	// cached_at is added to metadata
+	query := `
+	CREATE TABLE IF NOT EXISTS metadata (
+		hash TEXT PRIMARY KEY,
+		url TEXT,
+		size INTEGER,
+		mod_time INTEGER,
+		etag TEXT,
+		content_type TEXT,
+		cached_at INTEGER
+	);
+	CREATE TABLE IF NOT EXISTS cache_files (
+		hash TEXT PRIMARY KEY,
+		cached_at INTEGER,
+		complete BOOLEAN,
+		access_time INTEGER,
+		FOREIGN KEY(hash) REFERENCES metadata(hash)
+	);
+	`
+	if _, err := db.Exec(query); err != nil {
+		db.Close()
+		return nil, err
+	}
+
+	instance = &FileCache{
+		dir: cacheDir,
+		db:  db,
+	}
+
+	instance.migrateFromJSON()
 	go instance.cleaner()
 
 	return instance, nil
@@ -83,28 +116,79 @@ func GetInstance(baseDir string) (*FileCache, error) {
 func Reset() {
 	initMu.Lock()
 	defer initMu.Unlock()
-	instance = nil
+	if instance != nil {
+		instance.db.Close()
+		instance = nil
+	}
 }
 
-func (c *FileCache) loadCache() {
+func (c *FileCache) migrateFromJSON() {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	// Check if migration is needed (metadata table empty)
+	var count int
+	err := c.db.QueryRow("SELECT COUNT(*) FROM metadata").Scan(&count)
+	if err != nil || count > 0 {
+		return
+	}
+
 	entries, err := os.ReadDir(c.dir)
 	if err != nil {
 		return
 	}
+
 	for _, e := range entries {
-		if e.IsDir() || filepath.Ext(e.Name()) == ".json" {
+		if e.IsDir() || filepath.Ext(e.Name()) != ".json" {
 			continue
 		}
-		hash := e.Name()
-		metaPath := filepath.Join(c.dir, hash+".json")
-		if _, err := os.Stat(metaPath); err == nil {
-			c.items[hash] = &CacheItem{
-				Hash:       hash,
-				Path:       filepath.Join(c.dir, hash),
-				MetaPath:   metaPath,
-				AccessTime: time.Now(),
+
+		hash := e.Name()[:len(e.Name())-5] // Remove .json
+		metaPath := filepath.Join(c.dir, e.Name())
+		data, err := os.ReadFile(metaPath)
+		if err != nil {
+			continue
+		}
+
+		var meta Metadata
+		if err := json.Unmarshal(data, &meta); err != nil {
+			continue
+		}
+
+		// Insert metadata
+		// Handle ModTime zero -> NULL
+		var modTimeVal interface{}
+		if !meta.ModTime.IsZero() {
+			modTimeVal = meta.ModTime.UnixNano()
+		} else {
+			modTimeVal = nil
+		}
+
+		_, err = c.db.Exec(`INSERT OR REPLACE INTO metadata (hash, url, size, mod_time, etag, content_type, cached_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+			hash, meta.URL, meta.Size, modTimeVal, meta.ETag, meta.ContentType, meta.CachedAt.UnixNano())
+		if err != nil {
+			continue
+		}
+
+		// Check content file
+		contentPath := filepath.Join(c.dir, hash)
+		if info, err := os.Stat(contentPath); err == nil {
+			// Insert cache_files
+			accessTime := time.Now().UnixNano()
+			cachedAt := meta.CachedAt.UnixNano()
+			if meta.CachedAt.IsZero() {
+				cachedAt = info.ModTime().UnixNano()
+			}
+
+			_, err = c.db.Exec(`INSERT OR REPLACE INTO cache_files (hash, cached_at, complete, access_time) VALUES (?, ?, ?, ?)`,
+				hash, cachedAt, meta.Complete, accessTime)
+			if err != nil {
+				continue
 			}
 		}
+
+		// Delete JSON file
+		os.Remove(metaPath)
 	}
 }
 
@@ -114,7 +198,6 @@ func HashURL(url string) string {
 }
 
 // getMaxCacheItems returns the configured maximum cache items, defaulting to DefaultMaxCacheItems.
-// The returned value is capped at MaxCacheItems (100,000) to prevent excessive memory usage.
 func getMaxCacheItems() int {
 	if val := os.Getenv("WEBDAV_CACHE_SIZE"); val != "" {
 		if size, err := strconv.Atoi(val); err == nil && size > 0 {
@@ -133,67 +216,97 @@ func (c *FileCache) Get(url string) (string, *Metadata, bool) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	item, ok := c.items[hash]
-	if !ok {
-		return "", nil, false
-	}
+	var meta Metadata
+	var modTimeNano sql.NullInt64
+	var cachedAtNano, metaCachedAtNano int64
+	var complete bool
 
-	item.AccessTime = time.Now()
+	query := `
+		SELECT m.url, m.size, m.mod_time, m.etag, m.content_type, m.cached_at, c.cached_at, c.complete
+		FROM cache_files c
+		JOIN metadata m ON c.hash = m.hash
+		WHERE c.hash = ?
+	`
 
-	data, err := os.ReadFile(item.MetaPath)
+	err := c.db.QueryRow(query, hash).Scan(
+		&meta.URL, &meta.Size, &modTimeNano, &meta.ETag, &meta.ContentType, &metaCachedAtNano, &cachedAtNano, &complete,
+	)
 	if err != nil {
 		return "", nil, false
 	}
-	var meta Metadata
-	if err := json.Unmarshal(data, &meta); err != nil {
+
+	if modTimeNano.Valid {
+		meta.ModTime = time.Unix(0, modTimeNano.Int64)
+	}
+	// else ModTime is zero value
+
+	meta.CachedAt = time.Unix(0, cachedAtNano)
+	meta.Complete = complete
+
+	// Verify file exists on disk
+	path := filepath.Join(c.dir, hash)
+	if _, err := os.Stat(path); err != nil {
+		// File missing, remove from cache_files
+		c.db.Exec("DELETE FROM cache_files WHERE hash = ?", hash)
 		return "", nil, false
 	}
 
-	return item.Path, &meta, true
+	// Update Access Time
+	nowNano := time.Now().UnixNano()
+	c.db.Exec("UPDATE cache_files SET access_time = ? WHERE hash = ?", nowNano, hash)
+
+	return path, &meta, true
 }
 
-// GetMetadata returns the metadata and file info of the JSON file, even if content is missing.
+// GetMetadata returns the metadata and file info of the cached file (or sidecar), even if content is missing.
 func (c *FileCache) GetMetadata(url string) (*Metadata, os.FileInfo, bool) {
 	hash := HashURL(url)
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	// Construct path to JSON file
-	metaPath := filepath.Join(c.dir, hash+".json")
+	var meta Metadata
+	var modTimeNano sql.NullInt64
+	var cachedAtNano int64
 
-	info, err := os.Stat(metaPath)
+	// Select cached_at from metadata
+	err := c.db.QueryRow(`SELECT url, size, mod_time, etag, content_type, cached_at FROM metadata WHERE hash = ?`, hash).Scan(
+		&meta.URL, &meta.Size, &modTimeNano, &meta.ETag, &meta.ContentType, &cachedAtNano,
+	)
 	if err != nil {
 		return nil, nil, false
 	}
 
-	data, err := os.ReadFile(metaPath)
-	if err != nil {
-		return nil, info, true
+	if modTimeNano.Valid {
+		meta.ModTime = time.Unix(0, modTimeNano.Int64)
 	}
 
-	var meta Metadata
-	if err := json.Unmarshal(data, &meta); err != nil {
-		return nil, info, true
-	}
+	meta.CachedAt = time.Unix(0, cachedAtNano)
 
-	return &meta, info, true
+	return &meta, nil, true
 }
 
-// WriteMetadata writes the metadata to the JSON cache file.
+// WriteMetadata writes the metadata to the DB.
 func (c *FileCache) WriteMetadata(url string, meta Metadata) error {
 	hash := HashURL(url)
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	meta.URL = url
-	metaPath := filepath.Join(c.dir, hash+".json")
-
-	data, err := json.Marshal(meta)
-	if err != nil {
-		return err
+	// Ensure cached_at is set
+	cachedAt := meta.CachedAt.UnixNano()
+	if meta.CachedAt.IsZero() {
+		cachedAt = time.Now().UnixNano()
 	}
 
-	return os.WriteFile(metaPath, data, 0644)
+	var modTimeVal interface{}
+	if !meta.ModTime.IsZero() {
+		modTimeVal = meta.ModTime.UnixNano()
+	} else {
+		modTimeVal = nil
+	}
+
+	_, err := c.db.Exec(`INSERT OR REPLACE INTO metadata (hash, url, size, mod_time, etag, content_type, cached_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		hash, url, meta.Size, modTimeVal, meta.ETag, meta.ContentType, cachedAt)
+	return err
 }
 
 // StartCaching triggers a background download if the file is not already cached.
@@ -201,31 +314,25 @@ func (c *FileCache) StartCaching(url string, client *http.Client, userAgent stri
 	hash := HashURL(url)
 
 	c.mutex.RLock()
-	// Check if already cached
-	if _, ok := c.items[hash]; ok {
-		c.mutex.RUnlock()
-		return
-	}
+	var exists bool
+	// Check if it exists in cache_files and is complete
+	err := c.db.QueryRow("SELECT 1 FROM cache_files WHERE hash = ? AND complete = 1", hash).Scan(&exists)
 	c.mutex.RUnlock()
 
-	// Double check if file exists on disk (maybe created by another process or raced)
-	// Actually StartCaching is called when Get failed, but there's a race between Get and StartCaching.
-	// We'll just trust that if it's not in items map, we should try to cache it.
-	// We can use a "pending" map if needed, but simple go routine is likely fine.
+	if err == nil && exists {
+		return
+	}
 
 	go c.download(url, hash, client, userAgent)
 }
 
 func (c *FileCache) download(urlStr, hash string, client *http.Client, userAgent string) {
-	// Prevent concurrent downloads for the same hash could be done with a map of mutexes,
-	// but for now relying on chance and overwrites is acceptable for "simple" cache.
-
 	// Create temp file
 	tmpFile, err := os.CreateTemp(c.dir, "tmp_*")
 	if err != nil {
 		return
 	}
-	defer os.Remove(tmpFile.Name()) // Clean up if not renamed
+	defer os.Remove(tmpFile.Name())
 
 	req, err := http.NewRequest("GET", urlStr, nil)
 	if err != nil {
@@ -248,21 +355,18 @@ func (c *FileCache) download(urlStr, hash string, client *http.Client, userAgent
 		return
 	}
 
-	// Read up to MaxFileSize
 	_, err = io.CopyN(tmpFile, resp.Body, MaxFileSize)
 	complete := false
 	if err == nil {
-		// Copied exactly MaxFileSize. Assumed incomplete.
+		// Copied exactly MaxFileSize.
 	} else if err == io.EOF {
 		complete = true
 	} else {
 		tmpFile.Close()
 		return
 	}
-
 	tmpFile.Close()
 
-	// Prepare metadata
 	meta := Metadata{
 		URL:         urlStr,
 		Size:        resp.ContentLength,
@@ -278,33 +382,28 @@ func (c *FileCache) download(urlStr, hash string, client *http.Client, userAgent
 		}
 	}
 
-	// Write metadata
-	metaPath := filepath.Join(c.dir, hash+".json")
-	metaData, err := json.Marshal(meta)
-	if err != nil {
-		return
-	}
-	if err := os.WriteFile(metaPath, metaData, 0644); err != nil {
-		return
-	}
-
-	// Move file
 	finalPath := filepath.Join(c.dir, hash)
-	// Rename might fail if across devices, but we created temp in same dir
 	if err := os.Rename(tmpFile.Name(), finalPath); err != nil {
-		// Try copy if rename fails?
 		return
 	}
 
-	// Update items
 	c.mutex.Lock()
-	c.items[hash] = &CacheItem{
-		Hash:       hash,
-		Path:       finalPath,
-		MetaPath:   metaPath,
-		AccessTime: time.Now(),
+	defer c.mutex.Unlock()
+
+	var modTimeVal interface{}
+	if !meta.ModTime.IsZero() {
+		modTimeVal = meta.ModTime.UnixNano()
+	} else {
+		modTimeVal = nil
 	}
-	c.mutex.Unlock()
+
+	// Update metadata with cached_at
+	c.db.Exec(`INSERT OR REPLACE INTO metadata (hash, url, size, mod_time, etag, content_type, cached_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		hash, meta.URL, meta.Size, modTimeVal, meta.ETag, meta.ContentType, meta.CachedAt.UnixNano())
+
+	// Update cache_files
+	c.db.Exec(`INSERT OR REPLACE INTO cache_files (hash, cached_at, complete, access_time) VALUES (?, ?, ?, ?)`,
+		hash, meta.CachedAt.UnixNano(), meta.Complete, time.Now().UnixNano())
 }
 
 func (c *FileCache) cleaner() {
@@ -320,29 +419,36 @@ func (c *FileCache) CleanNow() {
 	defer c.mutex.Unlock()
 
 	maxItems := getMaxCacheItems()
-	if len(c.items) <= maxItems {
+
+	// Count items
+	var count int
+	if err := c.db.QueryRow("SELECT COUNT(*) FROM cache_files").Scan(&count); err != nil {
 		return
 	}
 
-	type entry struct {
-		hash string
-		time time.Time
-	}
-	var entries []entry
-	for k, v := range c.items {
-		entries = append(entries, entry{hash: k, time: v.AccessTime})
+	if count <= maxItems {
+		return
 	}
 
-	slices.SortFunc(entries, func(a, b entry) int {
-		return a.time.Compare(b.time)
-	})
+	toRemove := count - maxItems
+	rows, err := c.db.Query("SELECT hash FROM cache_files ORDER BY access_time ASC LIMIT ?", toRemove)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
 
-	toRemove := len(entries) - maxItems
-	for i := 0; i < toRemove; i++ {
-		e := entries[i]
-		item := c.items[e.hash]
-		os.Remove(item.Path)
-		delete(c.items, e.hash)
+	var hashes []string
+	for rows.Next() {
+		var h string
+		if err := rows.Scan(&h); err == nil {
+			hashes = append(hashes, h)
+		}
+	}
+	rows.Close()
+
+	for _, h := range hashes {
+		os.Remove(filepath.Join(c.dir, h))
+		c.db.Exec("DELETE FROM cache_files WHERE hash = ?", h)
 	}
 }
 
@@ -350,7 +456,35 @@ func (c *FileCache) CleanNow() {
 func (c *FileCache) RemoveAll() {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
-	_ = os.RemoveAll(c.dir)
-	_ = os.MkdirAll(c.dir, 0755)
-	c.items = make(map[string]*CacheItem)
+
+	c.db.Close()
+	os.RemoveAll(c.dir)
+	os.MkdirAll(c.dir, 0755)
+
+	// Re-init DB
+	dbPath := filepath.Join(c.dir, "cache.db")
+	db, _ := sql.Open("sqlite", dbPath)
+	db.Exec("PRAGMA journal_mode=WAL;")
+	c.db = db
+
+	// Create tables again
+	query := `
+	CREATE TABLE IF NOT EXISTS metadata (
+		hash TEXT PRIMARY KEY,
+		url TEXT,
+		size INTEGER,
+		mod_time INTEGER,
+		etag TEXT,
+		content_type TEXT,
+		cached_at INTEGER
+	);
+	CREATE TABLE IF NOT EXISTS cache_files (
+		hash TEXT PRIMARY KEY,
+		cached_at INTEGER,
+		complete BOOLEAN,
+		access_time INTEGER,
+		FOREIGN KEY(hash) REFERENCES metadata(hash)
+	);
+	`
+	c.db.Exec(query)
 }

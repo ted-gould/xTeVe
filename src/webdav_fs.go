@@ -448,7 +448,7 @@ func resolveFileMetadata(ctx context.Context, hash string, stream map[string]str
 	}
 
 	// Step 1: Check JSON Cache File
-	cacheMeta, jsonInfo, jsonExists := fc.GetMetadata(targetURL)
+	cacheMeta, _, jsonExists := fc.GetMetadata(targetURL)
 	if jsonExists && cacheMeta != nil {
 		metaFromCache = cacheMeta
 		foundInCache = true
@@ -489,8 +489,8 @@ func resolveFileMetadata(ctx context.Context, hash string, stream map[string]str
 	}
 
 	// Step 5: JSON File Creation Time
-	if finalModTime.IsZero() && jsonExists && jsonInfo != nil {
-		finalModTime = jsonInfo.ModTime()
+	if finalModTime.IsZero() && foundInCache && metaFromCache != nil && !metaFromCache.CachedAt.IsZero() {
+		finalModTime = metaFromCache.CachedAt
 		source = "json_file_stat"
 	}
 
