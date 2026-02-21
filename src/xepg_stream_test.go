@@ -54,7 +54,7 @@ func TestCreateXMLTVFileStreaming(t *testing.T) {
 	Data.Streams.Active = []any{"dummy"}
 
 	// Mock ImgCache
-	Data.Cache.Images, _ = imgcache.New(System.Folder.ImagesCache, "http://localhost/images/", false)
+	Data.Cache.Images, _ = imgcache.New(System.Folder.ImagesCache, "http://localhost/images/", false, NewHTTPClient())
 
 	// Run createXMLTVFile
 	err = createXMLTVFile()

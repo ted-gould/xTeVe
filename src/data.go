@@ -156,7 +156,7 @@ func updateServerSettings(request RequestStruct) (settings SettingsStruct, err e
 
 		if cacheImages {
 			if Settings.EpgSource == "XEPG" && System.ImageCachingInProgress == 0 {
-				Data.Cache.Images, err = imgcache.New(System.Folder.ImagesCache, fmt.Sprintf("%s://%s/images/", System.ServerProtocol.WEB, System.Domain), Settings.CacheImages)
+				Data.Cache.Images, err = imgcache.New(System.Folder.ImagesCache, fmt.Sprintf("%s://%s/images/", System.ServerProtocol.WEB, System.Domain), Settings.CacheImages, NewHTTPClient())
 				if err != nil {
 					ShowError(err, 0)
 				}
@@ -470,7 +470,7 @@ func saveFilter(request RequestStruct) (settings SettingsStruct, err error) {
 
 // Save XEPG Mapping
 func saveXEpgMapping(request RequestStruct) (err error) {
-	Data.Cache.Images, err = imgcache.New(System.Folder.ImagesCache, fmt.Sprintf("%s://%s/images/", System.ServerProtocol.WEB, System.Domain), Settings.CacheImages)
+	Data.Cache.Images, err = imgcache.New(System.Folder.ImagesCache, fmt.Sprintf("%s://%s/images/", System.ServerProtocol.WEB, System.Domain), Settings.CacheImages, NewHTTPClient())
 	if err != nil {
 		ShowError(err, 0)
 	}

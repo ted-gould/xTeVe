@@ -219,7 +219,7 @@ func TestBuildM3U_PMSSource(t *testing.T) {
 	assert.NoError(t, err)
 	defer os.RemoveAll(tempDir)
 
-	Data.Cache.Images, err = imgcache.New(tempDir, "", false)
+	Data.Cache.Images, err = imgcache.New(tempDir, "", false, NewHTTPClient())
 	assert.NoError(t, err)
 
 	// Execute

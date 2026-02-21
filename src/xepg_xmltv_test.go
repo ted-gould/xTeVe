@@ -82,7 +82,7 @@ func setupXMLTVTestGlobals() func() {
 	// However, to fully initialize, use values from testXMLTVSystem.
 	imgCacheInstance, err := imgcache.New(cachePath,
 		testXMLTVSystem.ServerProtocol.WEB+"://"+testXMLTVSystem.Domain+"/images/",
-		false) // IMPORTANT: caching = false
+		false, NewHTTPClient()) // IMPORTANT: caching = false
 	if err != nil {
 		panic(fmt.Sprintf("Failed to initialize imgcache for tests: %v", err))
 	}

@@ -63,7 +63,7 @@ func buildXEPG(background bool) error { // Added error return type
 	System.ScanInProgress = 1
 	var err error // Keep for local error handling before returning
 
-	Data.Cache.Images, err = imgcache.New(System.Folder.ImagesCache, fmt.Sprintf("%s://%s/images/", System.ServerProtocol.WEB, System.Domain), Settings.CacheImages)
+	Data.Cache.Images, err = imgcache.New(System.Folder.ImagesCache, fmt.Sprintf("%s://%s/images/", System.ServerProtocol.WEB, System.Domain), Settings.CacheImages, NewHTTPClient())
 	if err != nil {
 		ShowError(err, 0)
 		// Decide if this is fatal for buildXEPG

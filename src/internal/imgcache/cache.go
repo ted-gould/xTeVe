@@ -16,6 +16,7 @@ type Cache struct {
 	path     string
 	cacheURL string
 	caching  bool
+	client   *http.Client
 	images   map[string]string
 	Queue    []string
 	Cache    []string
@@ -30,13 +31,17 @@ type imageFunc struct {
 }
 
 // New : New cache
-func New(path, chacheURL string, caching bool) (c *Cache, err error) {
+func New(path, chacheURL string, caching bool, client *http.Client) (c *Cache, err error) {
 	c = &Cache{}
 
 	c.images = make(map[string]string)
 	c.path = path
 	c.cacheURL = chacheURL
 	c.caching = caching
+	c.client = client
+	if c.client == nil {
+		c.client = http.DefaultClient
+	}
 	c.Queue = []string{}
 	c.Cache = []string{}
 
@@ -81,7 +86,7 @@ func New(path, chacheURL string, caching bool) (c *Cache, err error) {
 		var filename string
 
 		for _, src := range c.Queue {
-			resp, err := http.Get(src)
+			resp, err := c.client.Get(src)
 			if err != nil {
 				continue
 			}
