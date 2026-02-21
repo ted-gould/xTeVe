@@ -154,8 +154,11 @@ func TestFileCache_MetadataPersistence(t *testing.T) {
 		}
 
 		// Insert metadata
-		fc.db.Exec(`INSERT OR REPLACE INTO metadata (hash, url, size, mod_time, etag, content_type) VALUES (?, ?, ?, ?, ?, ?)`,
+		_, err := fc.db.Exec(`INSERT OR REPLACE INTO metadata (hash, url, size, mod_time, etag, content_type) VALUES (?, ?, ?, ?, ?, ?)`,
 			hash, meta.URL, meta.Size, meta.ModTime.UnixNano(), meta.ETag, meta.ContentType)
+		if err != nil {
+			t.Fatal(err)
+		}
 
 		// Insert cache_files with access_time
 		// Old access time for first 5
@@ -163,8 +166,11 @@ func TestFileCache_MetadataPersistence(t *testing.T) {
 		if i >= 5 {
 			accessTime = time.Now()
 		}
-		fc.db.Exec(`INSERT OR REPLACE INTO cache_files (hash, cached_at, complete, access_time) VALUES (?, ?, ?, ?)`,
+		_, err = fc.db.Exec(`INSERT OR REPLACE INTO cache_files (hash, cached_at, complete, access_time) VALUES (?, ?, ?, ?)`,
 			hash, meta.CachedAt.UnixNano(), meta.Complete, accessTime.UnixNano())
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	// Trigger cleanup
@@ -211,14 +217,18 @@ func TestMigration(t *testing.T) {
 	metaPath := filepath.Join(cacheDir, hash+".json")
 
 	// Create content
-	os.WriteFile(contentPath, []byte("content"), 0644)
+	if err := os.WriteFile(contentPath, []byte("content"), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	// Create JSON
 	// Note: mod_time and cached_at in JSON should be RFC3339 compatible for unmarshal if type is time.Time
 	// In Metadata struct: ModTime time.Time `json:"mod_time"`
 	// time.Time JSON unmarshal expects RFC3339 string.
 	jsonContent := `{"url":"http://test.com","size":7,"mod_time":"2023-01-01T00:00:00Z","complete":true}`
-	os.WriteFile(metaPath, []byte(jsonContent), 0644)
+	if err := os.WriteFile(metaPath, []byte(jsonContent), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	// Now Init FileCache, which should trigger migration
 	Reset()
@@ -249,7 +259,9 @@ func TestMigration(t *testing.T) {
 	// Verify data correctness
 	var url string
 	var size int64
-	fc.db.QueryRow("SELECT url, size FROM metadata WHERE hash = ?", hash).Scan(&url, &size)
+	if err := fc.db.QueryRow("SELECT url, size FROM metadata WHERE hash = ?", hash).Scan(&url, &size); err != nil {
+		t.Fatalf("Failed to scan metadata: %v", err)
+	}
 	if url != "http://test.com" {
 		t.Errorf("Expected URL http://test.com, got %s", url)
 	}
@@ -375,7 +387,9 @@ func TestConfigurableCacheSizeIntegration(t *testing.T) {
 		hash := fmt.Sprintf("hash%d", i)
 		path := filepath.Join(fc.dir, hash)
 
-		os.WriteFile(path, []byte("data"), 0644)
+		if err := os.WriteFile(path, []byte("data"), 0644); err != nil {
+			t.Fatal(err)
+		}
 
 		meta := Metadata{
 			URL:      fmt.Sprintf("http://example.com/%d", i),
@@ -385,8 +399,11 @@ func TestConfigurableCacheSizeIntegration(t *testing.T) {
 			Complete: true,
 		}
 
-		fc.db.Exec(`INSERT OR REPLACE INTO metadata (hash, url, size, mod_time, etag, content_type) VALUES (?, ?, ?, ?, ?, ?)`,
+		_, err := fc.db.Exec(`INSERT OR REPLACE INTO metadata (hash, url, size, mod_time, etag, content_type) VALUES (?, ?, ?, ?, ?, ?)`,
 			hash, meta.URL, meta.Size, meta.ModTime.UnixNano(), meta.ETag, meta.ContentType)
+		if err != nil {
+			t.Fatal(err)
+		}
 
 		accessTime := time.Now()
 		// Make first 5 older
@@ -394,14 +411,19 @@ func TestConfigurableCacheSizeIntegration(t *testing.T) {
 			accessTime = time.Now().Add(-1 * time.Hour)
 		}
 
-		fc.db.Exec(`INSERT OR REPLACE INTO cache_files (hash, cached_at, complete, access_time) VALUES (?, ?, ?, ?)`,
+		_, err = fc.db.Exec(`INSERT OR REPLACE INTO cache_files (hash, cached_at, complete, access_time) VALUES (?, ?, ?, ?)`,
 			hash, meta.CachedAt.UnixNano(), meta.Complete, accessTime.UnixNano())
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	fc.CleanNow()
 
 	var count int
-	fc.db.QueryRow("SELECT COUNT(*) FROM cache_files").Scan(&count)
+	if err := fc.db.QueryRow("SELECT COUNT(*) FROM cache_files").Scan(&count); err != nil {
+		t.Fatal(err)
+	}
 
 	if count != customMax {
 		t.Errorf("Cache size = %d, want %d", count, customMax)
