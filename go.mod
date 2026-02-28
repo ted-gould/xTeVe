@@ -1,8 +1,6 @@
 module xteve
 
-go 1.24.0
-
-toolchain go1.24.3
+go 1.25.0
 
 require (
 	github.com/gorilla/websocket v1.5.3
@@ -11,6 +9,7 @@ require (
 )
 
 require (
+	github.com/CAFxX/bytespool v0.0.1
 	github.com/avfs/avfs v0.35.0
 	github.com/canonical/go-snapctl v1.0.0-beta.6
 	github.com/google/go-cmp v0.7.0

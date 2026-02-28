@@ -70,7 +70,7 @@ Note: WebDAV support is read-only.
 
 ### Requirements
 
-* [Go](https://go.dev/dl/) (1.24 or newer)
+* [Go](https://go.dev/dl/) (1.25 or newer)
 * [Node.js](https://nodejs.org/en/download/) (which includes `npm`)
 
 ### Dependencies

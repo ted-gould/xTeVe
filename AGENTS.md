@@ -4,7 +4,7 @@ This file consolidates critical learnings, architectural decisions, security gui
 
 ## Environment & Build
 * **Prerequisites**:
-    * **Go version**: 1.24 or newer is required.
+    * **Go version**: 1.25 or newer is required.
     * **FFmpeg**: Required for streaming functionality. Install with `sudo apt-get update && sudo apt-get install -y ffmpeg`.
     * **Packages**: Always use `sudo` for `apt-get` commands.
 * **Building**:
