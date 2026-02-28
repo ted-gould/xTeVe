@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"math/big"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -684,12 +685,14 @@ func randomString(n int) (string, error) {
 	const alphanum = "-AbCdEfGhIjKlMnOpQrStUvWxYz0123456789aBcDeFgHiJkLmNoPqRsTuVwXyZ_"
 
 	var bytes = make([]byte, n)
-	_, err := rand.Read(bytes)
-	if err != nil {
-		return "", err
-	}
-	for i, b := range bytes {
-		bytes[i] = alphanum[b%byte(len(alphanum))]
+	max := big.NewInt(int64(len(alphanum)))
+
+	for i := 0; i < n; i++ {
+		num, err := rand.Int(rand.Reader, max)
+		if err != nil {
+			return "", err
+		}
+		bytes[i] = alphanum[num.Int64()]
 	}
 	return string(bytes), nil
 }
@@ -698,12 +701,14 @@ func randomID(n int) (string, error) {
 	const alphanum = "ABCDEFGHJKLMNOPQRSTUVWXYZ0123456789"
 
 	var bytes = make([]byte, n)
-	_, err := rand.Read(bytes)
-	if err != nil {
-		return "", err
-	}
-	for i, b := range bytes {
-		bytes[i] = alphanum[b%byte(len(alphanum))]
+	max := big.NewInt(int64(len(alphanum)))
+
+	for i := 0; i < n; i++ {
+		num, err := rand.Int(rand.Reader, max)
+		if err != nil {
+			return "", err
+		}
+		bytes[i] = alphanum[num.Int64()]
 	}
 	return string(bytes), nil
 }
