@@ -1,6 +1,7 @@
 package filecache
 
 import (
+	"database/sql"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -31,48 +32,57 @@ func TestFileCacheLRU(t *testing.T) {
 	}
 
 	maxItems := getMaxCacheItems()
-	// Create files exceeding the max (default is 100, so create 105)
-	// We create them manually in the directory to simulate existing cache items
-	// that will be picked up by loadCache.
 	numFiles := maxItems + 5
+
+	// Create items
 	for i := 0; i < numFiles; i++ {
 		hash := fmt.Sprintf("hash%d", i)
 		path := filepath.Join(fc.dir, hash)
-		metaPath := path + ".json"
 
+		// Create content file
 		if err := os.WriteFile(path, []byte("data"), 0644); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(metaPath, []byte(`{}`), 0644); err != nil {
+
+		// Create metadata entry
+		meta := Metadata{
+			URL:      fmt.Sprintf("http://example.com/%d", i),
+			Size:     4,
+			ModTime:  time.Now(),
+			CachedAt: time.Now(),
+			Complete: true,
+		}
+
+		// Insert into DB manually to simulate usage
+		_, err := fc.db.Exec(`INSERT OR REPLACE INTO metadata (hash, url, size, mod_time, etag, content_type) VALUES (?, ?, ?, ?, ?, ?)`,
+			hash, meta.URL, meta.Size, meta.ModTime.UnixNano(), meta.ETag, meta.ContentType)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Insert into cache_files with access_time
+		// Use older access time for first 5 items
+		accessTime := time.Now().Add(-2 * time.Hour)
+		if i >= 5 {
+			accessTime = time.Now()
+		}
+
+		_, err = fc.db.Exec(`INSERT OR REPLACE INTO cache_files (hash, cached_at, complete, access_time) VALUES (?, ?, ?, ?)`,
+			hash, meta.CachedAt.UnixNano(), meta.Complete, accessTime.UnixNano())
+		if err != nil {
 			t.Fatal(err)
 		}
 	}
 
-	// Reload cache to populate items map
-	Reset()
-	fc, err = GetInstance(tempDir)
+	// Trigger cleanup
+	fc.CleanNow()
+
+	// Check count in cache_files
+	var count int
+	err = fc.db.QueryRow("SELECT COUNT(*) FROM cache_files").Scan(&count)
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	// Manually "touch" items 5 to numFiles-1 to make them newer
-	// items 0-4 will remain with the initial load timestamp (older)
-	for i := 5; i < numFiles; i++ {
-		hash := fmt.Sprintf("hash%d", i)
-		fc.mutex.Lock()
-		if item, ok := fc.items[hash]; ok {
-			item.AccessTime = time.Now().Add(1 * time.Hour) // Future to ensure they are newer
-		}
-		fc.mutex.Unlock()
-	}
-
-	// Now trigger cleanup
-	fc.CleanNow()
-
-	// Check count
-	fc.mutex.RLock()
-	count := len(fc.items)
-	fc.mutex.RUnlock()
 
 	if count > maxItems {
 		t.Errorf("Cache size %d exceeds max %d", count, maxItems)
@@ -82,15 +92,17 @@ func TestFileCacheLRU(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		hash := fmt.Sprintf("hash%d", i)
 		path := filepath.Join(fc.dir, hash)
+
+		// File should be gone
 		if _, err := os.Stat(path); err == nil {
-			t.Errorf("Item %s should have been evicted", hash)
+			t.Errorf("Item %s file should have been evicted", hash)
 		}
 
-		fc.mutex.RLock()
-		_, ok := fc.items[hash]
-		fc.mutex.RUnlock()
-		if ok {
-			t.Errorf("Item %s should have been removed from map", hash)
+		// Cache entry should be gone
+		var exists bool
+		err := fc.db.QueryRow("SELECT 1 FROM cache_files WHERE hash = ?", hash).Scan(&exists)
+		if err != sql.ErrNoRows {
+			t.Errorf("Item %s should have been removed from cache_files", hash)
 		}
 	}
 
@@ -98,12 +110,19 @@ func TestFileCacheLRU(t *testing.T) {
 	hash := fmt.Sprintf("hash%d", 5)
 	path := filepath.Join(fc.dir, hash)
 	if _, err := os.Stat(path); err != nil {
-		t.Errorf("Item %s should be present", hash)
+		t.Errorf("Item %s file should be present", hash)
+	}
+
+	// Verify item 5 in cache_files
+	var exists bool
+	err = fc.db.QueryRow("SELECT 1 FROM cache_files WHERE hash = ?", hash).Scan(&exists)
+	if err != nil {
+		t.Errorf("Item %s should be present in cache_files", hash)
 	}
 }
 
-func TestFileCache_JSONPersistence(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "filecache_test_json")
+func TestFileCache_MetadataPersistence(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "filecache_test_meta")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,59 +134,139 @@ func TestFileCache_JSONPersistence(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create files exceeding the max (max default 100)
 	maxItems := getMaxCacheItems()
 	numFiles := maxItems + 5
 
 	for i := 0; i < numFiles; i++ {
 		hash := fmt.Sprintf("hash%d", i)
 		path := filepath.Join(fc.dir, hash)
-		metaPath := path + ".json"
 
 		if err := os.WriteFile(path, []byte("data"), 0644); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(metaPath, []byte(`{}`), 0644); err != nil {
+
+		meta := Metadata{
+			URL:      fmt.Sprintf("http://example.com/%d", i),
+			Size:     4,
+			ModTime:  time.Now(),
+			CachedAt: time.Now(),
+			Complete: true,
+		}
+
+		// Insert metadata
+		_, err := fc.db.Exec(`INSERT OR REPLACE INTO metadata (hash, url, size, mod_time, etag, content_type) VALUES (?, ?, ?, ?, ?, ?)`,
+			hash, meta.URL, meta.Size, meta.ModTime.UnixNano(), meta.ETag, meta.ContentType)
+		if err != nil {
 			t.Fatal(err)
 		}
-	}
 
-	// Reload to populate items
-	Reset()
-	fc, err = GetInstance(tempDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Make older items stay old (default load time).
-	// Make newer items newer.
-	for i := 5; i < numFiles; i++ {
-		hash := fmt.Sprintf("hash%d", i)
-		fc.mutex.Lock()
-		if item, ok := fc.items[hash]; ok {
-			item.AccessTime = time.Now().Add(1 * time.Hour)
+		// Insert cache_files with access_time
+		// Old access time for first 5
+		accessTime := time.Now().Add(-2 * time.Hour)
+		if i >= 5 {
+			accessTime = time.Now()
 		}
-		fc.mutex.Unlock()
+		_, err = fc.db.Exec(`INSERT OR REPLACE INTO cache_files (hash, cached_at, complete, access_time) VALUES (?, ?, ?, ?)`,
+			hash, meta.CachedAt.UnixNano(), meta.Complete, accessTime.UnixNano())
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	// Trigger cleanup
 	fc.CleanNow()
 
-	// Verify oldest items (0-4) data file is gone, BUT json file remains
+	// Verify oldest items (0-4) data file is gone, BUT metadata row remains
 	for i := 0; i < 5; i++ {
 		hash := fmt.Sprintf("hash%d", i)
 		path := filepath.Join(fc.dir, hash)
-		metaPath := path + ".json"
 
 		// Data file should be gone
 		if _, err := os.Stat(path); err == nil {
 			t.Errorf("Item %s data file should have been evicted", hash)
 		}
 
-		// JSON file should REMAIN
-		if _, err := os.Stat(metaPath); err != nil {
-			t.Errorf("Item %s JSON file should still exist", hash)
+		// Metadata row should REMAIN
+		var exists bool
+		err := fc.db.QueryRow("SELECT 1 FROM metadata WHERE hash = ?", hash).Scan(&exists)
+		if err != nil {
+			t.Errorf("Item %s metadata should still exist in DB", hash)
 		}
+	}
+}
+
+func TestMigration(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "filecache_test_migration")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create JSON file and content file manually BEFORE GetInstance
+	// GetInstance uses tempDir/xteve_cache
+	// Wait, GetInstance logic:
+	// cacheDir := filepath.Join(baseDir, "xteve_cache")
+
+	cacheDir := filepath.Join(tempDir, "xteve_cache")
+	if err := os.MkdirAll(cacheDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	hash := "testhash"
+	contentPath := filepath.Join(cacheDir, hash)
+	metaPath := filepath.Join(cacheDir, hash+".json")
+
+	// Create content
+	if err := os.WriteFile(contentPath, []byte("content"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create JSON
+	// Note: mod_time and cached_at in JSON should be RFC3339 compatible for unmarshal if type is time.Time
+	// In Metadata struct: ModTime time.Time `json:"mod_time"`
+	// time.Time JSON unmarshal expects RFC3339 string.
+	jsonContent := `{"url":"http://test.com","size":7,"mod_time":"2023-01-01T00:00:00Z","complete":true}`
+	if err := os.WriteFile(metaPath, []byte(jsonContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Now Init FileCache, which should trigger migration
+	Reset()
+	fc, err := GetInstance(tempDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify JSON file is gone
+	if _, err := os.Stat(metaPath); err == nil {
+		t.Errorf("JSON file should have been deleted")
+	}
+
+	// Verify DB has entries
+	var exists bool
+	// Check metadata
+	err = fc.db.QueryRow("SELECT 1 FROM metadata WHERE hash = ?", hash).Scan(&exists)
+	if err != nil {
+		t.Errorf("Metadata should exist in DB: %v", err)
+	}
+
+	// Check cache_files
+	err = fc.db.QueryRow("SELECT 1 FROM cache_files WHERE hash = ?", hash).Scan(&exists)
+	if err != nil {
+		t.Errorf("Cache file entry should exist in DB: %v", err)
+	}
+
+	// Verify data correctness
+	var url string
+	var size int64
+	if err := fc.db.QueryRow("SELECT url, size FROM metadata WHERE hash = ?", hash).Scan(&url, &size); err != nil {
+		t.Fatalf("Failed to scan metadata: %v", err)
+	}
+	if url != "http://test.com" {
+		t.Errorf("Expected URL http://test.com, got %s", url)
+	}
+	if size != 7 {
+		t.Errorf("Expected size 7, got %d", size)
 	}
 }
 
@@ -236,7 +335,6 @@ func TestConfigurableCacheSize(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Save and restore original env var
 			oldVal := os.Getenv("WEBDAV_CACHE_SIZE")
 			defer func() {
 				if oldVal != "" {
@@ -246,14 +344,12 @@ func TestConfigurableCacheSize(t *testing.T) {
 				}
 			}()
 
-			// Set up test env var
 			if tt.shouldUseEnv {
 				os.Setenv("WEBDAV_CACHE_SIZE", tt.envValue)
 			} else {
 				os.Unsetenv("WEBDAV_CACHE_SIZE")
 			}
 
-			// Test getMaxCacheItems
 			got := getMaxCacheItems()
 			if got != tt.expectedSize {
 				t.Errorf("getMaxCacheItems() = %d, want %d", got, tt.expectedSize)
@@ -263,13 +359,12 @@ func TestConfigurableCacheSize(t *testing.T) {
 }
 
 func TestConfigurableCacheSizeIntegration(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "filecache_test")
+	tempDir, err := os.MkdirTemp("", "filecache_test_size")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(tempDir)
 
-	// Set custom cache size
 	oldVal := os.Getenv("WEBDAV_CACHE_SIZE")
 	os.Setenv("WEBDAV_CACHE_SIZE", "25")
 	defer func() {
@@ -287,44 +382,48 @@ func TestConfigurableCacheSizeIntegration(t *testing.T) {
 	}
 
 	customMax := 25
-	// Create 30 files (max is 25)
+	// Create 30 files
 	for i := 0; i < 30; i++ {
 		hash := fmt.Sprintf("hash%d", i)
 		path := filepath.Join(fc.dir, hash)
-		metaPath := path + ".json"
 
 		if err := os.WriteFile(path, []byte("data"), 0644); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(metaPath, []byte(`{}`), 0644); err != nil {
+
+		meta := Metadata{
+			URL:      fmt.Sprintf("http://example.com/%d", i),
+			Size:     4,
+			ModTime:  time.Now(),
+			CachedAt: time.Now(),
+			Complete: true,
+		}
+
+		_, err := fc.db.Exec(`INSERT OR REPLACE INTO metadata (hash, url, size, mod_time, etag, content_type) VALUES (?, ?, ?, ?, ?, ?)`,
+			hash, meta.URL, meta.Size, meta.ModTime.UnixNano(), meta.ETag, meta.ContentType)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		accessTime := time.Now()
+		// Make first 5 older
+		if i < 5 {
+			accessTime = time.Now().Add(-1 * time.Hour)
+		}
+
+		_, err = fc.db.Exec(`INSERT OR REPLACE INTO cache_files (hash, cached_at, complete, access_time) VALUES (?, ?, ?, ?)`,
+			hash, meta.CachedAt.UnixNano(), meta.Complete, accessTime.UnixNano())
+		if err != nil {
 			t.Fatal(err)
 		}
 	}
 
-	// Reload cache
-	Reset()
-	fc, err = GetInstance(tempDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Touch items 5-29 to make them newer
-	for i := 5; i < 30; i++ {
-		hash := fmt.Sprintf("hash%d", i)
-		fc.mutex.Lock()
-		if item, ok := fc.items[hash]; ok {
-			item.AccessTime = time.Now().Add(1 * time.Hour)
-		}
-		fc.mutex.Unlock()
-	}
-
-	// Trigger cleanup
 	fc.CleanNow()
 
-	// Verify cache size respects custom limit
-	fc.mutex.RLock()
-	count := len(fc.items)
-	fc.mutex.RUnlock()
+	var count int
+	if err := fc.db.QueryRow("SELECT COUNT(*) FROM cache_files").Scan(&count); err != nil {
+		t.Fatal(err)
+	}
 
 	if count != customMax {
 		t.Errorf("Cache size = %d, want %d", count, customMax)
@@ -333,20 +432,10 @@ func TestConfigurableCacheSizeIntegration(t *testing.T) {
 	// Verify oldest items (0-4) were evicted
 	for i := 0; i < 5; i++ {
 		hash := fmt.Sprintf("hash%d", i)
-		fc.mutex.RLock()
-		_, ok := fc.items[hash]
-		fc.mutex.RUnlock()
-		if ok {
+		var exists bool
+		err := fc.db.QueryRow("SELECT 1 FROM cache_files WHERE hash = ?", hash).Scan(&exists)
+		if err == nil {
 			t.Errorf("Item %s should have been evicted", hash)
 		}
-	}
-
-	// Verify newer items are still present
-	hash := fmt.Sprintf("hash%d", 10)
-	fc.mutex.RLock()
-	_, ok := fc.items[hash]
-	fc.mutex.RUnlock()
-	if !ok {
-		t.Errorf("Item %s should still be present", hash)
 	}
 }
