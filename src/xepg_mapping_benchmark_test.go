@@ -36,15 +36,19 @@ func BenchmarkPerformAutomaticChannelMapping(b *testing.B) {
 		for c := 0; c < channelsPerProvider; c++ {
 			channelID := fmt.Sprintf("ch_%d_%d", p, c)
 			var displayNames []DisplayName
+			var displayNamesSolid []string
 			for d := 0; d < displayNamesPerChannel; d++ {
+				val := fmt.Sprintf("Channel Name %d %d Variant %d", p, c, d)
 				displayNames = append(displayNames, DisplayName{
-					Value: fmt.Sprintf("Channel Name %d %d Variant %d", p, c, d),
+					Value: val,
 				})
+				displayNamesSolid = append(displayNamesSolid, strings.ReplaceAll(val, " ", ""))
 			}
 
 			Data.XMLTV.Mapping[providerName][channelID] = XMLTVChannelMapping{
-				ID:           channelID,
-				DisplayNames: displayNames,
+				ID:                channelID,
+				DisplayNames:      displayNames,
+				DisplayNamesSolid: displayNamesSolid,
 			}
 		}
 	}
@@ -104,15 +108,19 @@ func BenchmarkPerformAutomaticChannelMapping_WithIndex(b *testing.B) {
 		for c := 0; c < channelsPerProvider; c++ {
 			channelID := fmt.Sprintf("ch_%d_%d", p, c)
 			var displayNames []DisplayName
+			var displayNamesSolid []string
 			for d := 0; d < displayNamesPerChannel; d++ {
+				val := fmt.Sprintf("Channel Name %d %d Variant %d", p, c, d)
 				displayNames = append(displayNames, DisplayName{
-					Value: fmt.Sprintf("Channel Name %d %d Variant %d", p, c, d),
+					Value: val,
 				})
+				displayNamesSolid = append(displayNamesSolid, strings.ReplaceAll(val, " ", ""))
 			}
 
 			Data.XMLTV.Mapping[providerName][channelID] = XMLTVChannelMapping{
-				ID:           channelID,
-				DisplayNames: displayNames,
+				ID:                channelID,
+				DisplayNames:      displayNames,
+				DisplayNamesSolid: displayNamesSolid,
 			}
 		}
 	}

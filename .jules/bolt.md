@@ -9,3 +9,7 @@
 ## 2026-02-14 - Redundant Scanning in Parsing
 **Learning:** Scanning a large string (e.g., `strings.Count(body, ...)`) to estimate capacity for pre-allocation is wasteful if the allocation is later discarded or re-done. In `ParseM3U8`, we were scanning the entire body twice for segments count. Removing the first scan improved performance by ~14% and reduced memory usage by ~35%.
 **Action:** Verify if pre-calculation of capacity is actually used and not overwritten later in the code path. Avoid multiple O(N) scans of large inputs.
+
+## 2026-03-07 - UTF-8 Case Folding in Custom String Functions
+**Learning:** When optimizing string comparisons in Go (e.g., ignoring spaces without allocating new strings), simple ASCII case-folding logic will break on international characters (like EPG channel names containing 'Ö', 'É', etc.). EPG data frequently contains non-ASCII characters.
+**Action:** Always use `utf8.DecodeRuneInString` and `unicode.SimpleFold` (or `unicode.ToLower`) to implement custom case-insensitive matching that accurately mirrors `strings.EqualFold()`, ensuring both correctness and zero-allocation performance.

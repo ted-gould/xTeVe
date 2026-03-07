@@ -209,6 +209,13 @@ func createXEPGMapping() {
 					channel.ID = c.ID
 					channel.DisplayNames = c.DisplayNames
 					channel.Icon = c.Icon.Src
+
+					// Pre-calculate space-stripped display names for fast matching
+					channel.DisplayNamesSolid = make([]string, len(c.DisplayNames))
+					for i, dn := range c.DisplayNames {
+						channel.DisplayNamesSolid[i] = strings.ReplaceAll(dn.Value, " ", "")
+					}
+
 					xmltvMap[c.ID] = channel
 				}
 				tmpMap[filepath.Base(file)] = xmltvMap
@@ -657,7 +664,6 @@ func performAutomaticChannelMapping(xepgChannel XEPGChannelStruct, _ string, nam
 		} else {
 			// Fallback: Linear scan (O(N*M))
 			mappingFound := false
-			// Optimization: Pre-calculate the solid name for the XEPG channel once
 			xepgNameSolid := strings.ReplaceAll(xepgChannel.Name, " ", "")
 
 			for file, xmltvChannels := range Data.XMLTV.Mapping {
@@ -671,11 +677,8 @@ func performAutomaticChannelMapping(xepgChannel XEPGChannelStruct, _ string, nam
 						break
 					}
 
-					for _, nameEntry := range xmltvChannel.DisplayNames {
-						currentDisplayNameValue := nameEntry.Value
-						xmltvNameSolid := strings.ReplaceAll(currentDisplayNameValue, " ", "")
-
-						if strings.EqualFold(xmltvNameSolid, xepgNameSolid) {
+					for _, currentDisplayNameSolid := range xmltvChannel.DisplayNamesSolid {
+						if strings.EqualFold(currentDisplayNameSolid, xepgNameSolid) {
 							xepgChannel.XmltvFile = file
 							xepgChannel.XMapping = xmltvChannel.ID
 							mappingMade = true
