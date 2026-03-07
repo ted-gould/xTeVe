@@ -3,6 +3,7 @@ package src
 import (
 	"fmt" // Added for fmt.Sprintf in panic
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -73,27 +74,31 @@ func setupMappingTestGlobals() func() {
 	// Sample XMLTV file "test_provider.xml"
 	Data.XMLTV.Mapping["test_provider.xml"] = map[string]XMLTVChannelMapping{
 		"channel1.tvg.id": {
-			ID:           "channel1.tvg.id",
-			DisplayNames: []DisplayName{{Value: "Test Channel 1 TVG-ID"}},
-			Icon:         "icon1.png",
+			ID:                "channel1.tvg.id",
+			DisplayNames:      []DisplayName{{Value: "Test Channel 1 TVG-ID"}},
+			DisplayNamesSolid: []string{"TestChannel1TVG-ID"},
+			Icon:              "icon1.png",
 		},
 		"channel2.name.match": {
-			ID:           "channel2.name.match",
-			DisplayNames: []DisplayName{{Value: "Test Channel NameMatch"}},
-			Icon:         "icon2.png",
+			ID:                "channel2.name.match",
+			DisplayNames:      []DisplayName{{Value: "Test Channel NameMatch"}},
+			DisplayNamesSolid: []string{"TestChannelNameMatch"},
+			Icon:              "icon2.png",
 		},
 	}
 	// Sample Dummy EPG
 	Data.XMLTV.Mapping["xTeVe Dummy"] = map[string]XMLTVChannelMapping{
 		"default_dummy": {
-			ID:           "default_dummy",
-			DisplayNames: []DisplayName{{Value: "Default Dummy EPG"}},
-			Icon:         "",
+			ID:                "default_dummy",
+			DisplayNames:      []DisplayName{{Value: "Default Dummy EPG"}},
+			DisplayNamesSolid: []string{"DefaultDummyEPG"},
+			Icon:              "",
 		},
 		"60_Minutes": {
-			ID:           "60_Minutes",
-			DisplayNames: []DisplayName{{Value: "60 Minutes"}},
-			Icon:         "",
+			ID:                "60_Minutes",
+			DisplayNames:      []DisplayName{{Value: "60 Minutes"}},
+			DisplayNamesSolid: []string{"60Minutes"},
+			Icon:              "",
 		},
 	}
 
@@ -259,7 +264,23 @@ func TestPerformAutomaticChannelMapping(t *testing.T) {
 			// is now with the caller (the main mapping() function).
 			// So, we don't need to check Data.XEPG.Channels here directly for this unit test.
 
-			resultChannel, mappingMade := performAutomaticChannelMapping(tt.initialChannel, xepgID, nil)
+			var nameIndex = make(map[string]xmltvNameMatch)
+			if len(Data.XMLTV.Mapping) > 0 {
+				for file, xmltvChannels := range Data.XMLTV.Mapping {
+					for _, channel := range xmltvChannels {
+						for _, dn := range channel.DisplayNames {
+							solid := strings.ToLower(strings.ReplaceAll(dn.Value, " ", ""))
+							nameIndex[solid] = xmltvNameMatch{
+								XmltvFile: file,
+								XMapping:  channel.ID,
+								TvgLogo:   channel.Icon,
+							}
+						}
+					}
+				}
+			}
+
+			resultChannel, mappingMade := performAutomaticChannelMapping(tt.initialChannel, xepgID, nameIndex)
 
 			if mappingMade != tt.expectedMappingMade {
 				t.Errorf("performAutomaticChannelMapping mappingMade: got %v, want %v", mappingMade, tt.expectedMappingMade)
