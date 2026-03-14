@@ -1247,7 +1247,6 @@ func API(w http.ResponseWriter, r *http.Request) {
 			}
 		default:
 			token, err = tokenAuthentication(request.Token)
-			fmt.Println(err)
 			if err != nil {
 				responseAPIError(err)
 				return
