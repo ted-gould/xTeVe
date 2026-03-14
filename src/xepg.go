@@ -20,9 +20,86 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"xteve/src/internal/imgcache"
 )
+
+// equalFoldNoSpaces compares two strings case-insensitively, ignoring spaces, without allocating.
+// It correctly handles international characters using unicode.SimpleFold.
+func equalFoldNoSpaces(s, t string) bool {
+	for {
+		var sr, tr rune
+		var sn, tn int
+
+		// Consume spaces in s
+		for {
+			if len(s) == 0 {
+				break
+			}
+			sr, sn = utf8.DecodeRuneInString(s)
+			if sr != ' ' {
+				break
+			}
+			s = s[sn:]
+		}
+
+		// Consume spaces in t
+		for {
+			if len(t) == 0 {
+				break
+			}
+			tr, tn = utf8.DecodeRuneInString(t)
+			if tr != ' ' {
+				break
+			}
+			t = t[tn:]
+		}
+
+		if len(s) == 0 && len(t) == 0 {
+			return true
+		}
+		if len(s) == 0 || len(t) == 0 {
+			return false
+		}
+
+		if sr != tr {
+			// Fast ASCII check if both are ASCII
+			if sr < utf8.RuneSelf && tr < utf8.RuneSelf {
+				srl := sr
+				if 'A' <= srl && srl <= 'Z' {
+					srl += 'a' - 'A'
+				}
+				trl := tr
+				if 'A' <= trl && trl <= 'Z' {
+					trl += 'a' - 'A'
+				}
+				if srl != trl {
+					return false
+				}
+			} else {
+				// Use Unicode fold for non-ASCII
+				match := false
+				r := unicode.SimpleFold(sr)
+				for r != sr {
+					if r == tr {
+						match = true
+						break
+					}
+					r = unicode.SimpleFold(r)
+				}
+				if !match {
+					return false
+				}
+			}
+		}
+
+		// Advance past the compared runes
+		s = s[sn:]
+		t = t[tn:]
+	}
+}
 
 var (
 	// xmltvProgramIndices caches the mapping from ChannelID to Programs for each XMLTV file.
@@ -209,12 +286,6 @@ func createXEPGMapping() {
 					channel.ID = c.ID
 					channel.DisplayNames = c.DisplayNames
 					channel.Icon = c.Icon.Src
-
-					// Pre-calculate space-stripped display names for fast matching
-					channel.DisplayNamesSolid = make([]string, len(c.DisplayNames))
-					for i, dn := range c.DisplayNames {
-						channel.DisplayNamesSolid[i] = strings.ReplaceAll(dn.Value, " ", "")
-					}
 
 					xmltvMap[c.ID] = channel
 				}
@@ -664,7 +735,6 @@ func performAutomaticChannelMapping(xepgChannel XEPGChannelStruct, _ string, nam
 		} else {
 			// Fallback: Linear scan (O(N*M))
 			mappingFound := false
-			xepgNameSolid := strings.ReplaceAll(xepgChannel.Name, " ", "")
 
 			for file, xmltvChannels := range Data.XMLTV.Mapping {
 				if mappingFound {
@@ -677,8 +747,8 @@ func performAutomaticChannelMapping(xepgChannel XEPGChannelStruct, _ string, nam
 						break
 					}
 
-					for _, currentDisplayNameSolid := range xmltvChannel.DisplayNamesSolid {
-						if strings.EqualFold(currentDisplayNameSolid, xepgNameSolid) {
+					for _, currentDisplayName := range xmltvChannel.DisplayNames {
+						if equalFoldNoSpaces(currentDisplayName.Value, xepgChannel.Name) {
 							xepgChannel.XmltvFile = file
 							xepgChannel.XMapping = xmltvChannel.ID
 							mappingMade = true
