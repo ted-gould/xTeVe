@@ -28,7 +28,7 @@ require (
 	go.opentelemetry.io/proto/otlp v1.9.0
 	golang.org/x/crypto v0.48.0
 	golang.org/x/net v0.51.0
-	google.golang.org/grpc v1.79.1
+	google.golang.org/grpc v1.79.3
 	modernc.org/sqlite v1.46.1
 )
 
