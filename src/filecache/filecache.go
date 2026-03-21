@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -18,8 +19,9 @@ import (
 
 const (
 	DefaultMaxCacheItems = 100
-	MaxCacheItems        = 100000      // Maximum allowed cache size
-	MaxFileSize          = 1024 * 1024 // 1MB
+	MaxCacheItems        = 100000          // Maximum allowed cache size
+	MaxFileSize          = 2 * 1024 * 1024 // 2MB front cache
+	TailCacheSize        = 4 * 1024 * 1024 // 4MB tail cache
 )
 
 type Metadata struct {
@@ -33,9 +35,11 @@ type Metadata struct {
 }
 
 type FileCache struct {
-	dir   string
-	db    *sql.DB
-	mutex sync.RWMutex
+	dir          string
+	db           *sql.DB
+	mutex        sync.RWMutex
+	tailInFlight map[string]bool
+	tailMu       sync.Mutex
 }
 
 var (
@@ -102,8 +106,9 @@ func GetInstance(baseDir string) (*FileCache, error) {
 	}
 
 	instance = &FileCache{
-		dir: cacheDir,
-		db:  db,
+		dir:          cacheDir,
+		db:           db,
+		tailInFlight: make(map[string]bool),
 	}
 
 	instance.migrateFromJSON()
@@ -195,6 +200,11 @@ func (c *FileCache) migrateFromJSON() {
 func HashURL(url string) string {
 	hash := md5.Sum([]byte(url))
 	return hex.EncodeToString(hash[:])
+}
+
+// TailHash returns the cache key for the tail region of a URL.
+func TailHash(url string) string {
+	return HashURL(url) + "_tail"
 }
 
 // getMaxCacheItems returns the configured maximum cache items, defaulting to DefaultMaxCacheItems.
@@ -326,6 +336,124 @@ func (c *FileCache) StartCaching(url string, client *http.Client, userAgent stri
 	}
 
 	go c.download(url, hash, client, userAgent)
+}
+
+// StartTailCaching triggers a background download of the last TailCacheSize bytes if not already cached.
+func (c *FileCache) StartTailCaching(url string, fileSize int64, client *http.Client, userAgent string) {
+	if fileSize <= MaxFileSize {
+		return // front cache covers entire file
+	}
+
+	tailHash := TailHash(url)
+
+	c.mutex.RLock()
+	var exists bool
+	err := c.db.QueryRow("SELECT 1 FROM cache_files WHERE hash = ? AND complete = 1", tailHash).Scan(&exists)
+	c.mutex.RUnlock()
+
+	if err == nil && exists {
+		return
+	}
+
+	c.tailMu.Lock()
+	if c.tailInFlight[tailHash] {
+		c.tailMu.Unlock()
+		return
+	}
+	c.tailInFlight[tailHash] = true
+	c.tailMu.Unlock()
+
+	go c.downloadTail(url, tailHash, fileSize, client, userAgent)
+}
+
+func (c *FileCache) downloadTail(urlStr, tailHash string, fileSize int64, client *http.Client, userAgent string) {
+	defer func() {
+		c.tailMu.Lock()
+		delete(c.tailInFlight, tailHash)
+		c.tailMu.Unlock()
+	}()
+
+	start := fileSize - TailCacheSize
+	if start < 0 {
+		start = 0
+	}
+
+	tmpFile, err := os.CreateTemp(c.dir, "tmp_tail_*")
+	if err != nil {
+		return
+	}
+	defer os.Remove(tmpFile.Name())
+
+	req, err := http.NewRequest("GET", urlStr, nil)
+	if err != nil {
+		tmpFile.Close()
+		return
+	}
+	if userAgent != "" {
+		req.Header.Set("User-Agent", userAgent)
+	}
+	req.Header.Set("Range", fmt.Sprintf("bytes=%d-", start))
+
+	resp, err := client.Do(req)
+	if err != nil {
+		tmpFile.Close()
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusPartialContent && resp.StatusCode != http.StatusOK {
+		tmpFile.Close()
+		return
+	}
+
+	// If server returned 200 OK (ignoring Range), skip the prefix we don't need
+	if resp.StatusCode == http.StatusOK && start > 0 {
+		if _, err := io.CopyN(io.Discard, resp.Body, start); err != nil {
+			tmpFile.Close()
+			return
+		}
+	}
+
+	_, err = io.Copy(tmpFile, resp.Body)
+	tmpFile.Close()
+	if err != nil {
+		return
+	}
+
+	finalPath := filepath.Join(c.dir, tailHash)
+	if err := os.Rename(tmpFile.Name(), finalPath); err != nil {
+		return
+	}
+
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	_, _ = c.db.Exec(`INSERT OR REPLACE INTO cache_files (hash, cached_at, complete, access_time) VALUES (?, ?, ?, ?)`,
+		tailHash, time.Now().UnixNano(), true, time.Now().UnixNano())
+}
+
+// GetTail returns the path to the cached tail file if available.
+func (c *FileCache) GetTail(url string) (string, bool) {
+	tailHash := TailHash(url)
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	var exists bool
+	err := c.db.QueryRow("SELECT 1 FROM cache_files WHERE hash = ?", tailHash).Scan(&exists)
+	if err != nil {
+		return "", false
+	}
+
+	path := filepath.Join(c.dir, tailHash)
+	if _, err := os.Stat(path); err != nil {
+		_, _ = c.db.Exec("DELETE FROM cache_files WHERE hash = ?", tailHash)
+		return "", false
+	}
+
+	nowNano := time.Now().UnixNano()
+	_, _ = c.db.Exec("UPDATE cache_files SET access_time = ? WHERE hash = ?", nowNano, tailHash)
+
+	return path, true
 }
 
 func (c *FileCache) download(urlStr, hash string, client *http.Client, userAgent string) {

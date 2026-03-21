@@ -1,8 +1,11 @@
 package filecache
 
 import (
+	"bytes"
 	"database/sql"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -436,6 +439,216 @@ func TestConfigurableCacheSizeIntegration(t *testing.T) {
 		err := fc.db.QueryRow("SELECT 1 FROM cache_files WHERE hash = ?", hash).Scan(&exists)
 		if err == nil {
 			t.Errorf("Item %s should have been evicted", hash)
+		}
+	}
+}
+
+func TestTailCacheDownload(t *testing.T) {
+	// Create a 10MB file on a test server
+	fileSize := 10 * 1024 * 1024
+	fileContent := make([]byte, fileSize)
+	for i := range fileContent {
+		fileContent[i] = byte(i % 256)
+	}
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.ServeContent(w, r, "video.mp4", time.Now(), bytes.NewReader(fileContent))
+	}))
+	defer ts.Close()
+
+	tempDir, err := os.MkdirTemp("", "filecache_tail_test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	Reset()
+	fc, err := GetInstance(tempDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Start tail caching
+	fc.StartTailCaching(ts.URL, int64(fileSize), http.DefaultClient, "")
+
+	// Wait for download to complete
+	var tailPath string
+	var tailExists bool
+	for i := 0; i < 50; i++ {
+		tailPath, tailExists = fc.GetTail(ts.URL)
+		if tailExists {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	if !tailExists {
+		t.Fatal("Tail cache should exist after download")
+	}
+
+	// Verify file size: should be TailCacheSize (4MB)
+	info, err := os.Stat(tailPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Size() != TailCacheSize {
+		t.Errorf("Expected tail file size %d, got %d", TailCacheSize, info.Size())
+	}
+
+	// Verify content: should be last 4MB of the file
+	tailData, err := os.ReadFile(tailPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expectedStart := fileSize - TailCacheSize
+	if !bytes.Equal(tailData, fileContent[expectedStart:]) {
+		t.Error("Tail cache content does not match expected file tail")
+	}
+}
+
+func TestTailCacheSkipSmallFile(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "filecache_tail_skip_test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	Reset()
+	fc, err := GetInstance(tempDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// File size <= MaxFileSize: no tail should be created
+	fc.StartTailCaching("http://example.com/small.mp4", MaxFileSize, http.DefaultClient, "")
+
+	time.Sleep(200 * time.Millisecond)
+
+	_, exists := fc.GetTail("http://example.com/small.mp4")
+	if exists {
+		t.Error("Tail cache should not be created for files <= MaxFileSize")
+	}
+}
+
+func TestGetTail(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "filecache_get_tail_test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	Reset()
+	fc, err := GetInstance(tempDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	url := "http://example.com/video.mp4"
+	tailHash := TailHash(url)
+
+	// Pre-create tail file and DB entry
+	tailPath := filepath.Join(fc.dir, tailHash)
+	if err := os.WriteFile(tailPath, []byte("tail data"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	_, err = fc.db.Exec(`INSERT INTO cache_files (hash, cached_at, complete, access_time) VALUES (?, ?, ?, ?)`,
+		tailHash, time.Now().UnixNano(), true, time.Now().Add(-1*time.Hour).UnixNano())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Retrieve it
+	path, exists := fc.GetTail(url)
+	if !exists {
+		t.Fatal("GetTail should find pre-created entry")
+	}
+	if path != tailPath {
+		t.Errorf("Expected path %s, got %s", tailPath, path)
+	}
+
+	// Verify access_time was updated (should be recent)
+	var accessTime int64
+	err = fc.db.QueryRow("SELECT access_time FROM cache_files WHERE hash = ?", tailHash).Scan(&accessTime)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if time.Since(time.Unix(0, accessTime)) > 5*time.Second {
+		t.Error("Access time should have been updated to now")
+	}
+}
+
+func TestLRUWithTailFiles(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "filecache_lru_tail_test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	oldVal := os.Getenv("WEBDAV_CACHE_SIZE")
+	os.Setenv("WEBDAV_CACHE_SIZE", "10")
+	defer func() {
+		if oldVal != "" {
+			os.Setenv("WEBDAV_CACHE_SIZE", oldVal)
+		} else {
+			os.Unsetenv("WEBDAV_CACHE_SIZE")
+		}
+	}()
+
+	Reset()
+	fc, err := GetInstance(tempDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create 8 front entries (recent) + 4 tail entries (old)
+	// With max 10, the 2 oldest should be evicted
+	for i := 0; i < 8; i++ {
+		hash := fmt.Sprintf("front%d", i)
+		path := filepath.Join(fc.dir, hash)
+		if err := os.WriteFile(path, []byte("data"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		_, err := fc.db.Exec(`INSERT OR REPLACE INTO metadata (hash, url, size) VALUES (?, ?, ?)`,
+			hash, fmt.Sprintf("http://example.com/%d", i), 4)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = fc.db.Exec(`INSERT OR REPLACE INTO cache_files (hash, cached_at, complete, access_time) VALUES (?, ?, ?, ?)`,
+			hash, time.Now().UnixNano(), true, time.Now().UnixNano())
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	for i := 0; i < 4; i++ {
+		hash := fmt.Sprintf("tail%d_tail", i)
+		path := filepath.Join(fc.dir, hash)
+		if err := os.WriteFile(path, []byte("tail"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		_, err := fc.db.Exec(`INSERT OR REPLACE INTO cache_files (hash, cached_at, complete, access_time) VALUES (?, ?, ?, ?)`,
+			hash, time.Now().UnixNano(), true, time.Now().Add(-2*time.Hour).UnixNano())
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	fc.CleanNow()
+
+	var count int
+	if err := fc.db.QueryRow("SELECT COUNT(*) FROM cache_files").Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 10 {
+		t.Errorf("Expected 10 cache entries, got %d", count)
+	}
+
+	// The 2 oldest tail entries should have been evicted
+	for i := 0; i < 2; i++ {
+		hash := fmt.Sprintf("tail%d_tail", i)
+		path := filepath.Join(fc.dir, hash)
+		if _, err := os.Stat(path); err == nil {
+			t.Errorf("Tail file %s should have been evicted", hash)
 		}
 	}
 }
