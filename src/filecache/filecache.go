@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -544,16 +545,30 @@ func (c *FileCache) cleaner() {
 	}
 }
 
+// baseHash returns the URL-level hash by stripping the _tail suffix if present.
+func baseHash(h string) string {
+	if strings.HasSuffix(h, "_tail") {
+		return strings.TrimSuffix(h, "_tail")
+	}
+	return h
+}
+
 // CleanNow performs the cleanup immediately.
+// The limit (maxItems) counts URL pairs, not individual files. When a URL is
+// evicted, both its front and tail cache entries are removed together.
 func (c *FileCache) CleanNow() {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
 	maxItems := getMaxCacheItems()
 
-	// Count items
+	// Count distinct URLs (base hashes) by stripping _tail suffix.
+	// We use the most recent access_time across front+tail as the pair's access time.
 	var count int
-	if err := c.db.QueryRow("SELECT COUNT(*) FROM cache_files").Scan(&count); err != nil {
+	if err := c.db.QueryRow(`
+		SELECT COUNT(DISTINCT CASE WHEN hash LIKE '%_tail' THEN substr(hash, 1, length(hash)-5) ELSE hash END)
+		FROM cache_files
+	`).Scan(&count); err != nil {
 		return
 	}
 
@@ -562,25 +577,40 @@ func (c *FileCache) CleanNow() {
 	}
 
 	toRemove := count - maxItems
-	rows, err := c.db.Query("SELECT hash FROM cache_files ORDER BY access_time ASC LIMIT ?", toRemove)
+
+	// Find the oldest URL pairs by their most recent access_time (max across front+tail).
+	rows, err := c.db.Query(`
+		SELECT base_hash FROM (
+			SELECT CASE WHEN hash LIKE '%_tail' THEN substr(hash, 1, length(hash)-5) ELSE hash END AS base_hash,
+			       MAX(access_time) AS last_access
+			FROM cache_files
+			GROUP BY base_hash
+			ORDER BY last_access ASC
+			LIMIT ?
+		)
+	`, toRemove)
 	if err != nil {
 		return
 	}
 	defer rows.Close()
 
-	var hashes []string
+	var baseHashes []string
 	for rows.Next() {
 		var h string
 		if err := rows.Scan(&h); err == nil {
-			hashes = append(hashes, h)
+			baseHashes = append(baseHashes, h)
 		}
 	}
 	rows.Close()
 
-	for _, h := range hashes {
-		os.Remove(filepath.Join(c.dir, h))
-		// Ignore error on delete
-		_, _ = c.db.Exec("DELETE FROM cache_files WHERE hash = ?", h)
+	for _, bh := range baseHashes {
+		// Remove front cache
+		os.Remove(filepath.Join(c.dir, bh))
+		_, _ = c.db.Exec("DELETE FROM cache_files WHERE hash = ?", bh)
+		// Remove tail cache
+		tailH := bh + "_tail"
+		os.Remove(filepath.Join(c.dir, tailH))
+		_, _ = c.db.Exec("DELETE FROM cache_files WHERE hash = ?", tailH)
 	}
 }
 

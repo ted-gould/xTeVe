@@ -584,8 +584,9 @@ func TestLRUWithTailFiles(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
+	// Limit is 5 URL pairs
 	oldVal := os.Getenv("WEBDAV_CACHE_SIZE")
-	os.Setenv("WEBDAV_CACHE_SIZE", "10")
+	os.Setenv("WEBDAV_CACHE_SIZE", "5")
 	defer func() {
 		if oldVal != "" {
 			os.Setenv("WEBDAV_CACHE_SIZE", oldVal)
@@ -600,34 +601,40 @@ func TestLRUWithTailFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create 8 front entries (recent) + 4 tail entries (old)
-	// With max 10, the 2 oldest should be evicted
-	for i := 0; i < 8; i++ {
-		hash := fmt.Sprintf("front%d", i)
-		path := filepath.Join(fc.dir, hash)
-		if err := os.WriteFile(path, []byte("data"), 0644); err != nil {
+	// Create 7 URL pairs (front + tail each). That's 7 URLs > limit of 5.
+	// URLs 0-1 have old access times (should be evicted).
+	// URLs 2-6 have recent access times (should remain).
+	for i := 0; i < 7; i++ {
+		frontHash := fmt.Sprintf("url%d", i)
+		tailHash := fmt.Sprintf("url%d_tail", i)
+
+		// Create front file
+		if err := os.WriteFile(filepath.Join(fc.dir, frontHash), []byte("front"), 0644); err != nil {
 			t.Fatal(err)
 		}
+		// Create tail file
+		if err := os.WriteFile(filepath.Join(fc.dir, tailHash), []byte("tail"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
 		_, err := fc.db.Exec(`INSERT OR REPLACE INTO metadata (hash, url, size) VALUES (?, ?, ?)`,
-			hash, fmt.Sprintf("http://example.com/%d", i), 4)
+			frontHash, fmt.Sprintf("http://example.com/%d", i), 1000)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		accessTime := time.Now()
+		if i < 2 {
+			accessTime = time.Now().Add(-2 * time.Hour) // old
+		}
+
+		_, err = fc.db.Exec(`INSERT OR REPLACE INTO cache_files (hash, cached_at, complete, access_time) VALUES (?, ?, ?, ?)`,
+			frontHash, time.Now().UnixNano(), true, accessTime.UnixNano())
 		if err != nil {
 			t.Fatal(err)
 		}
 		_, err = fc.db.Exec(`INSERT OR REPLACE INTO cache_files (hash, cached_at, complete, access_time) VALUES (?, ?, ?, ?)`,
-			hash, time.Now().UnixNano(), true, time.Now().UnixNano())
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	for i := 0; i < 4; i++ {
-		hash := fmt.Sprintf("tail%d_tail", i)
-		path := filepath.Join(fc.dir, hash)
-		if err := os.WriteFile(path, []byte("tail"), 0644); err != nil {
-			t.Fatal(err)
-		}
-		_, err := fc.db.Exec(`INSERT OR REPLACE INTO cache_files (hash, cached_at, complete, access_time) VALUES (?, ?, ?, ?)`,
-			hash, time.Now().UnixNano(), true, time.Now().Add(-2*time.Hour).UnixNano())
+			tailHash, time.Now().UnixNano(), true, accessTime.UnixNano())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -635,20 +642,46 @@ func TestLRUWithTailFiles(t *testing.T) {
 
 	fc.CleanNow()
 
+	// Should have 5 URL pairs remaining = 10 cache_files rows
 	var count int
 	if err := fc.db.QueryRow("SELECT COUNT(*) FROM cache_files").Scan(&count); err != nil {
 		t.Fatal(err)
 	}
 	if count != 10 {
-		t.Errorf("Expected 10 cache entries, got %d", count)
+		t.Errorf("Expected 10 cache_files rows (5 pairs), got %d", count)
 	}
 
-	// The 2 oldest tail entries should have been evicted
+	// URLs 0-1 should be fully evicted (both front and tail)
 	for i := 0; i < 2; i++ {
-		hash := fmt.Sprintf("tail%d_tail", i)
-		path := filepath.Join(fc.dir, hash)
-		if _, err := os.Stat(path); err == nil {
-			t.Errorf("Tail file %s should have been evicted", hash)
+		frontHash := fmt.Sprintf("url%d", i)
+		tailHash := fmt.Sprintf("url%d_tail", i)
+
+		if _, err := os.Stat(filepath.Join(fc.dir, frontHash)); err == nil {
+			t.Errorf("Front file %s should have been evicted", frontHash)
+		}
+		if _, err := os.Stat(filepath.Join(fc.dir, tailHash)); err == nil {
+			t.Errorf("Tail file %s should have been evicted", tailHash)
+		}
+
+		var exists bool
+		if err := fc.db.QueryRow("SELECT 1 FROM cache_files WHERE hash = ?", frontHash).Scan(&exists); err == nil {
+			t.Errorf("Front entry %s should have been evicted from DB", frontHash)
+		}
+		if err := fc.db.QueryRow("SELECT 1 FROM cache_files WHERE hash = ?", tailHash).Scan(&exists); err == nil {
+			t.Errorf("Tail entry %s should have been evicted from DB", tailHash)
+		}
+	}
+
+	// URLs 2-6 should still exist (both front and tail)
+	for i := 2; i < 7; i++ {
+		frontHash := fmt.Sprintf("url%d", i)
+		tailHash := fmt.Sprintf("url%d_tail", i)
+
+		if _, err := os.Stat(filepath.Join(fc.dir, frontHash)); err != nil {
+			t.Errorf("Front file %s should still exist", frontHash)
+		}
+		if _, err := os.Stat(filepath.Join(fc.dir, tailHash)); err != nil {
+			t.Errorf("Tail file %s should still exist", tailHash)
 		}
 	}
 }
