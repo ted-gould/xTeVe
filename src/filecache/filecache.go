@@ -11,7 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -543,14 +542,6 @@ func (c *FileCache) cleaner() {
 	for range ticker.C {
 		c.CleanNow()
 	}
-}
-
-// baseHash returns the URL-level hash by stripping the _tail suffix if present.
-func baseHash(h string) string {
-	if strings.HasSuffix(h, "_tail") {
-		return strings.TrimSuffix(h, "_tail")
-	}
-	return h
 }
 
 // CleanNow performs the cleanup immediately.
