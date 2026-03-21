@@ -548,6 +548,15 @@ func resolveFileMetadata(ctx context.Context, hash string, stream map[string]str
 
 		// Update in-memory cache
 		updateMetadataCache(hash, targetURL, FileMeta{Size: finalSize, ModTime: finalModTime})
+
+		// Eagerly start caching both front and tail so data is ready before reads
+		if os.Getenv("XTEVE_DISABLE_CACHE") == "" {
+			client := NewHTTPClient()
+			fc.StartCaching(targetURL, client, Settings.UserAgent)
+			if finalSize > filecache.MaxFileSize {
+				fc.StartTailCaching(targetURL, finalSize, client, Settings.UserAgent)
+			}
+		}
 	}
 
 	span.SetAttributes(
@@ -1207,11 +1216,10 @@ func (s *webdavStream) openStream(offset int64) (err error) {
 	fc := getFileCache()
 	path, meta, exists := fc.Get(url)
 
-	// If request is within cache range (1MB) and we have it
+	// If request is within front cache range and we have it
 	if exists && offset < filecache.MaxFileSize {
 		f, err := os.Open(path)
 		if err == nil {
-			// Seek
 			if _, err := f.Seek(offset, io.SeekStart); err == nil {
 				s.readCloser = f
 				s.usingCache = true
@@ -1220,6 +1228,30 @@ func (s *webdavStream) openStream(offset int64) (err error) {
 				return nil
 			} else {
 				f.Close()
+			}
+		}
+	}
+
+	// Tail cache: if offset is within TailCacheSize of end of file
+	if s.size > 0 && offset >= s.size-int64(filecache.TailCacheSize) && offset < s.size {
+		tailPath, tailExists := fc.GetTail(url)
+		if tailExists {
+			f, err := os.Open(tailPath)
+			if err == nil {
+				tailStart := s.size - int64(filecache.TailCacheSize)
+				if tailStart < 0 {
+					tailStart = 0
+				}
+				offsetInTail := offset - tailStart
+				if _, err := f.Seek(offsetInTail, io.SeekStart); err == nil {
+					s.readCloser = f
+					s.usingCache = true
+					s.cacheComplete = true // tail cache covers to end of file
+					span.SetAttributes(attribute.Bool("webdav.tail_cache_hit", true))
+					return nil
+				} else {
+					f.Close()
+				}
 			}
 		}
 	}

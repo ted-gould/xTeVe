@@ -19,8 +19,8 @@ func TestWebDAVContentCache(t *testing.T) {
 	defer os.Unsetenv("XTEVE_ALLOW_LOOPBACK")
 
 	// 1. Setup Mock Server
-	// Serve a file larger than 1MB (e.g. 2MB)
-	fileContent := make([]byte, 2*1024*1024)
+	// Serve a file larger than front+tail cache (10MB)
+	fileContent := make([]byte, 10*1024*1024)
 	for i := range fileContent {
 		fileContent[i] = byte(i % 256)
 	}
@@ -127,27 +127,27 @@ func TestWebDAVContentCache(t *testing.T) {
 			t.Errorf("Expected size %d, got %d", len(fileContent), meta.Size)
 		}
 		if meta.Complete {
-			t.Errorf("Expected incomplete cache (max 1MB)")
+			t.Errorf("Expected incomplete cache (file is larger than MaxFileSize)")
 		}
 
-		// Verify cache file size
+		// Verify cache file size is MaxFileSize (2MB)
 		info, err := os.Stat(cachePath)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if info.Size() != 1024*1024 {
-			t.Errorf("Expected cache file size 1MB, got %d", info.Size())
+		if info.Size() != int64(filecache.MaxFileSize) {
+			t.Errorf("Expected cache file size %d, got %d", filecache.MaxFileSize, info.Size())
 		}
 	}
 
-	// 7. Verify subsequent read uses cache
+	// 7. Verify subsequent read uses cache (inside front cache range)
 	f2, err := fs.OpenFile(ctx, "/"+hash+"/"+dirOnDemand+"/Group C/"+dirIndividual+"/Stream C.mp4", os.O_RDONLY, 0)
 	if err != nil {
 		t.Fatalf("OpenFile 2 failed: %v", err)
 	}
 	defer f2.Close()
 
-	// Seek to 500KB (inside cache)
+	// Seek to 500KB (inside front cache)
 	if _, err := f2.Seek(500*1024, io.SeekStart); err != nil {
 		t.Fatalf("Seek failed: %v", err)
 	}
@@ -164,8 +164,8 @@ func TestWebDAVContentCache(t *testing.T) {
 		t.Errorf("Read 2 content mismatch")
 	}
 
-	// Seek to 1.5MB (outside cache)
-	if _, err := f2.Seek(1500*1024, io.SeekStart); err != nil {
+	// Seek to 5MB (outside both front and tail cache — mid-file)
+	if _, err := f2.Seek(5*1024*1024, io.SeekStart); err != nil {
 		t.Fatalf("Seek outside cache failed: %v", err)
 	}
 
@@ -177,7 +177,125 @@ func TestWebDAVContentCache(t *testing.T) {
 	if n != 100 {
 		t.Errorf("Expected 100 bytes, got %d", n)
 	}
-	if !bytes.Equal(buf3, fileContent[1500*1024:1500*1024+100]) {
+	if !bytes.Equal(buf3, fileContent[5*1024*1024:5*1024*1024+100]) {
 		t.Errorf("Read outside cache content mismatch")
 	}
+}
+
+func TestWebDAVTailCacheServing(t *testing.T) {
+	os.Setenv("XTEVE_ALLOW_LOOPBACK", "true")
+	defer os.Unsetenv("XTEVE_ALLOW_LOOPBACK")
+
+	// 10MB file
+	fileSize := 10 * 1024 * 1024
+	fileContent := make([]byte, fileSize)
+	for i := range fileContent {
+		fileContent[i] = byte(i % 256)
+	}
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.ServeContent(w, r, "video.mp4", time.Now(), bytes.NewReader(fileContent))
+	}))
+	defer ts.Close()
+
+	tempDir, err := os.MkdirTemp("", "xteve_tail_cache_test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	origFolderCache := System.Folder.Cache
+	origFolderTemp := System.Folder.Temp
+	origStreamsAll := Data.Streams.All
+	origFilesM3U := Settings.Files.M3U
+
+	System.Folder.Cache = tempDir
+	System.Folder.Temp = tempDir
+
+	filecache.Reset()
+	globalFileCache = nil
+	globalFileCacheOnce = sync.Once{}
+
+	defer func() {
+		System.Folder.Cache = origFolderCache
+		System.Folder.Temp = origFolderTemp
+		Data.Streams.All = origStreamsAll
+		Settings.Files.M3U = origFilesM3U
+		filecache.Reset()
+	}()
+
+	hash := "tailhash"
+	Settings.Files.M3U = make(map[string]interface{})
+	Settings.Files.M3U[hash] = map[string]interface{}{"name": "Test Tail Cache"}
+
+	stream := map[string]string{
+		"_file.m3u.id": hash,
+		"group-title":  "Group T",
+		"name":         "Stream T",
+		"url":          ts.URL,
+		"_duration":    "456",
+	}
+	Data.Streams.All = []interface{}{stream}
+
+	fs := &WebDAVFS{}
+	ctx := context.Background()
+	filePath := "/" + hash + "/" + dirOnDemand + "/Group T/" + dirIndividual + "/Stream T.mp4"
+
+	// Open the file
+	f, err := fs.OpenFile(ctx, filePath, os.O_RDONLY, 0)
+	if err != nil {
+		t.Fatalf("OpenFile failed: %v", err)
+	}
+
+	// Seek to end to trigger metadata resolution (this is what Plex does)
+	// This also triggers tail caching via resolveFileMetadata
+	endPos, err := f.Seek(0, io.SeekEnd)
+	if err != nil {
+		f.Close()
+		t.Fatalf("SeekEnd failed: %v", err)
+	}
+	if endPos <= 0 {
+		f.Close()
+		t.Fatalf("SeekEnd returned non-positive position: %d", endPos)
+	}
+
+	// Wait for tail cache to be populated
+	fc := getFileCache()
+	var tailExists bool
+	for i := 0; i < 50; i++ {
+		_, tailExists = fc.GetTail(ts.URL)
+		if tailExists {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	if !tailExists {
+		f.Close()
+		t.Fatal("Tail cache should exist after SeekEnd triggered metadata resolution")
+	}
+
+	// Now seek to 1MB from end (within tail cache range)
+	readOffset := int64(fileSize) - 1*1024*1024
+	if _, err := f.Seek(readOffset, io.SeekStart); err != nil {
+		f.Close()
+		t.Fatalf("Seek to tail region failed: %v", err)
+	}
+
+	// Read and verify content
+	buf := make([]byte, 100)
+	n, err := f.Read(buf)
+	if err != nil {
+		f.Close()
+		t.Fatalf("Read from tail region failed: %v", err)
+	}
+	if n != 100 {
+		f.Close()
+		t.Errorf("Expected 100 bytes, got %d", n)
+	}
+	if !bytes.Equal(buf, fileContent[readOffset:readOffset+100]) {
+		f.Close()
+		t.Error("Tail cache content mismatch")
+	}
+	f.Close()
 }
