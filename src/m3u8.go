@@ -111,8 +111,9 @@ func ParseM3U8(stream *ThisStream) (err error) {
 			stream.DynamicStream = make(map[int]DynamicStream)
 		}
 
-		// Optimization: Removed redundant O(N) strings.Count scan. The slice will grow naturally.
-		// m3u8Segments initialized as nil slice by default.
+		// Optimization: Removed redundant O(N) strings.Count pre-allocation scan.
+		// m3u8Segments initialized as nil slice by default to let append handle capacity.
+		// Avoids an extra pass over the potentially large M3U8 string.
 
 		// Optimization: Use string slicing instead of bufio.Scanner to avoid allocation
 		var remainder = stream.Body
