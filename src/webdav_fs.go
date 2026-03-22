@@ -549,15 +549,7 @@ func resolveFileMetadata(ctx context.Context, hash string, stream map[string]str
 		// Update in-memory cache
 		updateMetadataCache(hash, targetURL, FileMeta{Size: finalSize, ModTime: finalModTime})
 
-		// Eagerly start caching both front and tail so data is ready before reads
-		if os.Getenv("XTEVE_DISABLE_CACHE") == "" {
-			client := NewHTTPClient()
-			fc.StartCaching(targetURL, client, Settings.UserAgent)
-			if finalSize > filecache.MaxFileSize {
-				fc.StartTailCaching(targetURL, finalSize, client, Settings.UserAgent)
-			}
 		}
-	}
 
 	span.SetAttributes(
 		attribute.String("metadata.source", source),
@@ -1261,6 +1253,9 @@ func (s *webdavStream) openStream(offset int64) (err error) {
 		// Skip caching if XTEVE_DISABLE_CACHE is set (for retry logic tests)
 		client := NewHTTPClient()
 		fc.StartCaching(url, client, Settings.UserAgent)
+		if s.size > filecache.MaxFileSize {
+			fc.StartTailCaching(url, s.size, client, Settings.UserAgent)
+		}
 	}
 
 	span.SetAttributes(attribute.Bool("webdav.cache_hit", false))
