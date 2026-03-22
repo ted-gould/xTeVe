@@ -1129,6 +1129,13 @@ func (s *webdavStream) Seek(offset int64, whence int) (_ int64, err error) {
 		if info, err := resolveFileMetadata(s.ctx, s.hash, s.stream, s.targetURL, s.name, s.modTime); err == nil {
 			s.size = info.Size()
 			s.modTime = info.ModTime()
+			// Proactively start tail caching now that we know the file size.
+			// This handles the Plex pattern: SeekEnd (to get size) → SeekNearEnd → Read.
+			if s.size > filecache.MaxFileSize && os.Getenv("XTEVE_DISABLE_CACHE") == "" {
+				if fc := getFileCache(); fc != nil {
+					fc.StartTailCaching(s.targetURL, s.size, NewHTTPClient(), Settings.UserAgent)
+				}
+			}
 		}
 	}
 
