@@ -27,6 +27,7 @@ func TestFileCacheLRU(t *testing.T) {
 			os.Setenv("WEBDAV_CACHE_SIZE", oldVal)
 		}
 	}()
+	t.Setenv("SNAP_COMMON", "")
 
 	Reset()
 	fc, err := GetInstance(tempDir)
@@ -131,6 +132,8 @@ func TestFileCache_MetadataPersistence(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
+	t.Setenv("SNAP_COMMON", "")
+
 	Reset()
 	fc, err := GetInstance(tempDir)
 	if err != nil {
@@ -205,6 +208,8 @@ func TestMigration(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
+	t.Setenv("SNAP_COMMON", "")
+
 	// Create JSON file and content file manually BEFORE GetInstance
 	// GetInstance uses tempDir/xteve_cache
 	// Wait, GetInstance logic:
@@ -275,10 +280,10 @@ func TestMigration(t *testing.T) {
 
 func TestConfigurableCacheSize(t *testing.T) {
 	tests := []struct {
-		name           string
-		envValue       string
-		expectedSize   int
-		shouldUseEnv   bool
+		name         string
+		envValue     string
+		expectedSize int
+		shouldUseEnv bool
 	}{
 		{
 			name:         "default cache size when no env var",
@@ -377,6 +382,7 @@ func TestConfigurableCacheSizeIntegration(t *testing.T) {
 			os.Unsetenv("WEBDAV_CACHE_SIZE")
 		}
 	}()
+	t.Setenv("SNAP_COMMON", "")
 
 	Reset()
 	fc, err := GetInstance(tempDir)
@@ -462,6 +468,8 @@ func TestTailCacheDownload(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
+	t.Setenv("SNAP_COMMON", "")
+
 	Reset()
 	fc, err := GetInstance(tempDir)
 	if err != nil {
@@ -513,6 +521,8 @@ func TestTailCacheSkipSmallFile(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
+	t.Setenv("SNAP_COMMON", "")
+
 	Reset()
 	fc, err := GetInstance(tempDir)
 	if err != nil {
@@ -536,6 +546,8 @@ func TestGetTail(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(tempDir)
+
+	t.Setenv("SNAP_COMMON", "")
 
 	Reset()
 	fc, err := GetInstance(tempDir)
@@ -594,6 +606,7 @@ func TestLRUWithTailFiles(t *testing.T) {
 			os.Unsetenv("WEBDAV_CACHE_SIZE")
 		}
 	}()
+	t.Setenv("SNAP_COMMON", "")
 
 	Reset()
 	fc, err := GetInstance(tempDir)

@@ -549,15 +549,7 @@ func resolveFileMetadata(ctx context.Context, hash string, stream map[string]str
 		// Update in-memory cache
 		updateMetadataCache(hash, targetURL, FileMeta{Size: finalSize, ModTime: finalModTime})
 
-		// Eagerly start caching both front and tail so data is ready before reads
-		if os.Getenv("XTEVE_DISABLE_CACHE") == "" {
-			client := NewHTTPClient()
-			fc.StartCaching(targetURL, client, Settings.UserAgent)
-			if finalSize > filecache.MaxFileSize {
-				fc.StartTailCaching(targetURL, finalSize, client, Settings.UserAgent)
-			}
 		}
-	}
 
 	span.SetAttributes(
 		attribute.String("metadata.source", source),
@@ -1137,6 +1129,13 @@ func (s *webdavStream) Seek(offset int64, whence int) (_ int64, err error) {
 		if info, err := resolveFileMetadata(s.ctx, s.hash, s.stream, s.targetURL, s.name, s.modTime); err == nil {
 			s.size = info.Size()
 			s.modTime = info.ModTime()
+			// Proactively start tail caching now that we know the file size.
+			// This handles the Plex pattern: SeekEnd (to get size) → SeekNearEnd → Read.
+			if s.size > filecache.MaxFileSize && os.Getenv("XTEVE_DISABLE_CACHE") == "" {
+				if fc := getFileCache(); fc != nil {
+					fc.StartTailCaching(s.targetURL, s.size, NewHTTPClient(), Settings.UserAgent)
+				}
+			}
 		}
 	}
 
@@ -1261,6 +1260,9 @@ func (s *webdavStream) openStream(offset int64) (err error) {
 		// Skip caching if XTEVE_DISABLE_CACHE is set (for retry logic tests)
 		client := NewHTTPClient()
 		fc.StartCaching(url, client, Settings.UserAgent)
+		if s.size > filecache.MaxFileSize {
+			fc.StartTailCaching(url, s.size, client, Settings.UserAgent)
+		}
 	}
 
 	span.SetAttributes(attribute.Bool("webdav.cache_hit", false))
