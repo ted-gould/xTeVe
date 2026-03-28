@@ -4,7 +4,7 @@
     "target": "es6",
     "sourceMap": false,
     "outDir": "../src/html/js",
-    "strict": false
+    "strict": true
   },
   "include": [
     "*.ts"

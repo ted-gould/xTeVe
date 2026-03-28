@@ -1,8 +1,8 @@
-var SERVER = new Object();
+var SERVER: Record<string, any> = {};
 var BULK_EDIT: Boolean = false;
 var COLUMN_TO_SORT: number;
-var SEARCH_MAPPING = new Object();
-var UNDO = new Object();
+var SEARCH_MAPPING: Record<string, any> = {};
+var UNDO: Record<string, any> = {};
 var SERVER_CONNECTION = false;
 var WS_AVAILABLE = false;
 
@@ -112,7 +112,7 @@ settingsCategory.push(
   ),
 );
 
-function showPopUpElement(elm) {
+function showPopUpElement(elm: any) {
   var allElements = new Array("popup-custom");
 
   for (var i = 0; i < allElements.length; i++) {
@@ -128,8 +128,8 @@ function showPopUpElement(elm) {
   return;
 }
 
-function showElement(elmID, type) {
-  var cssClass: string;
+function showElement(elmID: any, type: any) {
+  var cssClass: string = "";
   switch (type) {
     case true:
       cssClass = "block";
@@ -139,16 +139,16 @@ function showElement(elmID, type) {
       break;
   }
 
-  document.getElementById(elmID).className = cssClass;
+  document.getElementById(elmID)!.className = cssClass;
 }
 
-function changeButtonAction(element, buttonID, attribute) {
+function changeButtonAction(element: any, buttonID: any, attribute: any) {
   var value = element.options[element.selectedIndex].value;
-  document.getElementById(buttonID).setAttribute(attribute, value);
+  document.getElementById(buttonID)!.setAttribute(attribute, value);
 }
 
-function getLocalData(dataType, id): object {
-  let data = {};
+function getLocalData(dataType: any, id: any): Record<string, any> {
+  let data: Record<string, any> = {};
   switch (dataType) {
     case "m3u":
       data = SERVER["settings"]["files"][dataType][id];
@@ -197,7 +197,7 @@ function getLocalData(dataType, id): object {
   return data;
 }
 
-function getOwnObjProps(object: Object): string[] {
+function getOwnObjProps(object: any): string[] {
   return object ? Object.getOwnPropertyNames(object) : [];
 }
 
@@ -208,11 +208,13 @@ function getAllSelectedChannels(): string[] {
     return channels;
   }
 
-  var trs = document.getElementById("content_table").getElementsByTagName("TR");
+  var trs = document
+    .getElementById("content_table")!
+    .getElementsByTagName("TR");
 
   for (var i = 1; i < trs.length; i++) {
     if ((trs[i] as HTMLElement).style.display != "none") {
-      if ((trs[i].firstChild.firstChild as HTMLInputElement).checked == true) {
+      if ((trs[i].firstChild!.firstChild as HTMLInputElement).checked == true) {
         channels.push(trs[i].id);
       }
     }
@@ -223,9 +225,11 @@ function getAllSelectedChannels(): string[] {
 
 function selectAllChannels() {
   var bulk: Boolean = false;
-  var trs = document.getElementById("content_table").getElementsByTagName("TR");
+  var trs = document
+    .getElementById("content_table")!
+    .getElementsByTagName("TR");
 
-  if ((trs[0].firstChild.firstChild as HTMLInputElement).checked == true) {
+  if ((trs[0].firstChild!.firstChild as HTMLInputElement).checked == true) {
     bulk = true;
   }
 
@@ -233,11 +237,11 @@ function selectAllChannels() {
     if ((trs[i] as HTMLElement).style.display != "none") {
       switch (bulk) {
         case true:
-          (trs[i].firstChild.firstChild as HTMLInputElement).checked = true;
+          (trs[i].firstChild!.firstChild as HTMLInputElement).checked = true;
           break;
 
         case false:
-          (trs[i].firstChild.firstChild as HTMLInputElement).checked = false;
+          (trs[i].firstChild!.firstChild as HTMLInputElement).checked = false;
           break;
       }
     }
@@ -248,7 +252,7 @@ function selectAllChannels() {
 
 function bulkEdit() {
   BULK_EDIT = !BULK_EDIT;
-  var className: string;
+  var className: string = "";
   var rows = document.getElementsByClassName("bulk");
 
   switch (BULK_EDIT) {
@@ -269,12 +273,12 @@ function bulkEdit() {
   return;
 }
 
-function sortTable(column) {
+function sortTable(column: any) {
   if (column == COLUMN_TO_SORT) {
     return;
   }
 
-  const table = document.getElementById("content_table");
+  const table = document.getElementById("content_table")!;
   const tableHead = table.getElementsByTagName("TR")[0];
   const tableItems = tableHead.getElementsByTagName("TD");
 
@@ -284,7 +288,7 @@ function sortTable(column) {
   };
 
   const sortArr: SortEntry[] = [];
-  let xValue: string | number;
+  let xValue: string | number = "";
 
   if (column >= 0 && COLUMN_TO_SORT >= 0) {
     tableItems[COLUMN_TO_SORT].className = "pointer";
@@ -353,7 +357,7 @@ function sortTable(column) {
 }
 
 function createSearchObj() {
-  SEARCH_MAPPING = new Object();
+  SEARCH_MAPPING = {};
   var data = SERVER["xepg"]["epgMapping"];
   var channels = getOwnObjProps(data);
 
@@ -404,19 +408,21 @@ function searchInMapping() {
   var searchValue = (
     document.getElementById("searchMapping") as HTMLInputElement
   ).value;
-  var trs = document.getElementById("content_table").getElementsByTagName("TR");
+  var trs = document
+    .getElementById("content_table")!
+    .getElementsByTagName("TR");
 
   for (var i = 1; i < trs.length; ++i) {
-    var id = trs[i].getAttribute("id");
+    var id = trs[i].getAttribute("id")!;
     var element = SEARCH_MAPPING[id];
 
     switch (element.toLowerCase().includes(searchValue.toLowerCase())) {
       case true:
-        document.getElementById(id).style.display = "";
+        document.getElementById(id)!.style.display = "";
         break;
 
       case false:
-        document.getElementById(id).style.display = "none";
+        document.getElementById(id)!.style.display = "none";
         break;
     }
   }
@@ -426,13 +432,13 @@ function searchInMapping() {
 
 function calculateWrapperHeight() {
   if (document.getElementById("box-wrapper")) {
-    var elm = document.getElementById("box-wrapper");
+    var elm = document.getElementById("box-wrapper")!;
 
     var divs = new Array("myStreamsBox", "clientInfo", "content");
-    var elementsHeight = 0 - elm.offsetHeight;
+    var elementsHeight = 0 - (elm as HTMLElement).offsetHeight;
     for (var i = 0; i < divs.length; i++) {
       elementsHeight =
-        elementsHeight + document.getElementById(divs[i]).offsetHeight;
+        elementsHeight + document.getElementById(divs[i])!.offsetHeight;
     }
 
     elm.style.height = window.innerHeight - elementsHeight + "px";
@@ -441,7 +447,7 @@ function calculateWrapperHeight() {
   return;
 }
 
-function changeChannelNumber(element) {
+function changeChannelNumber(element: any) {
   var dbID = element.parentNode.parentNode.id;
 
   var newNumber: number = parseFloat(element.value);
@@ -485,7 +491,7 @@ function changeChannelNumber(element) {
 }
 
 function backup() {
-  var data = new Object();
+  var data: Record<string, any> = {};
   var cmd = "xteveBackup";
   var server: Server = new Server(cmd);
   server.request(data);
@@ -495,7 +501,7 @@ function backup() {
 
 function toggleChannelStatus(id: string) {
   var element: any;
-  var status: boolean;
+  var status: boolean = false;
 
   if (document.getElementById("active")) {
     var checkbox = document.getElementById("active") as HTMLInputElement;
@@ -531,9 +537,9 @@ function toggleChannelStatus(id: string) {
     }
 
     if (channel["x-active"] == false) {
-      document.getElementById(id).className = "notActiveEPG";
+      document.getElementById(id)!.className = "notActiveEPG";
     } else {
-      document.getElementById(id).className = "activeEPG";
+      document.getElementById(id)!.className = "activeEPG";
     }
   });
 }
@@ -543,7 +549,7 @@ function toggleGroupUpdateCb(xepgId: string, target: HTMLInputElement) {
 
   const groupInput: HTMLInputElement = document.querySelector(
     'input[name="x-group-title"]',
-  );
+  )!;
   const mapping = getLocalData("mapping", xepgId);
 
   if (target.checked) {
@@ -551,7 +557,7 @@ function toggleGroupUpdateCb(xepgId: string, target: HTMLInputElement) {
     groupInput.value = mapping["group-title"];
     groupInput.disabled = true;
   } else {
-    groupInput.value = groupInput.dataset.oldValue;
+    groupInput.value = groupInput.dataset.oldValue!;
     groupInput.disabled = false;
   }
 
@@ -560,7 +566,7 @@ function toggleGroupUpdateCb(xepgId: string, target: HTMLInputElement) {
 
 function restore() {
   if (document.getElementById("upload")) {
-    document.getElementById("upload").remove();
+    document.getElementById("upload")!.remove();
   }
 
   var restore = document.createElement("INPUT");
@@ -573,19 +579,19 @@ function restore() {
   restore.click();
 
   restore.onchange = function () {
-    var filename = (restore as HTMLInputElement).files[0].name;
+    var filename = (restore as HTMLInputElement).files![0].name;
     var check = confirm("File: " + filename + "\n{{.confirm.restore}}");
 
     if (check == true) {
       var reader = new FileReader();
       var file = (
         document.querySelector("input[type=file]") as HTMLInputElement
-      ).files[0];
+      ).files![0];
 
       if (file) {
         reader.readAsDataURL(file);
         reader.onload = function () {
-          var data = new Object();
+          var data: Record<string, any> = {};
           var cmd = "xteveRestore";
           data["base64"] = reader.result;
 
@@ -606,7 +612,7 @@ function restore() {
 
 function uploadLogo() {
   if (document.getElementById("upload")) {
-    document.getElementById("upload").remove();
+    document.getElementById("upload")!.remove();
   }
 
   var upload = document.createElement("INPUT");
@@ -623,16 +629,16 @@ function uploadLogo() {
   };
 
   upload.onchange = function () {
-    var filename = (upload as HTMLInputElement).files[0].name;
+    var filename = (upload as HTMLInputElement).files![0].name;
 
     var reader = new FileReader();
     var file = (document.querySelector("input[type=file]") as HTMLInputElement)
-      .files[0];
+      .files![0];
 
     if (file) {
       reader.readAsDataURL(file);
       reader.onload = function () {
-        var data = new Object();
+        var data: Record<string, any> = {};
         var cmd = "uploadLogo";
         data["base64"] = reader.result;
         data["filename"] = file.name;
@@ -674,5 +680,5 @@ function checkUndo(key: string) {
 
 function updateLog() {
   var server: Server = new Server("updateLog");
-  server.request(new Object());
+  server.request({});
 }

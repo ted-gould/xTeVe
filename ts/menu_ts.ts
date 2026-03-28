@@ -3,14 +3,14 @@ class MainMenu {
   HTMLTag: string = "LI";
   ImagePath: string = "img/";
 
-  createIMG(src): any {
+  createIMG(src: any): any {
     let element = document.createElement("IMG");
     element.setAttribute("src", this.ImagePath + src);
     element.setAttribute("alt", src);
     return element;
   }
 
-  createValue(value): any {
+  createValue(value: any): any {
     let element = document.createElement("P");
     element.innerHTML = value;
     return element;
@@ -22,8 +22,8 @@ class MainMenuItem extends MainMenu {
   value: string;
   imgSrc: string;
   headline: string;
-  id: string;
-  tableHeader: string[];
+  id!: string;
+  tableHeader!: string[];
 
   constructor(menuKey: string, value: string, image: string, headline: string) {
     super();
@@ -43,7 +43,7 @@ class MainMenuItem extends MainMenu {
     item.appendChild(img);
     item.appendChild(value);
 
-    let doc = document.getElementById(this.DocumentID);
+    let doc = document.getElementById(this.DocumentID)!;
     doc.appendChild(item);
 
     switch (this.menuKey) {
@@ -113,11 +113,11 @@ class MainMenuItem extends MainMenu {
 class Content {
   DocumentID: string = "content";
   TableID: string = "content_table";
-  DivID: string;
+  DivID!: string;
   headerClass: string = "content_table_header";
   interactionID: string = "content-interaction";
 
-  createHeadline(value): any {
+  createHeadline(value: any): any {
     let element = document.createElement("H3");
     element.innerHTML = value;
     return element;
@@ -152,9 +152,9 @@ class Content {
   }
 
   createTableContent(menuKey: string): string[] {
-    let data = {};
-    let rows = [];
-    let fileTypes = [];
+    let data: Record<string, any> = {};
+    let rows: any[] = [];
+    let fileTypes: string[] = [];
 
     switch (menuKey) {
       case "playlist":
@@ -576,19 +576,17 @@ class Content {
 
     return rows;
   }
-
-  return;
 }
 
 class Cell {
-  child: Boolean;
-  childType: string;
-  value: any;
-  className: string;
-  tdClassName: string;
-  imageURL: string;
-  onclick: boolean;
-  onclickFunction: string;
+  child!: Boolean;
+  childType!: string;
+  value!: any;
+  className!: string;
+  tdClassName!: string;
+  imageURL!: string;
+  onclick!: boolean;
+  onclickFunction!: string;
 
   createCell(): any {
     let td = document.createElement("TD");
@@ -665,8 +663,6 @@ class Cell {
 
     return td;
   }
-
-  return;
 }
 
 class ShowContent extends Content {
@@ -688,7 +684,7 @@ class ShowContent extends Content {
   show(): void {
     COLUMN_TO_SORT = -1;
     // Delete old content
-    let doc = document.getElementById(this.DocumentID);
+    let doc = document.getElementById(this.DocumentID)!;
     doc.innerHTML = "";
     showPreview(false);
 
@@ -705,7 +701,7 @@ class ShowContent extends Content {
     // Interaction
     let div = this.createInteraction();
     doc.appendChild(div);
-    let interaction = document.getElementById(this.interactionID);
+    let interaction = document.getElementById(this.interactionID)!;
     switch (menuKey) {
       case "playlist":
         var input = this.createInput("button", menuKey, "{{.button.new}}");
@@ -716,7 +712,7 @@ class ShowContent extends Content {
 
       case "filter":
         var input = this.createInput("button", menuKey, "{{.button.new}}");
-        input.setAttribute("id", -1);
+        input.setAttribute("id", "-1");
         input.setAttribute("onclick", 'javascript: openPopUp("filter", this)');
         interaction.appendChild(input);
         break;
@@ -898,7 +894,7 @@ class ShowContent extends Content {
 
       // Content of the table
       var rows: any = this.createTableContent(menuKey);
-      rows.forEach((tr) => {
+      rows.forEach((tr: any) => {
         table.appendChild(tr);
       });
     }
@@ -948,14 +944,14 @@ function createLayout() {
   let keys = getOwnObjProps(obj);
   for (var i = 0; i < keys.length; i++) {
     if (document.getElementById(keys[i])) {
-      document.getElementById(keys[i]).innerHTML = obj[keys[i]];
+      document.getElementById(keys[i])!.innerHTML = obj[keys[i]];
       if (location.protocol === "https:") {
         if (
           keys[i] === "xepg-url" ||
           keys[i] === "m3u-url" ||
           keys[i] === "DVR"
         ) {
-          document.getElementById(keys[i]).addEventListener(
+          document.getElementById(keys[i])!.addEventListener(
             "click",
             function (event) {
               const target = event.target as HTMLElement;
@@ -975,7 +971,7 @@ function createLayout() {
   }
 
   // Create menu
-  document.getElementById("main-menu").innerHTML = "";
+  document.getElementById("main-menu")!.innerHTML = "";
   for (let i = 0; i < menuItems.length; i++) {
     menuItems[i].id = i;
 
@@ -1003,7 +999,7 @@ function createLayout() {
   return;
 }
 
-function openThisMenu(element) {
+function openThisMenu(element: any) {
   let id = element.id;
   let content: ShowContent = new ShowContent(id);
   content.show();
@@ -1015,7 +1011,7 @@ function openThisMenu(element) {
 class PopupWindow {
   DocumentID: string = "popup-custom";
   InteractionID: string = "interaction";
-  doc = document.getElementById(this.DocumentID);
+  doc = document.getElementById(this.DocumentID)!;
 
   createTitle(title: string): any {
     let td = document.createElement("TD");
@@ -1024,7 +1020,7 @@ class PopupWindow {
     return td;
   }
 
-  createContent(element): any {
+  createContent(element: any): any {
     let td = document.createElement("TD");
     td.appendChild(element);
     return td;
@@ -1041,7 +1037,7 @@ class PopupWindow {
 class PopupContent extends PopupWindow {
   table = document.createElement("TABLE");
 
-  createHeadline(headline): void {
+  createHeadline(headline: any): void {
     this.doc.innerHTML = "";
     var element = document.createElement("H3");
     element.innerHTML = headline.toUpperCase();
@@ -1134,13 +1130,13 @@ class PopupContent extends PopupWindow {
 
   // Interaction
   addInteraction(element: any) {
-    let interaction = document.getElementById("popup-interaction");
+    let interaction = document.getElementById("popup-interaction")!;
     interaction.appendChild(element);
   }
 }
 
-function openPopUp(dataType, element) {
-  let data: object = {};
+function openPopUp(dataType: any, element: any) {
+  let data: Record<string, any> = {};
   let id: any;
   switch (element) {
     case undefined:
@@ -1959,7 +1955,7 @@ function openPopUp(dataType, element) {
 }
 
 class XMLTVFile {
-  File: string;
+  File!: string;
 
   getFiles(set: string): any {
     let fileIDs: string[] = getOwnObjProps(SERVER["xepg"]["xmltvMap"]);
@@ -2035,16 +2031,16 @@ class XMLTVFile {
     option.innerText = "-";
     datalist.appendChild(option);
 
-    const epg: Object = SERVER["xepg"]["xmltvMap"][xmlTvFile];
+    const epg: Record<string, any> = SERVER["xepg"]["xmltvMap"][xmlTvFile];
 
     if (epg) {
       const programIds = getOwnObjProps(epg);
 
       programIds.forEach((programId) => {
-        const program: Object = epg[programId];
+        const program: Record<string, any> = epg[programId];
 
         if (program.hasOwnProperty("display-names")) {
-          program["display-names"].forEach((displayName: Object) => {
+          program["display-names"].forEach((displayName: any) => {
             const option = document.createElement("option");
             option.setAttribute("value", programId);
             option.innerText = displayName["Value"];
@@ -2063,16 +2059,14 @@ class XMLTVFile {
 
     return [container, input, datalist];
   }
-
-  return;
 }
 
-function getValueFromProviderFile(file: string, fileType, key) {
+function getValueFromProviderFile(file: string, fileType: any, key: any) {
   if (file == "xTeVe Dummy") {
     return file;
   }
 
-  let fileID: string;
+  let fileID: string = "";
   let indicator = file.charAt(0);
 
   switch (indicator) {
@@ -2107,7 +2101,7 @@ function setXmltvChannel(epgMapId: string, xmlTvFileSelect: HTMLSelectElement) {
   // Remove old XMLTV ID selection box
   const xmlTvIdPickerParent = document.getElementById(
     "xmltv-id-picker-container",
-  ).parentElement as HTMLTableCellElement;
+  )!.parentElement as HTMLTableCellElement;
   xmlTvIdPickerParent.innerHTML = "";
 
   // Create new XMLTV ID selection box
@@ -2158,7 +2152,7 @@ function checkXmltvChannel(
 }
 
 function changeChannelLogo(epgMapId: string) {
-  const channel: Object = SERVER["xepg"]["epgMapping"][epgMapId];
+  const channel: Record<string, any> = SERVER["xepg"]["epgMapping"][epgMapId];
 
   const xmlTvFileSelect = document.getElementById(
     "popup-xmltv",
@@ -2200,7 +2194,7 @@ function savePopupData(
   option: number,
 ) {
   if (dataType == "mapping") {
-    let data = {};
+    let data: Record<string, any> = {};
     let cmd = "saveEpgMapping";
     data["epgMapping"] = SERVER["xepg"]["epgMapping"];
 
@@ -2212,7 +2206,7 @@ function savePopupData(
     return;
   }
 
-  let div = document.getElementById("popup-custom");
+  let div = document.getElementById("popup-custom")!;
 
   let inputs = div
     .getElementsByTagName("TABLE")[0]
@@ -2221,7 +2215,7 @@ function savePopupData(
     .getElementsByTagName("TABLE")[0]
     .getElementsByTagName("SELECT");
 
-  let input = {};
+  let input: Record<string, any> = {};
   let confirmMsg: string;
 
   for (let i = 0; i < selects.length; i++) {
@@ -2266,9 +2260,9 @@ function savePopupData(
     }
   }
 
-  let data = {};
+  let data: Record<string, any> = {};
 
-  let cmd: string;
+  let cmd: string = "";
 
   if (remove == true) {
     input["delete"] = true;
@@ -2282,7 +2276,7 @@ function savePopupData(
         data["userData"] = input;
       } else {
         cmd = "saveUserData";
-        let d = {};
+        let d: Record<string, any> = {};
         d[id] = input;
         data["userData"] = d;
       }
@@ -2373,15 +2367,15 @@ function savePopupData(
 
 function donePopupData(dataType: string, idsStr: string) {
   let ids: string[] = idsStr.split(",");
-  let div = document.getElementById("popup-custom");
+  let div = document.getElementById("popup-custom")!;
   let inputs = div.getElementsByClassName("changed");
 
   ids.forEach((id) => {
-    let input: Object;
+    let input: Record<string, any>;
     input = SERVER["xepg"]["epgMapping"][id];
 
     for (let i = 0; i < inputs.length; i++) {
-      let name: string;
+      let name: string = "";
       let value: any;
 
       switch (inputs[i].tagName) {
@@ -2416,25 +2410,25 @@ function donePopupData(dataType: string, idsStr: string) {
 
         case "x-name":
           (
-            document.getElementById(id).childNodes[3].firstChild as HTMLElement
+            document.getElementById(id)!.childNodes[3].firstChild as HTMLElement
           ).innerHTML = value;
           break;
 
         case "x-category":
           (
-            document.getElementById(id).childNodes[3].firstChild as HTMLElement
+            document.getElementById(id)!.childNodes[3].firstChild as HTMLElement
           ).className = value;
           break;
 
         case "update-channel-name-regex":
           (
-            document.getElementById(id).childNodes[4].firstChild as HTMLElement
+            document.getElementById(id)!.childNodes[4].firstChild as HTMLElement
           ).innerHTML = value;
           break;
 
         case "x-group-title":
           (
-            document.getElementById(id).childNodes[6].firstChild as HTMLElement
+            document.getElementById(id)!.childNodes[6].firstChild as HTMLElement
           ).innerHTML = value;
           break;
 
@@ -2448,7 +2442,7 @@ function donePopupData(dataType: string, idsStr: string) {
           }
 
           (
-            document.getElementById(id).childNodes[7].firstChild as HTMLElement
+            document.getElementById(id)!.childNodes[7].firstChild as HTMLElement
           ).innerHTML = value;
           break;
 
@@ -2458,14 +2452,14 @@ function donePopupData(dataType: string, idsStr: string) {
           }
 
           (
-            document.getElementById(id).childNodes[8].firstChild as HTMLElement
+            document.getElementById(id)!.childNodes[8].firstChild as HTMLElement
           ).innerHTML = value;
 
           break;
 
         case "x-timeshift":
           (
-            document.getElementById(id).childNodes[9].firstChild as HTMLElement
+            document.getElementById(id)!.childNodes[9].firstChild as HTMLElement
           ).innerHTML = value;
           break;
 
@@ -2477,13 +2471,13 @@ function donePopupData(dataType: string, idsStr: string) {
     }
 
     if (input["x-active"] == false) {
-      document.getElementById(id).className = "notActiveEPG";
+      document.getElementById(id)!.className = "notActiveEPG";
     } else {
-      document.getElementById(id).className = "activeEPG";
+      document.getElementById(id)!.className = "activeEPG";
     }
 
     (
-      document.getElementById(id).childNodes[2].firstChild as HTMLElement
+      document.getElementById(id)!.childNodes[2].firstChild as HTMLElement
     ).setAttribute("src", input["tvg-logo"]);
   });
 
@@ -2493,7 +2487,7 @@ function donePopupData(dataType: string, idsStr: string) {
 }
 
 function showPreview(element: boolean) {
-  let div = document.getElementById("myStreamsBox");
+  let div = document.getElementById("myStreamsBox")!;
   switch (element) {
     case false:
       div.className = "notVisible";
@@ -2503,7 +2497,7 @@ function showPreview(element: boolean) {
   let streams: string[] = ["activeStreams", "inactiveStreams"];
 
   streams.forEach((preview) => {
-    let table = document.getElementById(preview);
+    let table = document.getElementById(preview)!;
     table.innerHTML = "";
     let obj: string[] = SERVER["data"]["StreamPreviewUI"][preview];
 
@@ -2534,7 +2528,7 @@ function showPreview(element: boolean) {
   });
 
   showElement("loading", false);
-  div.className = "visible";
+  div!.className = "visible";
 
   return;
 }

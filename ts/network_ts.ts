@@ -1,12 +1,12 @@
 class Server {
-  protocol: string;
+  protocol: string = "";
   cmd: string;
 
   constructor(cmd: string) {
     this.cmd = cmd;
   }
 
-  request(data: Object): any {
+  request(data: Record<string, any>): any {
     if (SERVER_CONNECTION == true) {
       return;
     }
@@ -60,7 +60,7 @@ class Server {
       SERVER_CONNECTION = false;
       showElement("loading", false);
 
-      const response: Object = JSON.parse(wsMessageEvt.data);
+      const response: Record<string, any> = JSON.parse(wsMessageEvt.data);
 
       if (response.hasOwnProperty("token")) {
         document.cookie = "Token=" + response["token"];
@@ -72,7 +72,7 @@ class Server {
       }
 
       if (response.hasOwnProperty("openLink")) {
-        window.location = response["openLink"];
+        window.location.href = response["openLink"];
       }
 
       if (response.hasOwnProperty("reload")) {
@@ -106,7 +106,7 @@ class Server {
 
       if (response.hasOwnProperty("openMenu")) {
         var menu = document.getElementById(response["openMenu"]);
-        menu.click();
+        menu!.click();
         showElement("popup", false);
       }
 
@@ -125,10 +125,10 @@ class Server {
   }
 }
 
-function getCookie(name) {
+function getCookie(name: string) {
   var value = "; " + document.cookie;
   var parts = value.split("; " + name + "=");
   if (parts.length == 2) {
-    return parts.pop().split(";").shift();
+    return parts.pop()!.split(";").shift();
   }
 }
