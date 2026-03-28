@@ -340,7 +340,7 @@ func Stream(w http.ResponseWriter, r *http.Request) {
 // Auto : HDHR routing (is currently not used)
 func Auto(w http.ResponseWriter, r *http.Request) {
 	var channelID = strings.Replace(r.RequestURI, "/auto/v", "", 1)
-	fmt.Println(channelID)
+	_ = channelID
 
 	/*
 		switch Settings.Buffer {
@@ -855,13 +855,8 @@ func WS(w http.ResponseWriter, r *http.Request) {
 		// 	System.ConfigurationWizard = false
 		// 	response.Reload = true
 		default:
-			fmt.Println("+ + + + + + + + + + +", request.Cmd)
-
 			var requestMap = make(map[string]any) // Debug
 			_ = requestMap
-			if System.Dev {
-				fmt.Println(mapToJSON(requestMap))
-			}
 		}
 
 		if err != nil {
