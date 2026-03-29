@@ -1,6 +1,6 @@
 function login() {
   var err: Boolean = false;
-  var data = new Object();
+  var data: Record<string, any> = {};
   var div: any = document.getElementById("content");
   var form: any = document.getElementById("authentication");
 
@@ -19,17 +19,17 @@ function login() {
   }
 
   if (err == true) {
-    data = new Object();
+    data = {};
     return;
   }
 
   if (data.hasOwnProperty("confirm")) {
     if (data["confirm"] != data["password"]) {
       alert("sdafsd");
-      document.getElementById("password").style.borderColor = "red";
-      document.getElementById("confirm").style.borderColor = "red";
+      document.getElementById("password")!.style.borderColor = "red";
+      document.getElementById("confirm")!.style.borderColor = "red";
 
-      document.getElementById("err").innerHTML = "{{.account.failed}}";
+      document.getElementById("err")!.innerHTML = "{{.account.failed}}";
       return;
     }
   }

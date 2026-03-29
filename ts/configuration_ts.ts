@@ -22,9 +22,9 @@ class WizardItem extends WizardCategory {
     var headline = this.createCategoryHeadline(this.headline);
     var key = this.key;
     var content: PopupContent = new PopupContent();
-    var description: string;
+    var description: string = "";
 
-    var doc = document.getElementById(this.DocumentID);
+    var doc = document.getElementById(this.DocumentID)!;
     doc.innerHTML = "";
     doc.appendChild(headline);
 
@@ -103,10 +103,10 @@ function readyForConfiguration(wizard: number) {
 
 function saveWizard() {
   var cmd = "saveWizard";
-  var div = document.getElementById("content");
+  var div = document.getElementById("content")!;
   var config = div.getElementsByClassName("wizard");
 
-  var wizard = new Object();
+  var wizard: Record<string, any> = {};
 
   for (var i = 0; i < config.length; i++) {
     var name: string;
@@ -149,7 +149,7 @@ function saveWizard() {
     }
   }
 
-  var data = new Object();
+  var data: Record<string, any> = {};
   data["wizard"] = wizard;
 
   var server: Server = new Server(cmd);

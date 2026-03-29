@@ -627,7 +627,7 @@ class SettingsCategory {
 
   createDescription(settingsKey: string): any {
     var description = document.createElement("TR");
-    var text: string;
+    var text: string = "";
     switch (settingsKey) {
       case "tlsMode":
         text = "{{.settings.tlsMode.description}}";
@@ -789,7 +789,7 @@ class SettingsCategoryItem extends SettingsCategory {
     var headline = this.createCategoryHeadline(this.headline);
     var settingsKeys = this.settingsKeys;
 
-    var doc = document.getElementById(this.DocumentID);
+    var doc = document.getElementById(this.DocumentID)!;
     doc.appendChild(headline);
 
     // Create a table for the category
@@ -870,10 +870,10 @@ function showSettings() {
 
 function saveSettings() {
   var cmd = "saveSettings";
-  var div = document.getElementById("content_settings");
+  var div = document.getElementById("content_settings")!;
   var settings = div.getElementsByClassName("changed");
 
-  var newSettings = new Object();
+  var newSettings: Record<string, any> = {};
 
   for (let i = 0; i < settings.length; i++) {
     var name: string;
@@ -925,7 +925,7 @@ function saveSettings() {
     }
   }
 
-  var data = new Object();
+  var data: Record<string, any> = {};
   data["settings"] = newSettings;
 
   var server: Server = new Server(cmd);

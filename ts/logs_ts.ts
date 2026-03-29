@@ -25,7 +25,7 @@ function showLogs(bottom: boolean) {
   var log = new Log();
 
   var logs = SERVER["log"]["log"];
-  var div = document.getElementById("content_log");
+  var div = document.getElementById("content_log")!;
 
   div.innerHTML = "";
 
@@ -39,7 +39,7 @@ function showLogs(bottom: boolean) {
 
   setTimeout(function () {
     if (bottom == true) {
-      var wrapper = document.getElementById("box-wrapper");
+      var wrapper = document.getElementById("box-wrapper")!;
       wrapper.scrollTop = wrapper.scrollHeight;
     }
   }, 10);
@@ -47,7 +47,7 @@ function showLogs(bottom: boolean) {
 
 function resetLogs() {
   var cmd = "resetLogs";
-  var data = new Object();
+  var data: Record<string, any> = {};
   var server: Server = new Server(cmd);
   server.request(data);
 }
