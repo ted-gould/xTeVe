@@ -1609,7 +1609,7 @@ func defaultFetchRemoteMetadata(ctx context.Context, urlStr string) (FileMeta, e
 					ETag:        resp.Header.Get("ETag"),
 					CachedAt:    time.Now(),
 				}
-				fc.SaveFrontData(urlStr, resp.Body, cacheMeta)
+				_ = fc.SaveFrontData(urlStr, resp.Body, cacheMeta)
 			}()
 		} else {
 			resp.Body.Close()
@@ -1622,7 +1622,7 @@ func defaultFetchRemoteMetadata(ctx context.Context, urlStr string) (FileMeta, e
 		if tailResult.err == nil {
 			go func() {
 				defer resp.Body.Close()
-				fc.SaveTailData(urlStr, resp.Body)
+				_ = fc.SaveTailData(urlStr, resp.Body)
 			}()
 		} else {
 			resp.Body.Close()
