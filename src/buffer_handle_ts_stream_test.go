@@ -229,3 +229,194 @@ func TestHandleTSStream_Corrupted(t *testing.T) {
 		t.Errorf("Content of created file does not match expected content. Got %d bytes, want %d bytes", len(writtenContent), len(expectedContent.Bytes()))
 	}
 }
+
+func TestHandleTSStream_EOFRetriesWhenEnabled(t *testing.T) {
+	// Simulate an upstream server that sends a small amount of valid TS data
+	// then closes the connection (EOF). With retry enabled, handleTSStream
+	// should return a "redirect" error to trigger reconnection instead of
+	// marking the stream as finished.
+	var validTSStream bytes.Buffer
+	packet := make([]byte, mpegts.PacketSize)
+	packet[0] = mpegts.SyncByte
+	validTSStream.Write(packet)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "video/mp2t")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(validTSStream.Bytes())
+		// Connection closes here, causing EOF on the client side
+	}))
+	defer server.Close()
+
+	initBufferVFS(true)
+	origBufferSize := Settings.BufferSize
+	origRetryEnabled := Settings.StreamRetryEnabled
+	origMaxRetries := Settings.StreamMaxRetries
+	origRetryDelay := Settings.StreamRetryDelay
+	defer func() {
+		Settings.BufferSize = origBufferSize
+		Settings.StreamRetryEnabled = origRetryEnabled
+		Settings.StreamMaxRetries = origMaxRetries
+		Settings.StreamRetryDelay = origRetryDelay
+	}()
+
+	Settings.BufferSize = 1024
+	Settings.UserAgent = "xTeVe-Test"
+	Settings.StreamRetryEnabled = true
+	Settings.StreamMaxRetries = 3
+	Settings.StreamRetryDelay = 0 // No delay in tests
+
+	playlistID := "M1-eof-retry"
+	streamID := 0
+	tmpFolder := "/tmp/xteve_test_ts_eof_retry/"
+	if err := bufferVFS.MkdirAll(tmpFolder, 0755); err != nil {
+		t.Fatalf("Failed to create test directory: %v", err)
+	}
+	defer func() {
+		_ = bufferVFS.RemoveAll(tmpFolder)
+	}()
+
+	md5Val, err := getMD5(server.URL)
+	if err != nil {
+		t.Fatalf("getMD5 failed: %v", err)
+	}
+	stream := ThisStream{
+		URL:        server.URL,
+		Folder:     tmpFolder,
+		PlaylistID: playlistID,
+		MD5:        md5Val,
+	}
+
+	// Setup BufferInformation so completeTSsegment can update it
+	playlist := &Playlist{
+		Streams: map[int]ThisStream{streamID: stream},
+	}
+	BufferInformation.Store(playlistID, playlist)
+	defer BufferInformation.Delete(playlistID)
+
+	var clients ClientConnection
+	clients.Connection = 1
+	BufferClients.Store(playlistID+md5Val, &clients)
+	defer BufferClients.Delete(playlistID + md5Val)
+
+	var tmpSegment = 1
+	var streamErrors []error
+	addErrorToStream := func(err error) {
+		streamErrors = append(streamErrors, err)
+	}
+	var buffer = make([]byte, 1024*Settings.BufferSize)
+	var bandwidth BandwidthCalculation
+
+	req, err := http.NewRequest("GET", server.URL, nil)
+	if err != nil {
+		t.Fatalf("Failed to create request: %v", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("Failed to make request: %v", err)
+	}
+
+	resultStream, err := handleTSStream(resp, stream, streamID, playlistID, tmpFolder, &tmpSegment, addErrorToStream, buffer, &bandwidth, 0)
+	if err == nil {
+		t.Fatalf("Expected 'redirect' error for EOF retry, got nil (stream finished prematurely). StreamFinished=%v", resultStream.StreamFinished)
+	}
+	if err.Error() != "redirect" {
+		t.Fatalf("Expected 'redirect' error, got: %v", err)
+	}
+
+	// Stream should NOT be marked as finished since we're retrying
+	if resultStream.StreamFinished {
+		t.Errorf("Stream should not be marked as finished when retrying on EOF")
+	}
+
+	if len(streamErrors) > 0 {
+		t.Errorf("addErrorToStream should not have been called, got: %v", streamErrors)
+	}
+}
+
+func TestHandleTSStream_EOFNoRetryWhenDisabled(t *testing.T) {
+	// With retry disabled, EOF should mark the stream as finished (original behavior).
+	var validTSStream bytes.Buffer
+	packet := make([]byte, mpegts.PacketSize)
+	packet[0] = mpegts.SyncByte
+	validTSStream.Write(packet)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "video/mp2t")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(validTSStream.Bytes())
+	}))
+	defer server.Close()
+
+	initBufferVFS(true)
+	origBufferSize := Settings.BufferSize
+	origRetryEnabled := Settings.StreamRetryEnabled
+	defer func() {
+		Settings.BufferSize = origBufferSize
+		Settings.StreamRetryEnabled = origRetryEnabled
+	}()
+
+	Settings.BufferSize = 1024
+	Settings.UserAgent = "xTeVe-Test"
+	Settings.StreamRetryEnabled = false
+
+	playlistID := "M1-eof-noretry"
+	streamID := 0
+	tmpFolder := "/tmp/xteve_test_ts_eof_noretry/"
+	if err := bufferVFS.MkdirAll(tmpFolder, 0755); err != nil {
+		t.Fatalf("Failed to create test directory: %v", err)
+	}
+	defer func() {
+		_ = bufferVFS.RemoveAll(tmpFolder)
+	}()
+
+	md5Val, err := getMD5(server.URL)
+	if err != nil {
+		t.Fatalf("getMD5 failed: %v", err)
+	}
+	stream := ThisStream{
+		URL:        server.URL,
+		Folder:     tmpFolder,
+		PlaylistID: playlistID,
+		MD5:        md5Val,
+	}
+
+	var clients ClientConnection
+	clients.Connection = 1
+	BufferClients.Store(playlistID+md5Val, &clients)
+	defer BufferClients.Delete(playlistID + md5Val)
+
+	var tmpSegment = 1
+	var streamErrors []error
+	addErrorToStream := func(err error) {
+		streamErrors = append(streamErrors, err)
+	}
+	var buffer = make([]byte, 1024*Settings.BufferSize)
+	var bandwidth BandwidthCalculation
+
+	req, err := http.NewRequest("GET", server.URL, nil)
+	if err != nil {
+		t.Fatalf("Failed to create request: %v", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("Failed to make request: %v", err)
+	}
+
+	resultStream, err := handleTSStream(resp, stream, streamID, playlistID, tmpFolder, &tmpSegment, addErrorToStream, buffer, &bandwidth, 0)
+	if err != nil {
+		t.Fatalf("handleTSStream returned unexpected error: %v", err)
+	}
+
+	if !resultStream.StreamFinished {
+		t.Errorf("Expected stream to be finished when retry is disabled")
+	}
+
+	if !resultStream.Status {
+		t.Errorf("Expected stream status to be true")
+	}
+
+	if len(streamErrors) > 0 {
+		t.Errorf("addErrorToStream should not have been called, got: %v", streamErrors)
+	}
+}
