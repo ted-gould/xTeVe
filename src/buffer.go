@@ -884,7 +884,23 @@ func handleTSStream(resp *http.Response, stream ThisStream, streamID int, playli
 				ShowError(err, 0)
 				addErrorToStream(err)
 			} else {
-				// EOF reached, add the final segment if it has data
+				// EOF reached - for live TV streams, the upstream server may
+				// close the connection unexpectedly. Retry the connection
+				// instead of treating it as a normal end of stream.
+				if Settings.StreamRetryEnabled && retries < Settings.StreamMaxRetries {
+					// Save any partial segment before retrying
+					if fileSize > 0 {
+						completeTSsegment(playlistID, streamID, &stream, bandwidth, fileSize, tmpFile, *tmpSegment)
+						*tmpSegment++
+					}
+					retries++
+					showInfo(fmt.Sprintf("Stream EOF (upstream closed connection). Retry %d/%d in %d seconds.", retries, Settings.StreamMaxRetries, Settings.StreamRetryDelay))
+					time.Sleep(time.Duration(Settings.StreamRetryDelay) * time.Second)
+					bufferFile.Close()
+					return stream, errors.New("redirect")
+				}
+
+				// No retries left or retries disabled - treat as normal end of stream
 				if fileSize > 0 {
 					segmentName := fmt.Sprintf("%d.ts", *tmpSegment)
 					segmentInfo := SegmentInfo{Filename: segmentName, SentCount: 0}
