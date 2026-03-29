@@ -34,6 +34,7 @@ func TestHandleTSStream(t *testing.T) {
 	initBufferVFS(true)
 	Settings.BufferSize = 1024 // 1MB buffer size
 	Settings.UserAgent = "xTeVe-Test"
+	Settings.StreamRetryEnabled = false // EOF should finish the stream in this test
 
 	playlistID := "M1"
 	streamID := 0
@@ -149,6 +150,7 @@ func TestHandleTSStream_Corrupted(t *testing.T) {
 	initBufferVFS(true)
 	Settings.BufferSize = 1024 // 1MB buffer size
 	Settings.UserAgent = "xTeVe-Test"
+	Settings.StreamRetryEnabled = false // EOF should finish the stream in this test
 
 	playlistID := "M1"
 	streamID := 0
