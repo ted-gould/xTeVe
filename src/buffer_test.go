@@ -130,6 +130,7 @@ func TestConnectToStreamingServer_Buffering(t *testing.T) {
 	initBufferVFS(true)
 	Settings.BufferSize = 1024 // 1MB buffer size
 	Settings.UserAgent = "xTeVe-Test"
+	Settings.StreamRetryEnabled = false // EOF should finish the stream in this test
 
 	playlistID := "M1"
 	streamID := 0
@@ -259,8 +260,9 @@ func TestBufferingStream_NewStreamClientRegistration(t *testing.T) {
 	initBufferVFS(true)
 	Settings.BufferSize = 1024
 	Settings.UserAgent = "xTeVe-Test-Race"
-	Settings.BufferTimeout = 0 // Start immediately
-	Settings.Buffer = "xteve"  // This is required to trigger connectToStreamingServer
+	Settings.BufferTimeout = 0          // Start immediately
+	Settings.Buffer = "xteve"           // This is required to trigger connectToStreamingServer
+	Settings.StreamRetryEnabled = false // EOF should finish the stream in this test
 
 	playlistID := "M-NewStreamTest"
 	streamURL := server.URL
@@ -358,6 +360,7 @@ func TestRaceCondition_KillAndStreamEOF(t *testing.T) {
 	// 2. Setup state
 	initBufferVFS(true)
 	Settings.BufferSize = 1
+	Settings.StreamRetryEnabled = false // EOF should not retry in this test
 	playlistID := "M-race-test"
 	streamID := 0
 	streamURL := server.URL
@@ -530,6 +533,7 @@ func TestBufferingStream_ClosesOnStreamEnd(t *testing.T) {
 	initBufferVFS(true)
 	Settings.BufferSize = 1024
 	Settings.UserAgent = "xTeVe-Test"
+	Settings.StreamRetryEnabled = false // EOF should finish the stream in this test
 
 	playlistID := "M1"
 	streamID := 0
