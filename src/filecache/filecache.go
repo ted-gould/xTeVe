@@ -432,6 +432,101 @@ func (c *FileCache) downloadTail(urlStr, tailHash string, fileSize int64, client
 		tailHash, time.Now().UnixNano(), true, time.Now().UnixNano())
 }
 
+// SaveFrontData saves an already-fetched response body as the front cache for a URL.
+// The caller is responsible for closing the reader after this returns.
+func (c *FileCache) SaveFrontData(urlStr string, body io.Reader, meta Metadata) error {
+	hash := HashURL(urlStr)
+
+	c.mutex.RLock()
+	var exists bool
+	err := c.db.QueryRow("SELECT 1 FROM cache_files WHERE hash = ? AND complete = 1", hash).Scan(&exists)
+	c.mutex.RUnlock()
+	if err == nil && exists {
+		return nil // already cached
+	}
+
+	tmpFile, err := os.CreateTemp(c.dir, "tmp_*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmpFile.Name())
+
+	_, err = io.CopyN(tmpFile, body, MaxFileSize)
+	complete := false
+	if err == nil {
+		// Copied exactly MaxFileSize
+	} else if err == io.EOF {
+		complete = true
+	} else {
+		tmpFile.Close()
+		return err
+	}
+	tmpFile.Close()
+
+	meta.Complete = complete
+
+	finalPath := filepath.Join(c.dir, hash)
+	if err := os.Rename(tmpFile.Name(), finalPath); err != nil {
+		return err
+	}
+
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	var modTimeVal interface{}
+	if !meta.ModTime.IsZero() {
+		modTimeVal = meta.ModTime.UnixNano()
+	} else {
+		modTimeVal = nil
+	}
+
+	_, _ = c.db.Exec(`INSERT OR REPLACE INTO metadata (hash, url, size, mod_time, etag, content_type, cached_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		hash, meta.URL, meta.Size, modTimeVal, meta.ETag, meta.ContentType, meta.CachedAt.UnixNano())
+	_, _ = c.db.Exec(`INSERT OR REPLACE INTO cache_files (hash, cached_at, complete, access_time) VALUES (?, ?, ?, ?)`,
+		hash, meta.CachedAt.UnixNano(), meta.Complete, time.Now().UnixNano())
+
+	return nil
+}
+
+// SaveTailData saves an already-fetched response body as the tail cache for a URL.
+// The caller is responsible for closing the reader after this returns.
+func (c *FileCache) SaveTailData(urlStr string, body io.Reader) error {
+	tailHash := TailHash(urlStr)
+
+	c.mutex.RLock()
+	var exists bool
+	err := c.db.QueryRow("SELECT 1 FROM cache_files WHERE hash = ? AND complete = 1", tailHash).Scan(&exists)
+	c.mutex.RUnlock()
+	if err == nil && exists {
+		return nil // already cached
+	}
+
+	tmpFile, err := os.CreateTemp(c.dir, "tmp_tail_*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmpFile.Name())
+
+	_, err = io.Copy(tmpFile, body)
+	tmpFile.Close()
+	if err != nil {
+		return err
+	}
+
+	finalPath := filepath.Join(c.dir, tailHash)
+	if err := os.Rename(tmpFile.Name(), finalPath); err != nil {
+		return err
+	}
+
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	_, _ = c.db.Exec(`INSERT OR REPLACE INTO cache_files (hash, cached_at, complete, access_time) VALUES (?, ?, ?, ?)`,
+		tailHash, time.Now().UnixNano(), true, time.Now().UnixNano())
+
+	return nil
+}
+
 // GetTail returns the path to the cached tail file if available.
 func (c *FileCache) GetTail(url string) (string, bool) {
 	tailHash := TailHash(url)

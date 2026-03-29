@@ -32,26 +32,25 @@ func TestWebDAVFS_SizeFallback_Triggered(t *testing.T) {
 		}
 
 		if r.Method == "GET" {
-			// Check if Range request
 			rangeHeader := r.Header.Get("Range")
-			// Depending on filecache.MaxFileSize, it might be 1048576 or something else.
-			// Currently code uses filecache.MaxFileSize-1.
-			// Let's just check prefix "bytes=0-"
+			// Front range: bytes=0-{MaxFileSize-1}
 			if len(rangeHeader) > 8 && rangeHeader[:8] == "bytes=0-" {
-				// Expect "bytes=0-1048575"
-				// Content-Range format: "bytes start-end/total"
-				w.Header().Set("Content-Range", fmt.Sprintf("bytes 0-1048575/%d", realSize))
+				w.Header().Set("Content-Range", fmt.Sprintf("bytes 0-%d/%d", filecache.MaxFileSize-1, realSize))
 				w.WriteHeader(http.StatusPartialContent)
-				_, _ = w.Write(make([]byte, 1048576)) // Send 1MB of zeros
+				_, _ = w.Write(make([]byte, filecache.MaxFileSize))
 				return
 			}
-			// If request is specifically for last bytes (which shouldn't happen in triggered test if 1st works), handle it just in case logic changed
-			if rangeHeader == "bytes=-1024" {
-				start := realSize - 1024
+			// Tail range: bytes=-{TailCacheSize} (negative index)
+			if len(rangeHeader) > 6 && rangeHeader[:6] == "bytes=" && rangeHeader[6] == '-' {
+				tailSize := filecache.TailCacheSize
+				if int64(tailSize) > realSize {
+					tailSize = int(realSize)
+				}
+				start := realSize - int64(tailSize)
 				end := realSize - 1
 				w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, realSize))
 				w.WriteHeader(http.StatusPartialContent)
-				_, _ = w.Write(make([]byte, 1024))
+				_, _ = w.Write(make([]byte, tailSize))
 				return
 			}
 			w.WriteHeader(http.StatusBadRequest)
@@ -95,21 +94,24 @@ func TestWebDAVFS_SizeFallback_LastBytes(t *testing.T) {
 
 		if r.Method == "GET" {
 			rangeHeader := r.Header.Get("Range")
-			// Match prefix for first MB check
+			// Front range: returns unknown total size (*)
 			if len(rangeHeader) > 8 && rangeHeader[:8] == "bytes=0-" {
-				// First request: unknown size
-				w.Header().Set("Content-Range", "bytes 0-1048575/*")
+				w.Header().Set("Content-Range", fmt.Sprintf("bytes 0-%d/*", filecache.MaxFileSize-1))
 				w.WriteHeader(http.StatusPartialContent)
-				_, _ = w.Write(make([]byte, 1048576))
+				_, _ = w.Write(make([]byte, filecache.MaxFileSize))
 				return
 			}
-			if rangeHeader == "bytes=-1024" {
-				// Last bytes request: returns size
-				start := realSize - 1024
+			// Tail range: returns actual size via negative index
+			if len(rangeHeader) > 6 && rangeHeader[:6] == "bytes=" && rangeHeader[6] == '-' {
+				tailSize := filecache.TailCacheSize
+				if int64(tailSize) > realSize {
+					tailSize = int(realSize)
+				}
+				start := realSize - int64(tailSize)
 				end := realSize - 1
 				w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, realSize))
 				w.WriteHeader(http.StatusPartialContent)
-				_, _ = w.Write(make([]byte, 1024))
+				_, _ = w.Write(make([]byte, tailSize))
 				return
 			}
 			w.WriteHeader(http.StatusBadRequest)

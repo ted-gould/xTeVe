@@ -1515,78 +1515,136 @@ func defaultFetchRemoteMetadata(ctx context.Context, urlStr string) (FileMeta, e
 		span.RecordError(fmt.Errorf("status %d", resp.StatusCode))
 	}
 
-	// Fallback: Use cache logic and GET first MB
-	// 1. Trigger cache
+	// Fallback: Parallel front + tail Range GETs
+	// Front: bytes=0-{MaxFileSize-1} → gives us the front cache + total size from Content-Range
+	// Tail: bytes=-{TailCacheSize} → gives us the tail cache + total size from Content-Range
+	// Both run in parallel; either response's Content-Range gives us the file size.
+
 	fc := getFileCache()
-	fc.StartCaching(urlStr, NewHTTPClient(), Settings.UserAgent)
 
-	// 2. GET request with Range
-	req, err = http.NewRequestWithContext(ctx, "GET", urlStr, nil)
-	if err != nil {
-		return meta, err
+	type rangeResult struct {
+		size    int64
+		modTime time.Time
+		resp    *http.Response
+		err     error
 	}
 
-	req.Header.Set("User-Agent", Settings.UserAgent)
-	req.Header.Set("Range", fmt.Sprintf("bytes=0-%d", filecache.MaxFileSize-1))
+	frontCh := make(chan rangeResult, 1)
+	tailCh := make(chan rangeResult, 1)
 
-	resp, err = client.Do(req)
-	if err != nil {
-		return meta, err
-	}
-	defer resp.Body.Close()
+	// Front range GET
+	go func() {
+		var r rangeResult
+		req, err := http.NewRequestWithContext(ctx, "GET", urlStr, nil)
+		if err != nil {
+			r.err = err
+			frontCh <- r
+			return
+		}
+		req.Header.Set("User-Agent", Settings.UserAgent)
+		req.Header.Set("Range", fmt.Sprintf("bytes=0-%d", filecache.MaxFileSize-1))
 
-	// 3. Check response
-	switch resp.StatusCode {
-	case http.StatusOK:
-		meta.Size = resp.ContentLength
-	case http.StatusPartialContent:
-		// Parse Content-Range: bytes start-end/total
-		cr := resp.Header.Get("Content-Range")
-		parts := strings.Split(cr, "/")
-		if len(parts) == 2 {
-			totalStr := strings.TrimSpace(parts[1])
-			if total, err := strconv.ParseInt(totalStr, 10, 64); err == nil {
-				meta.Size = total
+		frontClient := NewHTTPClient()
+		frontClient.Timeout = 5 * time.Second
+		resp, err := frontClient.Do(req)
+		if err != nil {
+			r.err = err
+			frontCh <- r
+			return
+		}
+		r.resp = resp
+		r.size = parseTotalSizeFromRange(resp)
+		if lastMod := resp.Header.Get("Last-Modified"); lastMod != "" {
+			if t, err := http.ParseTime(lastMod); err == nil {
+				r.modTime = t
 			}
 		}
-	}
+		frontCh <- r
+	}()
 
-	// If size is still 0 (unknown or failed parsing), try requesting the last few bytes.
-	// Some servers might not return total size for the first range but might for a suffix range.
-	if meta.Size <= 0 {
-		req, err = http.NewRequestWithContext(ctx, "GET", urlStr, nil)
-		if err == nil {
-			req.Header.Set("User-Agent", Settings.UserAgent)
-			req.Header.Set("Range", "bytes=-1024") // Request last 1KB
+	// Tail range GET (negative index - no file size needed)
+	go func() {
+		var r rangeResult
+		req, err := http.NewRequestWithContext(ctx, "GET", urlStr, nil)
+		if err != nil {
+			r.err = err
+			tailCh <- r
+			return
+		}
+		req.Header.Set("User-Agent", Settings.UserAgent)
+		req.Header.Set("Range", fmt.Sprintf("bytes=-%d", filecache.TailCacheSize))
 
-			resp, err = client.Do(req)
-			if err == nil {
+		tailClient := NewHTTPClient()
+		tailClient.Timeout = 5 * time.Second
+		resp, err := tailClient.Do(req)
+		if err != nil {
+			r.err = err
+			tailCh <- r
+			return
+		}
+		r.resp = resp
+		r.size = parseTotalSizeFromRange(resp)
+		if lastMod := resp.Header.Get("Last-Modified"); lastMod != "" {
+			if t, err := http.ParseTime(lastMod); err == nil {
+				r.modTime = t
+			}
+		}
+		tailCh <- r
+	}()
+
+	frontResult := <-frontCh
+	tailResult := <-tailCh
+
+	// Save front cache data in background (or close body on error)
+	if frontResult.resp != nil {
+		resp := frontResult.resp
+		if frontResult.err == nil {
+			go func() {
 				defer resp.Body.Close()
-				if resp.StatusCode == http.StatusPartialContent {
-					cr := resp.Header.Get("Content-Range")
-					parts := strings.Split(cr, "/")
-					if len(parts) == 2 {
-						// Clean up parts[1] (remove spaces, etc)
-						totalStr := strings.TrimSpace(parts[1])
-						if total, err := strconv.ParseInt(totalStr, 10, 64); err == nil {
-							meta.Size = total
-						}
-					}
+				cacheMeta := filecache.Metadata{
+					URL:         urlStr,
+					Size:        frontResult.size,
+					ModTime:     frontResult.modTime,
+					ContentType: resp.Header.Get("Content-Type"),
+					ETag:        resp.Header.Get("ETag"),
+					CachedAt:    time.Now(),
 				}
-			}
+				fc.SaveFrontData(urlStr, resp.Body, cacheMeta)
+			}()
+		} else {
+			resp.Body.Close()
 		}
 	}
 
-	// If size is still 0 (unknown or failed parsing), return error
+	// Save tail cache data in background (or close body on error)
+	if tailResult.resp != nil {
+		resp := tailResult.resp
+		if tailResult.err == nil {
+			go func() {
+				defer resp.Body.Close()
+				fc.SaveTailData(urlStr, resp.Body)
+			}()
+		} else {
+			resp.Body.Close()
+		}
+	}
+
+	// Determine file size from either response
+	if frontResult.size > 0 {
+		meta.Size = frontResult.size
+	} else if tailResult.size > 0 {
+		meta.Size = tailResult.size
+	}
+
+	// Get ModTime from whichever had it
+	if !frontResult.modTime.IsZero() {
+		meta.ModTime = frontResult.modTime
+	} else if !tailResult.modTime.IsZero() {
+		meta.ModTime = tailResult.modTime
+	}
+
 	if meta.Size <= 0 {
 		return meta, errors.New("failed to determine file size")
-	}
-
-	// Try to get ModTime from GET response
-	if lastMod := resp.Header.Get("Last-Modified"); lastMod != "" {
-		if t, err := http.ParseTime(lastMod); err == nil {
-			meta.ModTime = t
-		}
 	}
 
 	span.SetAttributes(
@@ -1594,6 +1652,28 @@ func defaultFetchRemoteMetadata(ctx context.Context, urlStr string) (FileMeta, e
 		attribute.String("metadata.fallback", "true"),
 	)
 	return meta, nil
+}
+
+// parseTotalSizeFromRange extracts the total file size from a Content-Range header.
+// Handles both 200 OK (Content-Length) and 206 Partial Content (Content-Range: bytes X-Y/TOTAL).
+func parseTotalSizeFromRange(resp *http.Response) int64 {
+	if resp == nil {
+		return 0
+	}
+	switch resp.StatusCode {
+	case http.StatusOK:
+		return resp.ContentLength
+	case http.StatusPartialContent:
+		cr := resp.Header.Get("Content-Range")
+		parts := strings.Split(cr, "/")
+		if len(parts) == 2 {
+			totalStr := strings.TrimSpace(parts[1])
+			if total, err := strconv.ParseInt(totalStr, 10, 64); err == nil {
+				return total
+			}
+		}
+	}
+	return 0
 }
 
 // Improved ensureMetadata that checks M3U first
