@@ -636,18 +636,6 @@ func connectToStreamingServer(streamID int, playlistID string, ctx context.Conte
 					addErrorToStream(err)
 					return
 				}
-				// After handleTSStream returns, we need to get a fresh copy of the playlist
-				// to avoid overwriting changes made by other goroutines (e.g. killClientConnection).
-				if p, ok := BufferInformation.Load(playlistID); ok {
-					if freshPlaylist, ok := p.(*Playlist); ok {
-						// Only update the stream if it hasn't been removed from the playlist.
-						if _, streamExists := freshPlaylist.Streams[streamID]; streamExists {
-							freshPlaylist.Streams[streamID] = stream
-							BufferInformation.Store(playlistID, freshPlaylist)
-						}
-					}
-				}
-
 			// Unknown Format
 			default:
 				showInfo("Content Type:" + resp.Header.Get("Content-Type"))
@@ -904,20 +892,36 @@ func handleTSStream(resp *http.Response, stream ThisStream, streamID int, playli
 				if fileSize > 0 {
 					segmentName := fmt.Sprintf("%d.ts", *tmpSegment)
 					segmentInfo := SegmentInfo{Filename: segmentName, SentCount: 0}
-					stream.CompletedSegments = append(stream.CompletedSegments, segmentInfo)
 
 					// Update the stream in BufferInformation
 					if p, ok := BufferInformation.Load(playlistID); ok {
 						if playlist, ok := p.(*Playlist); ok {
-							playlist.Streams[streamID] = stream
-							BufferInformation.Store(playlistID, playlist)
+							if s, ok := playlist.Streams[streamID]; ok {
+								s.CompletedSegments = append(s.CompletedSegments, segmentInfo)
+								playlist.Streams[streamID] = s
+								BufferInformation.Store(playlistID, playlist)
+								stream = s
+							}
 						}
 					}
 				}
 			}
+			bufferFile.Close()
+
 			stream.Status = true
 			stream.StreamFinished = true
-			bufferFile.Close()
+
+			if p, ok := BufferInformation.Load(playlistID); ok {
+				if playlist, ok := p.(*Playlist); ok {
+					if s, ok := playlist.Streams[streamID]; ok {
+						s.Status = true
+						s.StreamFinished = true
+						playlist.Streams[streamID] = s
+						BufferInformation.Store(playlistID, playlist)
+						stream = s
+					}
+				}
+			}
 			break
 		}
 		retries = 0
@@ -1004,10 +1008,13 @@ func updateSegmentSentCount(playlistID string, streamID int, segmentIndex int, f
 	}
 
 	if s, ok := pl.Streams[streamID]; ok {
-		if segmentIndex < len(s.CompletedSegments) && s.CompletedSegments[segmentIndex].Filename == filename {
-			s.CompletedSegments[segmentIndex].SentCount++
-			pl.Streams[streamID] = s
-			BufferInformation.Store(playlistID, pl)
+		for i := range s.CompletedSegments {
+			if s.CompletedSegments[i].Filename == filename {
+				s.CompletedSegments[i].SentCount++
+				pl.Streams[streamID] = s
+				BufferInformation.Store(playlistID, pl)
+				break
+			}
 		}
 	}
 }
@@ -1067,13 +1074,17 @@ func completeTSsegment(playlistID string, streamID int, stream *ThisStream, band
 	// Add completed segment to the list
 	segmentName := fmt.Sprintf("%d.ts", tmpSegment)
 	segmentInfo := SegmentInfo{Filename: segmentName, SentCount: 0}
-	stream.CompletedSegments = append(stream.CompletedSegments, segmentInfo)
-	stream.Status = true
 
 	if p, ok := BufferInformation.Load(playlistID); ok {
 		if playlist, ok := p.(*Playlist); ok {
-			playlist.Streams[streamID] = *stream
-			BufferInformation.Store(playlistID, playlist)
+			if s, ok := playlist.Streams[streamID]; ok {
+				s.CompletedSegments = append(s.CompletedSegments, segmentInfo)
+				s.Status = true
+				s.NetworkBandwidth = stream.NetworkBandwidth
+				playlist.Streams[streamID] = s
+				BufferInformation.Store(playlistID, playlist)
+				*stream = s
+			}
 		}
 	}
 }
