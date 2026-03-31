@@ -10,7 +10,6 @@ import (
 	"time"
 )
 
-
 // Return Error Message from numeric Error Codes
 func getErrMsg(errCode int) (errMsg string) {
 	switch errCode {

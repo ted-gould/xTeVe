@@ -37,13 +37,13 @@ func TestCreateXEPGMappingIntegration(t *testing.T) {
 
 	// "valid" provider -> valid.xml
 	Settings.Files.XMLTV["valid"] = map[string]any{
-		"name": "Valid Provider",
+		"name":        "Valid Provider",
 		"file.source": "http://example.com/valid.xml",
 	}
 
 	// "invalid" provider -> invalid.xml
 	Settings.Files.XMLTV["invalid"] = map[string]any{
-		"name": "Invalid Provider",
+		"name":        "Invalid Provider",
 		"file.source": "http://example.com/invalid.xml",
 	}
 
@@ -57,14 +57,14 @@ func TestCreateXEPGMappingIntegration(t *testing.T) {
     <display-name>Test Channel</display-name>
   </channel>
 </tv>`
-	err := os.WriteFile(tmpDir + string(os.PathSeparator) + "valid.xml", []byte(validXMLContent), 0644)
+	err := os.WriteFile(tmpDir+string(os.PathSeparator)+"valid.xml", []byte(validXMLContent), 0644)
 	if err != nil {
 		t.Fatalf("Failed to create valid.xml: %v", err)
 	}
 
 	// Create invalid.xml (corrupt content)
 	invalidXMLContent := `This is not XML content`
-	err = os.WriteFile(tmpDir + string(os.PathSeparator) + "invalid.xml", []byte(invalidXMLContent), 0644)
+	err = os.WriteFile(tmpDir+string(os.PathSeparator)+"invalid.xml", []byte(invalidXMLContent), 0644)
 	if err != nil {
 		t.Fatalf("Failed to create invalid.xml: %v", err)
 	}

@@ -46,14 +46,14 @@ func TestMakeInterfaceFromM3U(t *testing.T) {
 	assert.Len(t, streams, 4, "Should be 4 streams in total")
 
 	tests := []struct {
-		name       string
-		index      int
-		wantName   string
-		wantGroup  string
-		wantURL    string
-		wantTvgID  string
-		wantTvgName string
-		wantTvgLogo string
+		name         string
+		index        int
+		wantName     string
+		wantGroup    string
+		wantURL      string
+		wantTvgID    string
+		wantTvgName  string
+		wantTvgLogo  string
 		wantTvgShift string
 	}{
 		{
@@ -118,9 +118,9 @@ func TestMakeInterfaceFromM3U(t *testing.T) {
 
 func TestMakeInterfaceFromM3U_ErrorCases(t *testing.T) {
 	tests := []struct {
-		name        string
-		input       string
-		wantErr     string
+		name    string
+		input   string
+		wantErr string
 	}{
 		{
 			name:    "missing EXTM3U header",

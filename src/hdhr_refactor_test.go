@@ -34,9 +34,9 @@ func TestGetGuideNumberPMS(t *testing.T) {
 	}()
 
 	tests := []struct {
-		name     string
-		setup    map[string]string
-		wantID   string
+		name   string
+		setup  map[string]string
+		wantID string
 	}{
 		{
 			name:   "Empty cache",

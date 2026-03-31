@@ -136,7 +136,6 @@ func updateServerSettings(request RequestStruct) (settings SettingsStruct, err e
 		Settings.AuthenticationXML = false
 	}
 
-
 	err = saveSettings(Settings)
 	if err == nil {
 		settings = Settings

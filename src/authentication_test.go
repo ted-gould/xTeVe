@@ -25,6 +25,6 @@ func TestCheckAuthorizationLevel_ErrorPropagation(t *testing.T) {
 	if err == nil {
 		t.Error("Expected error, got nil")
 	} else if err.Error() != "No user id found for this token" {
-        t.Errorf("Expected 'No user id found for this token', got '%v'", err)
-    }
+		t.Errorf("Expected 'No user id found for this token', got '%v'", err)
+	}
 }

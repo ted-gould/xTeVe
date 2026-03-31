@@ -93,11 +93,11 @@ func TestMigrationFromLegacyToBcrypt(t *testing.T) {
 		t.Errorf("Password was not migrated to bcrypt. Hash: %s", newPasswordHash)
 	}
 
-    // Verify username hash also migrated (to per-user salt)
-    // We can't verify the exact value easily without reimplementing the per-user salt HMAC,
-    // but we can check it's NOT the legacy hash anymore.
-    newUsernameHash := user["_username"].(string)
-    if newUsernameHash == usernameHash {
-         t.Errorf("Username hash was not migrated. Still: %s", newUsernameHash)
-    }
+	// Verify username hash also migrated (to per-user salt)
+	// We can't verify the exact value easily without reimplementing the per-user salt HMAC,
+	// but we can check it's NOT the legacy hash anymore.
+	newUsernameHash := user["_username"].(string)
+	if newUsernameHash == usernameHash {
+		t.Errorf("Username hash was not migrated. Still: %s", newUsernameHash)
+	}
 }

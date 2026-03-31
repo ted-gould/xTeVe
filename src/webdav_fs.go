@@ -549,7 +549,7 @@ func resolveFileMetadata(ctx context.Context, hash string, stream map[string]str
 		// Update in-memory cache
 		updateMetadataCache(hash, targetURL, FileMeta{Size: finalSize, ModTime: finalModTime})
 
-		}
+	}
 
 	span.SetAttributes(
 		attribute.String("metadata.source", source),

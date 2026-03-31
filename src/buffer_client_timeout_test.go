@@ -11,11 +11,11 @@ import (
 )
 
 type MockResponseWriter struct {
-	headers      http.Header
-	writeCalled  bool
-	deadlineSet  bool
-	deadline     time.Time
-	writeSleep   time.Duration
+	headers     http.Header
+	writeCalled bool
+	deadlineSet bool
+	deadline    time.Time
+	writeSleep  time.Duration
 }
 
 func (m *MockResponseWriter) Header() http.Header {
