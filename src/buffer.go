@@ -559,7 +559,6 @@ func connectToStreamingServer(streamID int, playlistID string, ctx context.Conte
 
 			var retries = 0
 			// Jump for redirect (301 <---> 308)
-		Redirect:
 			req, _ := http.NewRequestWithContext(ctx, "GET", currentURL, nil)
 			req.Header.Set("User-Agent", Settings.UserAgent)
 			req.Header.Set("Connection", "close")
@@ -620,7 +619,7 @@ func connectToStreamingServer(streamID int, playlistID string, ctx context.Conte
 			// M3U8 Playlist
 			case "application/x-mpegurl", "application/vnd.apple.mpegurl", "audio/mpegurl", "audio/x-mpegurl":
 				var err error
-				stream, err = handleHLSStream(ctx, resp, stream, tmpFolder, &tmpSegment, addErrorToStream, currentURL)
+				stream, err = handleHLSStream(ctx, resp, stream, streamID, playlistID, tmpFolder, &tmpSegment, addErrorToStream, currentURL, &bandwidth)
 				if err != nil {
 					// handleHLSStream logs and adds errors, so we just need to return
 					return
@@ -628,11 +627,12 @@ func connectToStreamingServer(streamID int, playlistID string, ctx context.Conte
 			// Video Stream (TS)
 			case "video/mpeg", "video/mp4", "video/mp2t", "video/m2ts", "application/octet-stream", "binary/octet-stream", "application/mp2t", "video/x-matroska":
 				var err error
-				stream, err = handleTSStream(resp, stream, streamID, playlistID, tmpFolder, &tmpSegment, addErrorToStream, buffer, &bandwidth, retries)
+				var isRedirect bool
+				stream, isRedirect, err = handleTSStream(resp, stream, streamID, playlistID, tmpFolder, &tmpSegment, addErrorToStream, buffer, &bandwidth, retries)
+				if isRedirect {
+					continue
+				}
 				if err != nil {
-					if err.Error() == "redirect" {
-						goto Redirect
-					}
 					addErrorToStream(err)
 					return
 				}
@@ -687,7 +687,7 @@ func connectToStreamingServer(streamID int, playlistID string, ctx context.Conte
 // Limit the playlist download size to 32MB to prevent DoS
 var maxPlaylistDownloadSize int64 = 33554432
 
-func handleHLSStream(ctx context.Context, resp *http.Response, stream ThisStream, tmpFolder string, tmpSegment *int, addErrorToStream func(err error), currentURL string) (ThisStream, error) {
+func handleHLSStream(ctx context.Context, resp *http.Response, stream ThisStream, streamID int, playlistID, tmpFolder string, tmpSegment *int, addErrorToStream func(err error), currentURL string, bandwidth *BandwidthCalculation) (ThisStream, error) {
 	// Security: Check Content-Length to avoid starting download of obviously too large files
 	if resp.ContentLength > maxPlaylistDownloadSize {
 		err := fmt.Errorf("playlist too large: %d bytes (max: %d)", resp.ContentLength, maxPlaylistDownloadSize)
@@ -727,32 +727,46 @@ func handleHLSStream(ctx context.Context, resp *http.Response, stream ThisStream
 		client := NewHTTPClient()
 
 		for _, segment := range stream.Segment {
-			req, _ := http.NewRequestWithContext(ctx, "GET", segment.URL, nil)
-			req.Header.Set("User-Agent", Settings.UserAgent)
-			req.Header.Set("Connection", "close")
-			req.Header.Set("Accept", "*/*")
-			debugRequest(req)
+			var body []byte
+			var err error
 
-			segResp, err := ConnectWithRetry(client, req)
-			if err != nil {
-				ShowError(err, 0)
-				addErrorToStream(err)
-				return stream, err
+			// Retry loop for the segment
+			for retry := 0; retry < 3; retry++ {
+				req, _ := http.NewRequestWithContext(ctx, "GET", segment.URL, nil)
+				req.Header.Set("User-Agent", Settings.UserAgent)
+				req.Header.Set("Connection", "close")
+				req.Header.Set("Accept", "*/*")
+				debugRequest(req)
+
+				segResp, reqErr := ConnectWithRetry(client, req)
+				if reqErr != nil {
+					err = reqErr
+					time.Sleep(time.Duration(1) * time.Second) // Wait before retry
+					continue
+				}
+
+				body, err = io.ReadAll(segResp.Body)
+				segResp.Body.Close() // Close body immediately after reading
+
+				if err == nil {
+					break // Success, exit retry loop
+				}
+				time.Sleep(time.Duration(1) * time.Second) // Wait before retry
 			}
 
-			body, err := io.ReadAll(segResp.Body)
-			segResp.Body.Close() // Close body immediately after reading
 			if err != nil {
 				ShowError(err, 0)
 				addErrorToStream(err)
-				continue // Skip this segment
+				continue // Skip this segment after retries fail
 			}
 
 			tmpFile := fmt.Sprintf("%s%d.ts", tmpFolder, *tmpSegment)
 			bufferFile, err := bufferVFS.Create(tmpFile)
 			if err != nil {
 				addErrorToStream(err)
-				bufferFile.Close()
+				if bufferFile != nil {
+					bufferFile.Close()
+				}
 				return stream, err
 			}
 
@@ -763,6 +777,7 @@ func handleHLSStream(ctx context.Context, resp *http.Response, stream ThisStream
 				return stream, err
 			}
 			bufferFile.Close()
+			completeTSsegment(playlistID, streamID, &stream, bandwidth, len(body), tmpFile, *tmpSegment)
 			*tmpSegment++
 		}
 	}
@@ -770,7 +785,7 @@ func handleHLSStream(ctx context.Context, resp *http.Response, stream ThisStream
 	return stream, nil
 }
 
-func handleTSStream(resp *http.Response, stream ThisStream, streamID int, playlistID, tmpFolder string, tmpSegment *int, addErrorToStream func(err error), buffer []byte, bandwidth *BandwidthCalculation, retries int) (ThisStream, error) {
+func handleTSStream(resp *http.Response, stream ThisStream, streamID int, playlistID, tmpFolder string, tmpSegment *int, addErrorToStream func(err error), buffer []byte, bandwidth *BandwidthCalculation, retries int) (ThisStream, bool, error) {
 	var fileSize int
 	var bufferSize = Settings.BufferSize
 	var tmpFileSize = 1024 * bufferSize * 1
@@ -786,7 +801,7 @@ func handleTSStream(resp *http.Response, stream ThisStream, streamID int, playli
 
 	if !clientConnection(stream) {
 		resp.Body.Close()
-		return stream, nil
+		return stream, false, nil
 	}
 
 	bufferFile, err := bufferVFS.Create(tmpFile)
@@ -794,7 +809,7 @@ func handleTSStream(resp *http.Response, stream ThisStream, streamID int, playli
 		addErrorToStream(err)
 		bufferFile.Close()
 		resp.Body.Close()
-		return stream, err
+		return stream, false, err
 	}
 
 	parser := mpegts.NewParser()
@@ -813,7 +828,7 @@ func handleTSStream(resp *http.Response, stream ThisStream, streamID int, playli
 				ShowError(err, 0)
 				addErrorToStream(err)
 				bufferFile.Close()
-				return stream, err
+				return stream, false, err
 			}
 			for {
 				err := parser.NextInto(packetBuf)
@@ -824,14 +839,14 @@ func handleTSStream(resp *http.Response, stream ThisStream, streamID int, playli
 					ShowError(err, 0)
 					addErrorToStream(err)
 					bufferFile.Close()
-					return stream, err
+					return stream, false, err
 				}
 
 				if _, err := bufferFile.Write(packetBuf); err != nil {
 					ShowError(err, 0)
 					addErrorToStream(err)
 					bufferFile.Close()
-					return stream, err
+					return stream, false, err
 				}
 				fileSize += len(packetBuf)
 
@@ -846,13 +861,13 @@ func handleTSStream(resp *http.Response, stream ThisStream, streamID int, playli
 						if err = bufferVFS.RemoveAll(stream.Folder); err != nil {
 							ShowError(err, 4005)
 						}
-						return stream, nil
+						return stream, false, nil
 					}
 
 					bufferFile, err = bufferVFS.Create(tmpFile)
 					if err != nil {
 						addErrorToStream(err)
-						return stream, err
+						return stream, false, err
 					}
 
 					fileSize = 0
@@ -867,7 +882,7 @@ func handleTSStream(resp *http.Response, stream ThisStream, streamID int, playli
 					showInfo(fmt.Sprintf("Stream Read Error (%s). Retry %d/%d in %d seconds.", err.Error(), retries, Settings.StreamMaxRetries, Settings.StreamRetryDelay))
 					time.Sleep(time.Duration(Settings.StreamRetryDelay) * time.Second)
 					bufferFile.Close()
-					return stream, errors.New("redirect")
+					return stream, true, nil
 				}
 				ShowError(err, 0)
 				addErrorToStream(err)
@@ -885,7 +900,7 @@ func handleTSStream(resp *http.Response, stream ThisStream, streamID int, playli
 					showInfo(fmt.Sprintf("Stream EOF (upstream closed connection). Retry %d/%d in %d seconds.", retries, Settings.StreamMaxRetries, Settings.StreamRetryDelay))
 					time.Sleep(time.Duration(Settings.StreamRetryDelay) * time.Second)
 					bufferFile.Close()
-					return stream, errors.New("redirect")
+					return stream, true, nil
 				}
 
 				// No retries left or retries disabled - treat as normal end of stream
@@ -928,10 +943,10 @@ func handleTSStream(resp *http.Response, stream ThisStream, streamID int, playli
 
 		if !clientConnection(stream) {
 			bufferFile.Close()
-			return stream, nil
+			return stream, false, nil
 		}
 	}
-	return stream, nil
+	return stream, false, nil
 }
 
 func switchBandwidth(stream *ThisStream) (err error) {
