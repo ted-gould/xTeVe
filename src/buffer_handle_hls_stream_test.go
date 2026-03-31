@@ -73,7 +73,7 @@ func TestHandleHLSStream(t *testing.T) {
 	}
 
 	// 3. Call the function
-	modifiedStream, err := handleHLSStream(context.Background(), resp, stream, tmpFolder, &tmpSegment, addErrorToStream, stream.URL)
+	modifiedStream, err := handleHLSStream(context.Background(), resp, stream, 0, "test-playlist", tmpFolder, &tmpSegment, addErrorToStream, stream.URL, &BandwidthCalculation{})
 	if err != nil {
 		t.Fatalf("handleHLSStream returned an error: %v", err)
 	}
