@@ -17,6 +17,8 @@ import (
 
 	"context"
 
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
 	"xteve/src/mpegts"
@@ -481,10 +483,23 @@ func clientConnection(stream ThisStream) (status bool) {
 }
 
 func connectToStreamingServer(streamID int, playlistID string, ctx context.Context) {
+	tracer := otel.Tracer("xteve/buffer")
+	ctx, span := tracer.Start(ctx, "connectToStreamingServer")
+	defer span.End()
+
 	if p, ok := BufferInformation.Load(playlistID); ok {
 		var playlist *Playlist
 		if pl, ok := p.(*Playlist); ok {
 			playlist = pl
+			if stream, ok := playlist.Streams[streamID]; ok {
+				span.SetAttributes(
+					attribute.Int("streamID", streamID),
+					attribute.String("playlistID", playlistID),
+					attribute.String("channelName", stream.ChannelName),
+					attribute.String("streamingURL", stream.URL),
+					attribute.String("playlistName", stream.PlaylistName),
+				)
+			}
 		} else {
 			return
 		}
@@ -570,6 +585,16 @@ func connectToStreamingServer(streamID int, playlistID string, ctx context.Conte
 }
 
 func processSegments(ctx context.Context, stream *ThisStream, streamID int, playlistID string, tmpFolder string, tmpSegment *int, addErrorToStream func(error), buffer []byte, bandwidth *BandwidthCalculation) error {
+	tracer := otel.Tracer("xteve/buffer")
+	ctx, span := tracer.Start(ctx, "processSegments")
+	defer span.End()
+	span.SetAttributes(
+		attribute.Int("streamID", streamID),
+		attribute.String("playlistID", playlistID),
+		attribute.String("tmpFolder", tmpFolder),
+		attribute.String("stream.URL", stream.URL),
+	)
+
 	for {
 		if !clientConnection(*stream) {
 			return errors.New("client disconnected")
@@ -653,6 +678,16 @@ func setupInitialStreamSegment(playlist *Playlist, streamID int, timeOut *int) {
 }
 
 func processStreamingServerResponse(ctx context.Context, stream *ThisStream, currentURL string, streamID int, playlistID, tmpFolder string, tmpSegment *int, addErrorToStream func(error), buffer []byte, bandwidth *BandwidthCalculation) (bool, error) {
+	tracer := otel.Tracer("xteve/buffer")
+	ctx, span := tracer.Start(ctx, "processStreamingServerResponse")
+	defer span.End()
+	span.SetAttributes(
+		attribute.String("currentURL", currentURL),
+		attribute.Int("streamID", streamID),
+		attribute.String("playlistID", playlistID),
+		attribute.String("tmpFolder", tmpFolder),
+	)
+
 	debug := fmt.Sprintf("Connection to:%s", currentURL)
 	showDebug(debug, 2)
 
@@ -727,7 +762,7 @@ func processStreamingServerResponse(ctx context.Context, stream *ThisStream, cur
 	case "video/mpeg", "video/mp4", "video/mp2t", "video/m2ts", "application/octet-stream", "binary/octet-stream", "application/mp2t", "video/x-matroska":
 		var err error
 		var isRedirect bool
-		*stream, isRedirect, err = handleTSStream(resp, *stream, streamID, playlistID, tmpFolder, tmpSegment, addErrorToStream, buffer, bandwidth, retries)
+		*stream, isRedirect, err = handleTSStream(ctx, resp, *stream, streamID, playlistID, tmpFolder, tmpSegment, addErrorToStream, buffer, bandwidth, retries)
 		if isRedirect {
 			return true, nil
 		}
@@ -754,6 +789,16 @@ func processStreamingServerResponse(ctx context.Context, stream *ThisStream, cur
 var maxPlaylistDownloadSize int64 = 33554432
 
 func handleHLSStream(ctx context.Context, resp *http.Response, stream ThisStream, streamID int, playlistID, tmpFolder string, tmpSegment *int, addErrorToStream func(err error), currentURL string, bandwidth *BandwidthCalculation) (ThisStream, error) {
+	tracer := otel.Tracer("xteve/buffer")
+	ctx, span := tracer.Start(ctx, "handleHLSStream")
+	defer span.End()
+	span.SetAttributes(
+		attribute.Int("streamID", streamID),
+		attribute.String("playlistID", playlistID),
+		attribute.String("tmpFolder", tmpFolder),
+		attribute.String("currentURL", currentURL),
+	)
+
 	// Security: Check Content-Length to avoid starting download of obviously too large files
 	if resp.ContentLength > maxPlaylistDownloadSize {
 		err := fmt.Errorf("playlist too large: %d bytes (max: %d)", resp.ContentLength, maxPlaylistDownloadSize)
@@ -969,7 +1014,16 @@ func handleTSStreamError(err error, bufferFile avfs.File, fileSize int, retries 
 	return *stream, false, err
 }
 
-func handleTSStream(resp *http.Response, stream ThisStream, streamID int, playlistID, tmpFolder string, tmpSegment *int, addErrorToStream func(err error), buffer []byte, bandwidth *BandwidthCalculation, retries int) (ThisStream, bool, error) {
+func handleTSStream(ctx context.Context, resp *http.Response, stream ThisStream, streamID int, playlistID, tmpFolder string, tmpSegment *int, addErrorToStream func(err error), buffer []byte, bandwidth *BandwidthCalculation, retries int) (ThisStream, bool, error) {
+	tracer := otel.Tracer("xteve/buffer")
+	_, span := tracer.Start(ctx, "handleTSStream")
+	defer span.End()
+	span.SetAttributes(
+		attribute.Int("streamID", streamID),
+		attribute.String("playlistID", playlistID),
+		attribute.String("tmpFolder", tmpFolder),
+	)
+
 	var fileSize int
 	var bufferSize = Settings.BufferSize
 	var tmpFileSize = 1024 * bufferSize * 1
