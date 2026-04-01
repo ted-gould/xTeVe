@@ -2,6 +2,7 @@ package src
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -84,7 +85,7 @@ func TestHandleTSStream(t *testing.T) {
 	}
 
 	// 3. Call the function
-	modifiedStream, _, err := handleTSStream(resp, stream, streamID, playlistID, tmpFolder, &tmpSegment, addErrorToStream, buffer, &bandwidth, retries)
+	modifiedStream, _, err := handleTSStream(context.Background(), resp, stream, streamID, playlistID, tmpFolder, &tmpSegment, addErrorToStream, buffer, &bandwidth, retries)
 	if err != nil {
 		t.Fatalf("handleTSStream returned an error: %v", err)
 	}
@@ -200,7 +201,7 @@ func TestHandleTSStream_Corrupted(t *testing.T) {
 	}
 
 	// 3. Call the function
-	_, _, err = handleTSStream(resp, stream, streamID, playlistID, tmpFolder, &tmpSegment, addErrorToStream, buffer, &bandwidth, retries)
+	_, _, err = handleTSStream(context.Background(), resp, stream, streamID, playlistID, tmpFolder, &tmpSegment, addErrorToStream, buffer, &bandwidth, retries)
 	if err != nil {
 		t.Fatalf("handleTSStream returned an error: %v", err)
 	}
@@ -318,7 +319,7 @@ func TestHandleTSStream_EOFRetriesWhenEnabled(t *testing.T) {
 		t.Fatalf("Failed to make request: %v", err)
 	}
 
-	resultStream, isRedirect, err := handleTSStream(resp, stream, streamID, playlistID, tmpFolder, &tmpSegment, addErrorToStream, buffer, &bandwidth, 0)
+	resultStream, isRedirect, err := handleTSStream(context.Background(), resp, stream, streamID, playlistID, tmpFolder, &tmpSegment, addErrorToStream, buffer, &bandwidth, 0)
 	if !isRedirect {
 		t.Fatalf("Expected isRedirect to be true for EOF retry. err=%v", err)
 	}
@@ -402,7 +403,7 @@ func TestHandleTSStream_EOFNoRetryWhenDisabled(t *testing.T) {
 		t.Fatalf("Failed to make request: %v", err)
 	}
 
-	resultStream, _, err := handleTSStream(resp, stream, streamID, playlistID, tmpFolder, &tmpSegment, addErrorToStream, buffer, &bandwidth, 0)
+	resultStream, _, err := handleTSStream(context.Background(), resp, stream, streamID, playlistID, tmpFolder, &tmpSegment, addErrorToStream, buffer, &bandwidth, 0)
 	if err != nil {
 		t.Fatalf("handleTSStream returned unexpected error: %v", err)
 	}
