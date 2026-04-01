@@ -2,7 +2,6 @@ package src
 
 import (
 	"bytes"
-	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -75,7 +74,7 @@ func TestWebDAVContentCache(t *testing.T) {
 	Data.Streams.All = []interface{}{stream}
 
 	fs := &WebDAVFS{}
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// 5. Open file via WebDAV
 	// Path: /<hash>/On Demand/Group C/Individual/Stream C.mp4
@@ -238,7 +237,7 @@ func TestWebDAVTailCacheServing(t *testing.T) {
 	Data.Streams.All = []interface{}{stream}
 
 	fs := &WebDAVFS{}
-	ctx := context.Background()
+	ctx := t.Context()
 	filePath := "/" + hash + "/" + dirOnDemand + "/Group T/" + dirIndividual + "/Stream T.mp4"
 
 	// Open the file

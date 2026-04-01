@@ -1,7 +1,6 @@
 package src
 
 import (
-	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -174,7 +173,7 @@ func TestConnectToStreamingServer_Buffering(t *testing.T) {
 	BufferClients.Store(playlistID+stream.MD5, &clients)
 
 	// 3. Call the function to be tested
-	go connectToStreamingServer(streamID, playlistID, context.Background())
+	go connectToStreamingServer(streamID, playlistID, t.Context())
 
 	// 4. Wait for buffering to happen
 	// With a 1MB buffer and 10MB of data, we expect 10 files.
@@ -392,7 +391,7 @@ func TestRaceCondition_KillAndStreamEOF(t *testing.T) {
 	// 3. Start connectToStreamingServer in a goroutine
 	serverDone := make(chan bool)
 	go func() {
-		connectToStreamingServer(streamID, playlistID, context.Background())
+		connectToStreamingServer(streamID, playlistID, t.Context())
 		serverDone <- true
 	}()
 
@@ -577,7 +576,7 @@ func TestBufferingStream_ClosesOnStreamEnd(t *testing.T) {
 	BufferClients.Store(playlistID+stream.MD5, &clients)
 
 	// 3. Start buffering in a goroutine
-	go connectToStreamingServer(streamID, playlistID, context.Background())
+	go connectToStreamingServer(streamID, playlistID, t.Context())
 
 	// 4. Call bufferingStream and check if it closes
 	req := httptest.NewRequest("GET", "/stream", nil)

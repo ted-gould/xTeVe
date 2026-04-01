@@ -101,7 +101,7 @@ func TestWebDAVPriority(t *testing.T) {
 		ClearWebDAVCache(hash)
 
 		path := fmt.Sprintf("/%s/%s/Group/%s/%s", hash, dirOnDemand, dirIndividual, name)
-		info, err := fs.Stat(context.Background(), path)
+		info, err := fs.Stat(t.Context(), path)
 		if err != nil {
 			t.Fatalf("Stat failed: %v", err)
 		}

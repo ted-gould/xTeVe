@@ -1,7 +1,6 @@
 package src
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -68,7 +67,7 @@ func TestWebDAVFS_ZeroSize(t *testing.T) {
 	}
 
 	fs := &WebDAVFS{}
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Path to the file
 	// /dav/<hash>/On Demand/Zero Size Group/Individual/Zero Size File.mp4

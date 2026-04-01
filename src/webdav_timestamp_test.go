@@ -87,7 +87,7 @@ func TestWebDAVTimestamp(t *testing.T) {
 	}
 
 	fs := &WebDAVFS{}
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Helper to check timestamp
 	checkTimestamp := func(path string, expectedTime time.Time) {

@@ -107,7 +107,7 @@ func TestWebDAVFS_Filtering(t *testing.T) {
 	}
 
 	fs := &WebDAVFS{}
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// List "Group 1" in "On Demand" -> "Individual"
 	// Path: /dav/<hash>/On Demand/Group 1/Individual
