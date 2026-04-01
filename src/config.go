@@ -55,7 +55,6 @@ func Init() (err error) {
 	System.PlexChannelLimit = 480
 	System.Compatibility = "1.4.4"
 
-
 	// Default Log Entries, which will later be overwritten by those from settings.json. Needed so that the first entries are also displayed in the Log (webUI are displayed)
 	Settings.LogEntriesRAM = 500
 
@@ -112,10 +111,10 @@ func Init() (err error) {
 	fmt.Println()
 
 	/*
-	// Check whether xTeVe is running as root
-	if os.Geteuid() == 0 {
-		showWarning(2110)
-	}
+		// Check whether xTeVe is running as root
+		if os.Geteuid() == 0 {
+			showWarning(2110)
+		}
 	*/
 
 	if System.Flag.Debug > 0 {

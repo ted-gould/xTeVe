@@ -87,8 +87,8 @@ func TestZipAndExtract_Directory(t *testing.T) {
 	}
 
 	files := map[string]string{
-		"root.txt":          "content of root",
-		"subdir/child.txt":  "content of child",
+		"root.txt":         "content of root",
+		"subdir/child.txt": "content of child",
 	}
 
 	for relPath, content := range files {
@@ -134,9 +134,15 @@ func TestZipAndExtract_Directory(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if info.IsDir() { return nil }
-		if filepath.Base(path) == "root.txt" { foundRoot = true }
-		if filepath.Base(path) == "child.txt" { foundChild = true }
+		if info.IsDir() {
+			return nil
+		}
+		if filepath.Base(path) == "root.txt" {
+			foundRoot = true
+		}
+		if filepath.Base(path) == "child.txt" {
+			foundChild = true
+		}
 		return nil
 	})
 	if err != nil {
@@ -254,8 +260,8 @@ func TestExtractZIP_ZipSlip(t *testing.T) {
 	} else if err.Error() != "illegal file path: "+filepath.Join(absTargetDir, "../evil.txt") {
 		// Just check if error message contains "illegal file path" to be robust against path variations
 		if len(err.Error()) < 17 || err.Error()[:17] != "illegal file path" {
-             t.Errorf("Expected 'illegal file path' error, got: %v", err)
-        }
+			t.Errorf("Expected 'illegal file path' error, got: %v", err)
+		}
 	}
 
 	// Verify file was NOT written

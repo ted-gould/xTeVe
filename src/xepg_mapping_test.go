@@ -40,7 +40,7 @@ var testMappingSystem = SystemStruct{ // src.SystemStruct
 }
 
 var testMappingSettings = SettingsStruct{ // src.SettingsStruct
-	DefaultMissingEPG:   "default_dummy", // e.g., "60_Minutes"
+	DefaultMissingEPG:    "default_dummy", // e.g., "60_Minutes"
 	EnableMappedChannels: true,
 }
 
@@ -52,7 +52,7 @@ func setupMappingTestGlobals() func() {
 
 	System = testMappingSystem
 	Settings = testMappingSettings
-	
+
 	// Fresh Data for each test
 	Data = DataStruct{
 		XMLTV: struct {
@@ -129,120 +129,120 @@ func TestPerformAutomaticChannelMapping(t *testing.T) {
 		{
 			name: "inactive no mapping, tvg-id match",
 			initialChannel: XEPGChannelStruct{
-				XActive:    false,
-				Name:       "Channel With TVG-ID",
-				TvgID:      "channel1.tvg.id", // Matches Data.XMLTV.Mapping
-				XmltvFile:  "",
-				XMapping:   "",
-				TvgLogo:    "original_logo.png",
+				XActive:   false,
+				Name:      "Channel With TVG-ID",
+				TvgID:     "channel1.tvg.id", // Matches Data.XMLTV.Mapping
+				XmltvFile: "",
+				XMapping:  "",
+				TvgLogo:   "original_logo.png",
 			},
 			settingsDefaultEPG: "default_dummy",
 			expectedChannel: XEPGChannelStruct{
-				XActive:    false,
-				Name:       "Channel With TVG-ID",
-				TvgID:      "channel1.tvg.id",
-				XmltvFile:  "test_provider.xml",
-				XMapping:   "channel1.tvg.id",
-				TvgLogo:    "icon1.png", // Updated from XMLTV
+				XActive:   false,
+				Name:      "Channel With TVG-ID",
+				TvgID:     "channel1.tvg.id",
+				XmltvFile: "test_provider.xml",
+				XMapping:  "channel1.tvg.id",
+				TvgLogo:   "icon1.png", // Updated from XMLTV
 			},
 			expectedMappingMade: true,
 		},
 		{
 			name: "inactive no mapping, name match",
 			initialChannel: XEPGChannelStruct{
-				XActive:    false,
-				Name:       "Test Channel NameMatch", // Name will be used for matching
-				TvgID:      "non.existent.tvg.id",
-				XmltvFile:  "-", // Indicates no mapping
-				XMapping:   "-", // Indicates no mapping
-				TvgLogo:    "original_logo.png",
+				XActive:   false,
+				Name:      "Test Channel NameMatch", // Name will be used for matching
+				TvgID:     "non.existent.tvg.id",
+				XmltvFile: "-", // Indicates no mapping
+				XMapping:  "-", // Indicates no mapping
+				TvgLogo:   "original_logo.png",
 			},
 			settingsDefaultEPG: "default_dummy",
 			expectedChannel: XEPGChannelStruct{
-				XActive:    false,
-				Name:       "Test Channel NameMatch",
-				TvgID:      "non.existent.tvg.id",
-				XmltvFile:  "test_provider.xml",
-				XMapping:   "channel2.name.match",
-				TvgLogo:    "icon2.png", // Updated from XMLTV
+				XActive:   false,
+				Name:      "Test Channel NameMatch",
+				TvgID:     "non.existent.tvg.id",
+				XmltvFile: "test_provider.xml",
+				XMapping:  "channel2.name.match",
+				TvgLogo:   "icon2.png", // Updated from XMLTV
 			},
 			expectedMappingMade: true,
 		},
 		{
 			name: "inactive no mapping, no match, default EPG applied",
 			initialChannel: XEPGChannelStruct{
-				XActive:    false,
-				Name:       "No Match Channel",
-				TvgID:      "another.non.existent.id",
-				XmltvFile:  "",
-				XMapping:   "",
-				TvgLogo:    "original_logo.png",
+				XActive:   false,
+				Name:      "No Match Channel",
+				TvgID:     "another.non.existent.id",
+				XmltvFile: "",
+				XMapping:  "",
+				TvgLogo:   "original_logo.png",
 			},
 			settingsDefaultEPG: "default_dummy", // Setting this default
 			expectedChannel: XEPGChannelStruct{
-				XActive:    false,
-				Name:       "No Match Channel",
-				TvgID:      "another.non.existent.id",
-				XmltvFile:  "xTeVe Dummy",        // Default applied
-				XMapping:   "default_dummy",      // Default applied
-				TvgLogo:    "original_logo.png", // Not updated if dummy EPG has no icon or icon is empty
+				XActive:   false,
+				Name:      "No Match Channel",
+				TvgID:     "another.non.existent.id",
+				XmltvFile: "xTeVe Dummy",       // Default applied
+				XMapping:  "default_dummy",     // Default applied
+				TvgLogo:   "original_logo.png", // Not updated if dummy EPG has no icon or icon is empty
 			},
 			expectedMappingMade: true,
 		},
 		{
 			name: "inactive no mapping, no match, no default EPG (-)",
 			initialChannel: XEPGChannelStruct{
-				XActive:    false,
-				Name:       "No Match Channel No Default",
-				TvgID:      "yet.another.id",
-				XmltvFile:  "",
-				XMapping:   "",
+				XActive:   false,
+				Name:      "No Match Channel No Default",
+				TvgID:     "yet.another.id",
+				XmltvFile: "",
+				XMapping:  "",
 			},
 			settingsDefaultEPG: "-", // Setting explicitly no default
 			expectedChannel: XEPGChannelStruct{
-				XActive:    false,
-				Name:       "No Match Channel No Default",
-				TvgID:      "yet.another.id",
-				XmltvFile:  "-", // Should remain "-"
-				XMapping:   "-", // Should remain "-"
+				XActive:   false,
+				Name:      "No Match Channel No Default",
+				TvgID:     "yet.another.id",
+				XmltvFile: "-", // Should remain "-"
+				XMapping:  "-", // Should remain "-"
 			},
 			expectedMappingMade: false, // No mapping made, not even default
 		},
 		{
 			name: "active channel, should not attempt mapping",
 			initialChannel: XEPGChannelStruct{
-				XActive:    true, // Active
-				Name:       "Already Active",
-				TvgID:      "active.tvg.id",
-				XmltvFile:  "some_file.xml",
-				XMapping:   "some_mapping",
+				XActive:   true, // Active
+				Name:      "Already Active",
+				TvgID:     "active.tvg.id",
+				XmltvFile: "some_file.xml",
+				XMapping:  "some_mapping",
 			},
 			settingsDefaultEPG: "default_dummy",
 			expectedChannel: XEPGChannelStruct{ // Expected to be unchanged
-				XActive:    true,
-				Name:       "Already Active",
-				TvgID:      "active.tvg.id",
-				XmltvFile:  "some_file.xml",
-				XMapping:   "some_mapping",
+				XActive:   true,
+				Name:      "Already Active",
+				TvgID:     "active.tvg.id",
+				XmltvFile: "some_file.xml",
+				XMapping:  "some_mapping",
 			},
 			expectedMappingMade: false,
 		},
 		{
 			name: "inactive but already has XmltvFile, should not attempt mapping",
 			initialChannel: XEPGChannelStruct{
-				XActive:    false,
-				Name:       "Inactive With File",
-				TvgID:      "inactive.file.id",
-				XmltvFile:  "pre_existing_file.xml", // Already has a file
-				XMapping:   "", // Mapping is empty, but file is not <= 1 length
+				XActive:   false,
+				Name:      "Inactive With File",
+				TvgID:     "inactive.file.id",
+				XmltvFile: "pre_existing_file.xml", // Already has a file
+				XMapping:  "",                      // Mapping is empty, but file is not <= 1 length
 			},
 			settingsDefaultEPG: "default_dummy",
 			expectedChannel: XEPGChannelStruct{ // Expected to be unchanged by this function's core logic
-				XActive:    false,
-				Name:       "Inactive With File",
-				TvgID:      "inactive.file.id",
-				XmltvFile:  "pre_existing_file.xml",
-				XMapping:   "",
+				XActive:   false,
+				Name:      "Inactive With File",
+				TvgID:     "inactive.file.id",
+				XmltvFile: "pre_existing_file.xml",
+				XMapping:  "",
 			},
 			expectedMappingMade: false, // No new mapping attempted
 		},
@@ -281,7 +281,7 @@ func TestPerformAutomaticChannelMapping(t *testing.T) {
 			if mappingMade != tt.expectedMappingMade {
 				t.Errorf("performAutomaticChannelMapping mappingMade: got %v, want %v", mappingMade, tt.expectedMappingMade)
 			}
-			
+
 			// Normalizing XEPGChannelStruct fields that might be nil slices if empty, for comparison.
 			// For example, if a field is `[]DisplayName` and it's empty, it could be nil or empty slice.
 			// cmp.Diff should handle this, but good to be aware.
@@ -355,8 +355,8 @@ func TestVerifyExistingChannelMappings(t *testing.T) {
 			expectedChannel: XEPGChannelStruct{
 				XActive:   false, // Should be deactivated
 				Name:      "File Missing Channel",
-				XmltvFile: "-",     // Should be set to -
-				XMapping:  "-",     // Should be set to -
+				XmltvFile: "-", // Should be set to -
+				XMapping:  "-", // Should be set to -
 			},
 		},
 		{

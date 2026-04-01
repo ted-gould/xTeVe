@@ -63,8 +63,8 @@ func TestWebSocket_ReadLimit(t *testing.T) {
 	// 33MB string
 	largePayload := strings.Repeat("a", 33*1024*1024)
 	largeMsg := map[string]string{
-		"cmd":    "uploadLogo",
-		"base64": largePayload,
+		"cmd":      "uploadLogo",
+		"base64":   largePayload,
 		"filename": "test.png",
 	}
 

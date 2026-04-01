@@ -481,6 +481,22 @@ func connectToStreamingServer(streamID int, playlistID string, ctx context.Conte
 		var timeOut = 0
 		var tmpSegment = 1
 		var tmpFolder = playlist.Streams[streamID].Folder
+
+		defer func() {
+			go func(folder string) {
+				time.Sleep(60 * time.Second)
+				debugMsg := fmt.Sprintf("Streaming Status:Remove temporary files (%s)", folder)
+				showDebug(debugMsg, 1)
+
+				debugMsg = fmt.Sprintf("Remove tmp folder:%s", folder)
+				showDebug(debugMsg, 1)
+
+				if err := bufferVFS.RemoveAll(getPlatformPath(folder)); err != nil {
+					ShowError(err, 4005)
+				}
+			}(tmpFolder)
+		}()
+
 		var m3u8Segments []string
 		var bandwidth BandwidthCalculation
 		// Size of the Buffer

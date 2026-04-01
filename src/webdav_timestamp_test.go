@@ -107,19 +107,19 @@ func TestWebDAVTimestamp(t *testing.T) {
 	// This ensures we use Last-Modified from remote servers instead of falling back to M3U modtime
 
 	// 1. Check Hash Dir - uses JSON content timestamp for directory itself
-	checkTimestamp("/" + hash, jsonContentTime)
+	checkTimestamp("/"+hash, jsonContentTime)
 
 	// 2. Check On Demand Dir - uses JSON content timestamp for directory itself
-	checkTimestamp("/" + hash + "/" + dirOnDemand, jsonContentTime)
+	checkTimestamp("/"+hash+"/"+dirOnDemand, jsonContentTime)
 
 	// 3. Check Group Dir - uses JSON content timestamp for directory itself
-	checkTimestamp("/" + hash + "/" + dirOnDemand + "/Test Group", jsonContentTime)
+	checkTimestamp("/"+hash+"/"+dirOnDemand+"/Test Group", jsonContentTime)
 
 	// 4. Check Individual Dir - uses JSON content timestamp for directory itself
-	checkTimestamp("/" + hash + "/" + dirOnDemand + "/Test Group/" + dirIndividual, jsonContentTime)
+	checkTimestamp("/"+hash+"/"+dirOnDemand+"/Test Group/"+dirIndividual, jsonContentTime)
 
 	// 5. Check File - should use REMOTE timestamp, not JSON timestamp
-	checkTimestamp("/" + hash + "/" + dirOnDemand + "/Test Group/" + dirIndividual + "/Test Stream.mp4", remoteModTime)
+	checkTimestamp("/"+hash+"/"+dirOnDemand+"/Test Group/"+dirIndividual+"/Test Stream.mp4", remoteModTime)
 
 	// 6. Check Listing File
 	// Listing file is the actual M3U content, so its timestamp should be from the M3U file?
@@ -135,28 +135,28 @@ func TestWebDAVTimestamp(t *testing.T) {
 	//		info, err := os.Stat(realPath) ... return info.ModTime()
 	// }
 	// So listing file will use M3U time. I'll assert M3U time for listing file, and JSON time for dirs.
-	checkTimestamp("/" + hash + "/" + fileListing, m3uTime)
+	checkTimestamp("/"+hash+"/"+fileListing, m3uTime)
 
-    // Check Readdir timestamps - should use remote timestamp
-    f, err := fs.OpenFile(ctx, "/" + hash + "/" + dirOnDemand + "/Test Group/" + dirIndividual, os.O_RDONLY, 0)
-    if err != nil {
-        t.Fatalf("Failed to open Individual dir: %v", err)
-    }
-    infos, err := f.Readdir(-1)
-    f.Close()
-    if err != nil {
-        t.Fatalf("Failed to readdir: %v", err)
-    }
-    found := false
-    for _, info := range infos {
-        if info.Name() == "Test Stream.mp4" {
-            found = true
-            if !info.ModTime().Truncate(time.Second).Equal(remoteModTime.Truncate(time.Second)) {
-                 t.Errorf("Readdir Timestamp for Test Stream.mp4 mismatch. Expected %v (remote), got %v", remoteModTime, info.ModTime())
-            }
-        }
-    }
-    if !found {
-        t.Errorf("Test Stream.mp4 not found in Readdir")
-    }
+	// Check Readdir timestamps - should use remote timestamp
+	f, err := fs.OpenFile(ctx, "/"+hash+"/"+dirOnDemand+"/Test Group/"+dirIndividual, os.O_RDONLY, 0)
+	if err != nil {
+		t.Fatalf("Failed to open Individual dir: %v", err)
+	}
+	infos, err := f.Readdir(-1)
+	f.Close()
+	if err != nil {
+		t.Fatalf("Failed to readdir: %v", err)
+	}
+	found := false
+	for _, info := range infos {
+		if info.Name() == "Test Stream.mp4" {
+			found = true
+			if !info.ModTime().Truncate(time.Second).Equal(remoteModTime.Truncate(time.Second)) {
+				t.Errorf("Readdir Timestamp for Test Stream.mp4 mismatch. Expected %v (remote), got %v", remoteModTime, info.ModTime())
+			}
+		}
+	}
+	if !found {
+		t.Errorf("Test Stream.mp4 not found in Readdir")
+	}
 }

@@ -108,21 +108,21 @@ type ResponseStruct struct {
 		}
 	} `json:"data"`
 
-	Alert               string             `json:"alert,omitempty"`
-	ConfigurationWizard bool               `json:"configurationWizard"`
+	Alert               string              `json:"alert,omitempty"`
+	ConfigurationWizard bool                `json:"configurationWizard"`
 	Error               string              `json:"err,omitempty"`
 	IPAddressesV4Host   []string            `json:"ipAddressesV4Host"` // Every IPv4 address to display in web client
 	Log                 *WebScreenLogStruct `json:"log"`
 	LogoURL             string              `json:"logoURL,omitempty"`
 	OpenLink            string              `json:"openLink,omitempty"`
-	OpenMenu            string             `json:"openMenu,omitempty"`
-	Reload              bool               `json:"reload,omitempty"`
-	Settings            SettingsStruct     `json:"settings"`
-	Status              bool               `json:"status"`
-	Token               string             `json:"token,omitempty"`
-	Users               map[string]any     `json:"users,omitempty"`
-	Wizard              int                `json:"wizard,omitempty"`
-	XEPG                map[string]any     `json:"xepg"`
+	OpenMenu            string              `json:"openMenu,omitempty"`
+	Reload              bool                `json:"reload,omitempty"`
+	Settings            SettingsStruct      `json:"settings"`
+	Status              bool                `json:"status"`
+	Token               string              `json:"token,omitempty"`
+	Users               map[string]any      `json:"users,omitempty"`
+	Wizard              int                 `json:"wizard,omitempty"`
+	XEPG                map[string]any      `json:"xepg"`
 
 	Notification map[string]Notification `json:"notification,omitempty"`
 }
@@ -137,24 +137,24 @@ type APIRequestStruct struct {
 
 // APIResponseStruct : Response to the Client (API)
 type APIResponseStruct struct {
-	EpgSource            string `json:"epg.source,omitempty"`
-	Error                string `json:"err,omitempty"`
-	OtelExporterEndpoint string `json:"otel.exporter.endpoint,omitempty"`
-	OtelExporterType     string `json:"otel.exporter.type,omitempty"`
-	Status               bool   `json:"status"`
+	EpgSource             string `json:"epg.source,omitempty"`
+	Error                 string `json:"err,omitempty"`
+	OtelExporterEndpoint  string `json:"otel.exporter.endpoint,omitempty"`
+	OtelExporterType      string `json:"otel.exporter.type,omitempty"`
+	Status                bool   `json:"status"`
 	ActiveHTTPConnections int64  `json:"active.http.connections"`
-	StreamsActive        int64  `json:"streams.active,omitempty"`
-	StreamsAll    int64  `json:"streams.all,omitempty"`
-	StreamsXepg   int64  `json:"streams.xepg,omitempty"`
-	Token         string `json:"token,omitempty"`
-	TunerActive   int64  `json:"tuners.active"`
-	TunerAll      int64  `json:"tuners.all"`
-	URLDvr        string `json:"url.dvr,omitempty"`
-	URLM3U        string `json:"url.m3u,omitempty"`
-	URLWebDAV     string `json:"url.webdav,omitempty"`
-	URLXepg       string `json:"url.xepg,omitempty"`
-	VersionAPI    string `json:"version.api,omitempty"`
-	VersionXteve  string `json:"version.xteve,omitempty"`
+	StreamsActive         int64  `json:"streams.active,omitempty"`
+	StreamsAll            int64  `json:"streams.all,omitempty"`
+	StreamsXepg           int64  `json:"streams.xepg,omitempty"`
+	Token                 string `json:"token,omitempty"`
+	TunerActive           int64  `json:"tuners.active"`
+	TunerAll              int64  `json:"tuners.all"`
+	URLDvr                string `json:"url.dvr,omitempty"`
+	URLM3U                string `json:"url.m3u,omitempty"`
+	URLWebDAV             string `json:"url.webdav,omitempty"`
+	URLXepg               string `json:"url.xepg,omitempty"`
+	VersionAPI            string `json:"version.api,omitempty"`
+	VersionXteve          string `json:"version.xteve,omitempty"`
 }
 
 // WebScreenLogStruct : Logs are saved in RAM and made available for the Web Interface

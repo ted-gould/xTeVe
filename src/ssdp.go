@@ -47,11 +47,11 @@ func SSDP() (err error) {
 
 	// Advertise WebDAV Service
 	adDav, err := ssdp.Advertise(
-		"urn:schemas-upnp-org:service:WebDAV:1", // send as "ST"
+		"urn:schemas-upnp-org:service:WebDAV:1",                                        // send as "ST"
 		fmt.Sprintf("uuid:%s::urn:schemas-upnp-org:service:WebDAV:1", System.DeviceID), // send as "USN"
-		fmt.Sprintf("%s/dav/", System.URLBase),             // send as "LOCATION"
-		System.AppName, // send as "SERVER"
-		1800)           // send as "maxAge" in "CACHE-CONTROL"
+		fmt.Sprintf("%s/dav/", System.URLBase),                                         // send as "LOCATION"
+		System.AppName,                                                                 // send as "SERVER"
+		1800)                                                                           // send as "maxAge" in "CACHE-CONTROL"
 
 	if err != nil {
 		span.RecordError(err)
