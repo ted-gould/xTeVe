@@ -37,7 +37,7 @@ func TestUpdateSegmentSentCount_ShiftedIndex(t *testing.T) {
 	// Since the slice only has length 2 now, index 2 would be out of bounds,
 	// and the SentCount would not be updated.
 	// With the fix, the index parameter is ignored and it finds "3.ts" by name.
-	updateSegmentSentCount(playlistID, streamID, 2, "3.ts")
+	updateSegmentSentCount(playlistID, streamID, "3.ts")
 
 	// Verify the update
 	p, ok := BufferInformation.Load(playlistID)

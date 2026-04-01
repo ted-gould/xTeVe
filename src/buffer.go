@@ -16,12 +16,14 @@ import (
 	"slices"
 
 	"context"
+
 	"go.opentelemetry.io/otel/trace"
+
+	"xteve/src/mpegts"
 
 	"github.com/avfs/avfs"
 	"github.com/avfs/avfs/vfs/memfs"
 	"github.com/avfs/avfs/vfs/osfs"
-	"xteve/src/mpegts"
 )
 
 var errTunerLimitReached = errors.New("tuner limit reached")
@@ -400,7 +402,7 @@ func sendSingleSegmentToClient(fts segmentToSend, stream *ThisStream, streamID i
 	stream.OldSegments = append(stream.OldSegments, fts.Filename)
 
 	// Update the shared SentCount
-	updateSegmentSentCount(playlistID, streamID, fts.Index, fts.Filename)
+	updateSegmentSentCount(playlistID, streamID, fts.Filename)
 
 	// Cleanup completed segments
 	cleanupCompletedSegments(playlistID, streamID, stream.MD5)
@@ -1030,7 +1032,6 @@ func handleTSStream(resp *http.Response, stream ThisStream, streamID int, playli
 			return stream, false, nil
 		}
 	}
-	return stream, false, nil
 }
 
 func switchBandwidth(stream *ThisStream) (err error) {
@@ -1092,7 +1093,7 @@ func getSegmentsAndStatus(playlistID string, streamID int) ([]SegmentInfo, bool,
 }
 
 // updateSegmentSentCount safely increments the sent count of a segment.
-func updateSegmentSentCount(playlistID string, streamID int, segmentIndex int, filename string) {
+func updateSegmentSentCount(playlistID string, streamID int, filename string) {
 	Lock.Lock()
 	defer Lock.Unlock()
 
