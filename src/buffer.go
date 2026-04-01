@@ -929,7 +929,13 @@ func processTSStreamPacketsVFS(parser *mpegts.Parser, packetBuf []byte, bufferFi
 	return bufferFile, nil
 }
 
-func handleTSStreamError(err error, bufferFile avfs.File, fileSize int, retries *int, tmpFile string, tmpSegment *int, stream *ThisStream, playlistID string, streamID int, bandwidth *BandwidthCalculation, addErrorToStream func(err error)) (ThisStream, bool, error) {
+// shortLivedConnThreshold is the maximum connection duration below which an
+// EOF is treated as an intentional server-side drop (e.g. a CDN that rotates
+// connections every ~20 s) rather than a true end-of-stream. In that case we
+// skip the retry sleep so the reconnect happens immediately.
+const shortLivedConnThreshold = 60 * time.Second
+
+func handleTSStreamError(err error, bufferFile avfs.File, fileSize int, retries *int, tmpFile string, tmpSegment *int, stream *ThisStream, playlistID string, streamID int, bandwidth *BandwidthCalculation, addErrorToStream func(err error), connectedAt time.Time) (ThisStream, bool, error) {
 	if err != io.EOF {
 		if Settings.StreamRetryEnabled && *retries < Settings.StreamMaxRetries {
 			*retries++
@@ -953,8 +959,17 @@ func handleTSStreamError(err error, bufferFile avfs.File, fileSize int, retries 
 				*tmpSegment++
 			}
 			*retries++
-			showInfo(fmt.Sprintf("Stream EOF (upstream closed connection). Retry %d/%d in %d seconds.", *retries, Settings.StreamMaxRetries, Settings.StreamRetryDelay))
-			time.Sleep(time.Duration(Settings.StreamRetryDelay) * time.Second)
+			// If the upstream closed after a very short time it is almost
+			// certainly an intentional CDN-side connection rotation, not a
+			// real end-of-stream. Skip the retry sleep so we reconnect
+			// immediately and avoid a gap in the buffered output.
+			connDuration := time.Since(connectedAt)
+			if connDuration < shortLivedConnThreshold {
+				showInfo(fmt.Sprintf("Stream EOF after %s (short-lived connection, reconnecting immediately). Retry %d/%d.", connDuration.Round(time.Millisecond), *retries, Settings.StreamMaxRetries))
+			} else {
+				showInfo(fmt.Sprintf("Stream EOF (upstream closed connection). Retry %d/%d in %d seconds.", *retries, Settings.StreamMaxRetries, Settings.StreamRetryDelay))
+				time.Sleep(time.Duration(Settings.StreamRetryDelay) * time.Second)
+			}
 			if bufferFile != nil {
 				bufferFile.Close()
 			}
@@ -1014,6 +1029,7 @@ func handleTSStream(ctx context.Context, resp *http.Response, stream ThisStream,
 	var bufferSize = Settings.BufferSize
 	var tmpFileSize = 1024 * bufferSize * 1
 	var debug string
+	var connectedAt = time.Now()
 
 	debug = fmt.Sprintf("Buffer Size:%d KB [SERVER CONNECTION]", len(buffer)/1024)
 	showDebug(debug, 3)
@@ -1062,7 +1078,7 @@ func handleTSStream(ctx context.Context, resp *http.Response, stream ThisStream,
 		}
 
 		if err != nil {
-			stream, isRedirect, _ := handleTSStreamError(err, bufferFile, fileSize, &retries, tmpFile, tmpSegment, &stream, playlistID, streamID, bandwidth, addErrorToStream)
+			stream, isRedirect, _ := handleTSStreamError(err, bufferFile, fileSize, &retries, tmpFile, tmpSegment, &stream, playlistID, streamID, bandwidth, addErrorToStream, connectedAt)
 			return stream, isRedirect, nil // error is handled inside
 		}
 		retries = 0
