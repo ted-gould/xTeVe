@@ -526,85 +526,86 @@ func connectToStreamingServer(streamID int, playlistID string, ctx context.Conte
 		}
 
 		// M3U8 Segments
-	InitBuffer:
-		setupInitialStreamSegment(playlist, streamID, &timeOut)
-
-		if len(m3u8Segments) > 30 {
-			m3u8Segments = m3u8Segments[15:]
-		}
-		if timeOut >= 10 {
-			return
-		}
-
-		stream = playlist.Streams[streamID]
-
-		if !stream.Status {
-			if strings.Contains(stream.URL, ".m3u8") {
-				showInfo("Streaming Type:" + "[HLS / M3U8]")
-			} else {
-				showInfo("Streaming Type:" + "[TS]")
-			}
-			showInfo("Streaming URL:" + stream.URL)
-		}
-
-		stream.TimeStart = time.Now()
-		bandwidth.Start = stream.TimeStart
-		bandwidth.Size = 0
-
 		for {
-			if !clientConnection(stream) {
+			setupInitialStreamSegment(playlist, streamID, &timeOut)
+
+			if len(m3u8Segments) > 30 {
+				m3u8Segments = m3u8Segments[15:]
+			}
+			if timeOut >= 10 {
 				return
 			}
 
-			if len(stream.Segment) == 0 || len(stream.URL) == 0 {
-				goto InitBuffer
+			stream = playlist.Streams[streamID]
+
+			if !stream.Status {
+				if strings.Contains(stream.URL, ".m3u8") {
+					showInfo("Streaming Type:" + "[HLS / M3U8]")
+				} else {
+					showInfo("Streaming Type:" + "[TS]")
+				}
+				showInfo("Streaming URL:" + stream.URL)
 			}
 
-			var segment = stream.Segment[0]
-			var currentURL = strings.Trim(segment.URL, "\r\n")
+			stream.TimeStart = time.Now()
+			bandwidth.Start = stream.TimeStart
+			bandwidth.Size = 0
 
-			if len(currentURL) == 0 {
-				goto InitBuffer
-			}
+			for {
+				if !clientConnection(stream) {
+					return
+				}
 
-			shouldContinue, err := processStreamingServerResponse(ctx, &stream, currentURL, streamID, playlistID, tmpFolder, &tmpSegment, addErrorToStream, buffer, &bandwidth)
-			if err != nil {
-				return // Error processing means we should stop
-			}
-			if shouldContinue {
-				continue // For redirects
-			}
+				if len(stream.Segment) == 0 || len(stream.URL) == 0 {
+					break
+				}
 
-			if stream.StreamFinished && !stream.HLS {
-				return
-			}
+				var segment = stream.Segment[0]
+				var currentURL = strings.Trim(segment.URL, "\r\n")
 
-			// Calculate the waiting time for the Download of the next Segment
-			if stream.HLS {
-				var sleep float64
+				if len(currentURL) == 0 {
+					break
+				}
 
-				if segment.Duration > 0 {
-					stream.TimeEnd = time.Now()
-					stream.TimeDiff = stream.TimeEnd.Sub(stream.TimeStart).Seconds()
+				shouldContinue, err := processStreamingServerResponse(ctx, &stream, currentURL, streamID, playlistID, tmpFolder, &tmpSegment, addErrorToStream, buffer, &bandwidth)
+				if err != nil {
+					return // Error processing means we should stop
+				}
+				if shouldContinue {
+					continue // For redirects
+				}
 
-					sleep = max((segment.Duration-stream.TimeDiff)-(segment.Duration*0.25), 0)
+				if stream.StreamFinished && !stream.HLS {
+					return
+				}
 
-					debug := fmt.Sprintf("HLS Status:Download time: %f s | Segment duration: %f s | Sleep: %f s Sequence: %d", stream.TimeDiff, segment.Duration, sleep, segment.Sequence)
-					showDebug(debug, 1)
+				// Calculate the waiting time for the Download of the next Segment
+				if stream.HLS {
+					var sleep float64
 
-					if sleep > 0 {
-						for i := 0.0; i < sleep*1000; i = i + 100 {
-							_ = i
-							time.Sleep(time.Duration(100) * time.Millisecond)
+					if segment.Duration > 0 {
+						stream.TimeEnd = time.Now()
+						stream.TimeDiff = stream.TimeEnd.Sub(stream.TimeStart).Seconds()
 
-							if _, err := bufferVFS.Stat(stream.Folder); fsIsNotExistErr(err) {
-								break
+						sleep = max((segment.Duration-stream.TimeDiff)-(segment.Duration*0.25), 0)
+
+						debug := fmt.Sprintf("HLS Status:Download time: %f s | Segment duration: %f s | Sleep: %f s Sequence: %d", stream.TimeDiff, segment.Duration, sleep, segment.Sequence)
+						showDebug(debug, 1)
+
+						if sleep > 0 {
+							for i := 0.0; i < sleep*1000; i = i + 100 {
+								_ = i
+								time.Sleep(time.Duration(100) * time.Millisecond)
+
+								if _, err := bufferVFS.Stat(stream.Folder); fsIsNotExistErr(err) {
+									break
+								}
 							}
 						}
 					}
 				}
-			}
-			stream.Segment = stream.Segment[1:len(stream.Segment)]
+				stream.Segment = stream.Segment[1:len(stream.Segment)]
+			} // End of inner loop
 		} // End for loop
 	} // End of BufferInformation
 }
