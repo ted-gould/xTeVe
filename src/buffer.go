@@ -18,6 +18,7 @@ import (
 	"context"
 	"go.opentelemetry.io/otel/trace"
 
+	"github.com/avfs/avfs"
 	"github.com/avfs/avfs/vfs/memfs"
 	"github.com/avfs/avfs/vfs/osfs"
 	"xteve/src/mpegts"
@@ -320,10 +321,6 @@ func sendSegmentsToClient(ctx context.Context, playlistID string, streamID int, 
 	}
 
 	// 2. Determine which segments to send to this client
-	type segmentToSend struct {
-		Filename string
-		Index    int
-	}
 	var filesToSend []segmentToSend
 	for i, segInfo := range segmentsToProcess {
 		if _, alreadySent := sentSegments[segInfo.Filename]; !alreadySent {
@@ -333,49 +330,9 @@ func sendSegmentsToClient(ctx context.Context, playlistID string, streamID int, 
 
 	// 3. Send the files and update state
 	for _, fts := range filesToSend {
-		fileName := stream.Folder + fts.Filename
-		file, err := bufferVFS.Open(fileName)
-		if err != nil {
-			debug := fmt.Sprintf("Buffer Open (%s)", fileName)
-			showDebug(debug, 2)
+		if err := sendSingleSegmentToClient(fts, stream, streamID, playlistID, w, rc, streaming, sentSegments); err != nil {
 			return true, err
 		}
-
-		l, err := file.Stat()
-		if err == nil {
-			debug := fmt.Sprintf("Buffer Status:Send to client (%s)", fileName)
-			showDebug(debug, 2)
-			buffer := make([]byte, int(l.Size()))
-			_, err = file.Read(buffer)
-			if err == nil {
-				if !*streaming {
-					contentType := http.DetectContentType(buffer)
-					w.Header().Set("Content-type", contentType)
-					w.Header().Set("Content-Length", "0")
-					w.Header().Set("Connection", "close")
-					*streaming = true
-				}
-				if Settings.BufferClientTimeout > 0 {
-					_ = rc.SetWriteDeadline(time.Now().Add(time.Duration(Settings.BufferClientTimeout) * time.Millisecond))
-				}
-				if _, errWrite := w.Write(buffer); errWrite != nil {
-					file.Close()
-					killClientConnection(streamID, playlistID, false)
-					return true, errWrite
-				}
-			}
-		}
-		file.Close()
-
-		// Mark as sent for this client
-		sentSegments[fts.Filename] = true
-		stream.OldSegments = append(stream.OldSegments, fts.Filename)
-
-		// Update the shared SentCount
-		updateSegmentSentCount(playlistID, streamID, fts.Index, fts.Filename)
-
-		// Cleanup completed segments
-		cleanupCompletedSegments(playlistID, streamID, stream.MD5)
 	}
 
 	// Clean up old segment files from disk
@@ -397,6 +354,58 @@ func sendSegmentsToClient(ctx context.Context, playlistID string, streamID int, 
 	}
 
 	return false, nil
+}
+
+type segmentToSend struct {
+	Filename string
+	Index    int
+}
+
+func sendSingleSegmentToClient(fts segmentToSend, stream *ThisStream, streamID int, playlistID string, w http.ResponseWriter, rc *http.ResponseController, streaming *bool, sentSegments map[string]bool) error {
+	fileName := stream.Folder + fts.Filename
+	file, err := bufferVFS.Open(fileName)
+	if err != nil {
+		debug := fmt.Sprintf("Buffer Open (%s)", fileName)
+		showDebug(debug, 2)
+		return err
+	}
+	defer file.Close()
+
+	l, err := file.Stat()
+	if err == nil {
+		debug := fmt.Sprintf("Buffer Status:Send to client (%s)", fileName)
+		showDebug(debug, 2)
+		buffer := make([]byte, int(l.Size()))
+		_, err = file.Read(buffer)
+		if err == nil {
+			if !*streaming {
+				contentType := http.DetectContentType(buffer)
+				w.Header().Set("Content-type", contentType)
+				w.Header().Set("Content-Length", "0")
+				w.Header().Set("Connection", "close")
+				*streaming = true
+			}
+			if Settings.BufferClientTimeout > 0 {
+				_ = rc.SetWriteDeadline(time.Now().Add(time.Duration(Settings.BufferClientTimeout) * time.Millisecond))
+			}
+			if _, errWrite := w.Write(buffer); errWrite != nil {
+				killClientConnection(streamID, playlistID, false)
+				return errWrite
+			}
+		}
+	}
+
+	// Mark as sent for this client
+	sentSegments[fts.Filename] = true
+	stream.OldSegments = append(stream.OldSegments, fts.Filename)
+
+	// Update the shared SentCount
+	updateSegmentSentCount(playlistID, streamID, fts.Index, fts.Filename)
+
+	// Cleanup completed segments
+	cleanupCompletedSegments(playlistID, streamID, stream.MD5)
+
+	return nil
 }
 
 func killClientConnection(streamID int, playlistID string, force bool) {
@@ -551,63 +560,70 @@ func connectToStreamingServer(streamID int, playlistID string, ctx context.Conte
 			bandwidth.Start = stream.TimeStart
 			bandwidth.Size = 0
 
-			for {
-				if !clientConnection(stream) {
-					return
-				}
+			if err := processSegments(ctx, &stream, streamID, playlistID, tmpFolder, &tmpSegment, addErrorToStream, buffer, &bandwidth); err != nil {
+				return
+			}
+		} // End for loop
+	} // End of BufferInformation
+}
 
-				if len(stream.Segment) == 0 || len(stream.URL) == 0 {
-					break
-				}
+func processSegments(ctx context.Context, stream *ThisStream, streamID int, playlistID string, tmpFolder string, tmpSegment *int, addErrorToStream func(error), buffer []byte, bandwidth *BandwidthCalculation) error {
+	for {
+		if !clientConnection(*stream) {
+			return errors.New("client disconnected")
+		}
 
-				var segment = stream.Segment[0]
-				var currentURL = strings.Trim(segment.URL, "\r\n")
+		if len(stream.Segment) == 0 || len(stream.URL) == 0 {
+			break
+		}
 
-				if len(currentURL) == 0 {
-					break
-				}
+		var segment = stream.Segment[0]
+		var currentURL = strings.Trim(segment.URL, "\r\n")
 
-				shouldContinue, err := processStreamingServerResponse(ctx, &stream, currentURL, streamID, playlistID, tmpFolder, &tmpSegment, addErrorToStream, buffer, &bandwidth)
-				if err != nil {
-					return // Error processing means we should stop
-				}
-				if shouldContinue {
-					continue // For redirects
-				}
+		if len(currentURL) == 0 {
+			break
+		}
 
-				if stream.StreamFinished && !stream.HLS {
-					return
-				}
+		shouldContinue, err := processStreamingServerResponse(ctx, stream, currentURL, streamID, playlistID, tmpFolder, tmpSegment, addErrorToStream, buffer, bandwidth)
+		if err != nil {
+			return err // Error processing means we should stop
+		}
+		if shouldContinue {
+			continue // For redirects
+		}
 
-				// Calculate the waiting time for the Download of the next Segment
-				if stream.HLS {
-					var sleep float64
+		if stream.StreamFinished && !stream.HLS {
+			return errors.New("stream finished")
+		}
 
-					if segment.Duration > 0 {
-						stream.TimeEnd = time.Now()
-						stream.TimeDiff = stream.TimeEnd.Sub(stream.TimeStart).Seconds()
+		// Calculate the waiting time for the Download of the next Segment
+		if stream.HLS {
+			var sleep float64
 
-						sleep = max((segment.Duration-stream.TimeDiff)-(segment.Duration*0.25), 0)
+			if segment.Duration > 0 {
+				stream.TimeEnd = time.Now()
+				stream.TimeDiff = stream.TimeEnd.Sub(stream.TimeStart).Seconds()
 
-						debug := fmt.Sprintf("HLS Status:Download time: %f s | Segment duration: %f s | Sleep: %f s Sequence: %d", stream.TimeDiff, segment.Duration, sleep, segment.Sequence)
-						showDebug(debug, 1)
+				sleep = max((segment.Duration-stream.TimeDiff)-(segment.Duration*0.25), 0)
 
-						if sleep > 0 {
-							for i := 0.0; i < sleep*1000; i = i + 100 {
-								_ = i
-								time.Sleep(time.Duration(100) * time.Millisecond)
+				debug := fmt.Sprintf("HLS Status:Download time: %f s | Segment duration: %f s | Sleep: %f s Sequence: %d", stream.TimeDiff, segment.Duration, sleep, segment.Sequence)
+				showDebug(debug, 1)
 
-								if _, err := bufferVFS.Stat(stream.Folder); fsIsNotExistErr(err) {
-									break
-								}
-							}
+				if sleep > 0 {
+					for i := 0.0; i < sleep*1000; i = i + 100 {
+						_ = i
+						time.Sleep(time.Duration(100) * time.Millisecond)
+
+						if _, err := bufferVFS.Stat(stream.Folder); fsIsNotExistErr(err) {
+							break
 						}
 					}
 				}
-				stream.Segment = stream.Segment[1:len(stream.Segment)]
-			} // End of inner loop
-		} // End for loop
-	} // End of BufferInformation
+			}
+		}
+		stream.Segment = stream.Segment[1:len(stream.Segment)]
+	}
+	return nil
 }
 
 func setupInitialStreamSegment(playlist *Playlist, streamID int, timeOut *int) {
@@ -833,6 +849,124 @@ func handleHLSStream(ctx context.Context, resp *http.Response, stream ThisStream
 	return stream, nil
 }
 
+func processTSStreamPacketsVFS(parser *mpegts.Parser, packetBuf []byte, bufferFile avfs.File, fileSize *int, tmpFileSize int, playlistID string, streamID int, stream *ThisStream, bandwidth *BandwidthCalculation, tmpFile *string, tmpFolder string, tmpSegment *int, addErrorToStream func(err error)) (avfs.File, error) {
+	for {
+		err := parser.NextInto(packetBuf)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			ShowError(err, 0)
+			addErrorToStream(err)
+			bufferFile.Close()
+			return nil, err
+		}
+
+		if _, err := bufferFile.Write(packetBuf); err != nil {
+			ShowError(err, 0)
+			addErrorToStream(err)
+			bufferFile.Close()
+			return nil, err
+		}
+		*fileSize += len(packetBuf)
+
+		if *fileSize >= tmpFileSize {
+			bufferFile.Close()
+			completeTSsegment(playlistID, streamID, stream, bandwidth, *fileSize, *tmpFile, *tmpSegment)
+			*tmpSegment++
+
+			*tmpFile = fmt.Sprintf("%s%d.ts", tmpFolder, *tmpSegment)
+
+			if !clientConnection(*stream) {
+				if err = bufferVFS.RemoveAll(stream.Folder); err != nil {
+					ShowError(err, 4005)
+				}
+				return nil, errors.New("client connection lost")
+			}
+
+			newBufferFile, err := bufferVFS.Create(*tmpFile)
+			if err != nil {
+				addErrorToStream(err)
+				return nil, err
+			}
+			bufferFile = newBufferFile
+			*fileSize = 0
+		}
+	}
+	return bufferFile, nil
+}
+
+func handleTSStreamError(err error, bufferFile avfs.File, fileSize int, retries *int, tmpFile string, tmpSegment *int, stream *ThisStream, playlistID string, streamID int, bandwidth *BandwidthCalculation, addErrorToStream func(err error)) (ThisStream, bool, error) {
+	if err != io.EOF {
+		if Settings.StreamRetryEnabled && *retries < Settings.StreamMaxRetries {
+			*retries++
+			showInfo(fmt.Sprintf("Stream Read Error (%s). Retry %d/%d in %d seconds.", err.Error(), *retries, Settings.StreamMaxRetries, Settings.StreamRetryDelay))
+			time.Sleep(time.Duration(Settings.StreamRetryDelay) * time.Second)
+			if bufferFile != nil {
+				bufferFile.Close()
+			}
+			return *stream, true, nil
+		}
+		ShowError(err, 0)
+		addErrorToStream(err)
+	} else {
+		// EOF reached - for live TV streams, the upstream server may
+		// close the connection unexpectedly. Retry the connection
+		// instead of treating it as a normal end of stream.
+		if Settings.StreamRetryEnabled && *retries < Settings.StreamMaxRetries {
+			// Save any partial segment before retrying
+			if fileSize > 0 {
+				completeTSsegment(playlistID, streamID, stream, bandwidth, fileSize, tmpFile, *tmpSegment)
+				*tmpSegment++
+			}
+			*retries++
+			showInfo(fmt.Sprintf("Stream EOF (upstream closed connection). Retry %d/%d in %d seconds.", *retries, Settings.StreamMaxRetries, Settings.StreamRetryDelay))
+			time.Sleep(time.Duration(Settings.StreamRetryDelay) * time.Second)
+			if bufferFile != nil {
+				bufferFile.Close()
+			}
+			return *stream, true, nil
+		}
+
+		// No retries left or retries disabled - treat as normal end of stream
+		if fileSize > 0 {
+			segmentName := fmt.Sprintf("%d.ts", *tmpSegment)
+			segmentInfo := SegmentInfo{Filename: segmentName, SentCount: 0}
+
+			// Update the stream in BufferInformation
+			if p, ok := BufferInformation.Load(playlistID); ok {
+				if playlist, ok := p.(*Playlist); ok {
+					if s, ok := playlist.Streams[streamID]; ok {
+						s.CompletedSegments = append(s.CompletedSegments, segmentInfo)
+						playlist.Streams[streamID] = s
+						BufferInformation.Store(playlistID, playlist)
+						*stream = s
+					}
+				}
+			}
+		}
+	}
+	if bufferFile != nil {
+		bufferFile.Close()
+	}
+
+	stream.Status = true
+	stream.StreamFinished = true
+
+	if p, ok := BufferInformation.Load(playlistID); ok {
+		if playlist, ok := p.(*Playlist); ok {
+			if s, ok := playlist.Streams[streamID]; ok {
+				s.Status = true
+				s.StreamFinished = true
+				playlist.Streams[streamID] = s
+				BufferInformation.Store(playlistID, playlist)
+				*stream = s
+			}
+		}
+	}
+	return *stream, false, err
+}
+
 func handleTSStream(resp *http.Response, stream ThisStream, streamID int, playlistID, tmpFolder string, tmpSegment *int, addErrorToStream func(err error), buffer []byte, bandwidth *BandwidthCalculation, retries int) (ThisStream, bool, error) {
 	var fileSize int
 	var bufferSize = Settings.BufferSize
@@ -878,114 +1012,16 @@ func handleTSStream(resp *http.Response, stream ThisStream, streamID int, playli
 				bufferFile.Close()
 				return stream, false, err
 			}
-			for {
-				err := parser.NextInto(packetBuf)
-				if err == io.EOF {
-					break
-				}
-				if err != nil {
-					ShowError(err, 0)
-					addErrorToStream(err)
-					bufferFile.Close()
-					return stream, false, err
-				}
 
-				if _, err := bufferFile.Write(packetBuf); err != nil {
-					ShowError(err, 0)
-					addErrorToStream(err)
-					bufferFile.Close()
-					return stream, false, err
-				}
-				fileSize += len(packetBuf)
-
-				if fileSize >= tmpFileSize {
-					bufferFile.Close()
-					completeTSsegment(playlistID, streamID, &stream, bandwidth, fileSize, tmpFile, *tmpSegment)
-					*tmpSegment++
-
-					tmpFile = fmt.Sprintf("%s%d.ts", tmpFolder, *tmpSegment)
-
-					if !clientConnection(stream) {
-						if err = bufferVFS.RemoveAll(stream.Folder); err != nil {
-							ShowError(err, 4005)
-						}
-						return stream, false, nil
-					}
-
-					bufferFile, err = bufferVFS.Create(tmpFile)
-					if err != nil {
-						addErrorToStream(err)
-						return stream, false, err
-					}
-
-					fileSize = 0
-				}
+			bufferFile, err = processTSStreamPacketsVFS(parser, packetBuf, bufferFile, &fileSize, tmpFileSize, playlistID, streamID, &stream, bandwidth, &tmpFile, tmpFolder, tmpSegment, addErrorToStream)
+			if err != nil {
+				return stream, false, err
 			}
 		}
 
 		if err != nil {
-			if err != io.EOF {
-				if Settings.StreamRetryEnabled && retries < Settings.StreamMaxRetries {
-					retries++
-					showInfo(fmt.Sprintf("Stream Read Error (%s). Retry %d/%d in %d seconds.", err.Error(), retries, Settings.StreamMaxRetries, Settings.StreamRetryDelay))
-					time.Sleep(time.Duration(Settings.StreamRetryDelay) * time.Second)
-					bufferFile.Close()
-					return stream, true, nil
-				}
-				ShowError(err, 0)
-				addErrorToStream(err)
-			} else {
-				// EOF reached - for live TV streams, the upstream server may
-				// close the connection unexpectedly. Retry the connection
-				// instead of treating it as a normal end of stream.
-				if Settings.StreamRetryEnabled && retries < Settings.StreamMaxRetries {
-					// Save any partial segment before retrying
-					if fileSize > 0 {
-						completeTSsegment(playlistID, streamID, &stream, bandwidth, fileSize, tmpFile, *tmpSegment)
-						*tmpSegment++
-					}
-					retries++
-					showInfo(fmt.Sprintf("Stream EOF (upstream closed connection). Retry %d/%d in %d seconds.", retries, Settings.StreamMaxRetries, Settings.StreamRetryDelay))
-					time.Sleep(time.Duration(Settings.StreamRetryDelay) * time.Second)
-					bufferFile.Close()
-					return stream, true, nil
-				}
-
-				// No retries left or retries disabled - treat as normal end of stream
-				if fileSize > 0 {
-					segmentName := fmt.Sprintf("%d.ts", *tmpSegment)
-					segmentInfo := SegmentInfo{Filename: segmentName, SentCount: 0}
-
-					// Update the stream in BufferInformation
-					if p, ok := BufferInformation.Load(playlistID); ok {
-						if playlist, ok := p.(*Playlist); ok {
-							if s, ok := playlist.Streams[streamID]; ok {
-								s.CompletedSegments = append(s.CompletedSegments, segmentInfo)
-								playlist.Streams[streamID] = s
-								BufferInformation.Store(playlistID, playlist)
-								stream = s
-							}
-						}
-					}
-				}
-			}
-			bufferFile.Close()
-
-			stream.Status = true
-			stream.StreamFinished = true
-
-			if p, ok := BufferInformation.Load(playlistID); ok {
-				if playlist, ok := p.(*Playlist); ok {
-					if s, ok := playlist.Streams[streamID]; ok {
-						s.Status = true
-						s.StreamFinished = true
-						playlist.Streams[streamID] = s
-						BufferInformation.Store(playlistID, playlist)
-						stream = s
-					}
-				}
-			}
-			break
+			stream, isRedirect, _ := handleTSStreamError(err, bufferFile, fileSize, &retries, tmpFile, tmpSegment, &stream, playlistID, streamID, bandwidth, addErrorToStream)
+			return stream, isRedirect, nil // error is handled inside
 		}
 		retries = 0
 

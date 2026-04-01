@@ -15,6 +15,9 @@ This file consolidates critical learnings, architectural decisions, security gui
     * **Edit Source**: Modify code in `src/`, `cmd/`, or `ts/`.
     * **Scope**: Instructions in this file apply to the entire repository.
 
+## Code Structure & Conventions
+* **Function Size**: All functions should be small and easy to understand. Try to keep them under a hundred lines or so.
+
 ## Architecture & Logic
 * **XEPG & XMLTV**:
     * **Streaming Pattern**: Use the `yield` callback pattern (`func(*Program) error`) instead of appending to slices for large datasets (e.g., `getProgramData`).
