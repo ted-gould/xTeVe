@@ -442,6 +442,7 @@ func killClientConnection(streamID int, playlistID string, force bool) {
 						BufferClients.Delete(playlistID + stream.MD5)
 						delete(playlist.Streams, streamID)
 						delete(playlist.Clients, streamID)
+						showInfo(fmt.Sprintf("Streaming Status:Channel: %s - No client is using this channel anymore. Streaming Server connection has ended", stream.ChannelName))
 					}
 				}
 			}
@@ -462,21 +463,6 @@ func clientConnection(stream ThisStream) (status bool) {
 	defer Lock.Unlock()
 
 	if _, ok := BufferClients.Load(stream.PlaylistID + stream.MD5); !ok {
-		var debug = fmt.Sprintf("Streaming Status:Remove temporary files (%s)", stream.Folder)
-		showDebug(debug, 1)
-
-		status = false
-
-		debug = fmt.Sprintf("Remove tmp folder:%s", stream.Folder)
-		showDebug(debug, 1)
-
-		if err := bufferVFS.RemoveAll(stream.Folder); err != nil {
-			ShowError(err, 4005)
-		}
-
-		if _, ok := BufferInformation.Load(stream.PlaylistID); ok {
-			showInfo(fmt.Sprintf("Streaming Status:Channel: %s - No client is using this channel anymore. Streaming Server connection has ended", stream.ChannelName))
-		}
 		status = false
 	}
 	return
