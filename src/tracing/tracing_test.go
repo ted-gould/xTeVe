@@ -36,7 +36,7 @@ func (s *mockTraceServer) Export(ctx context.Context, req *coltracepb.ExportTrac
 func TestExporterSelection(t *testing.T) {
 	// Test case 1: OTEL_EXPORTER_TYPE is "otlp"
 	t.Run("otlp", func(t *testing.T) {
-		exporter, err := newSpanExporter(context.Background(), ExporterTypeOTLP)
+		exporter, err := newSpanExporter(t.Context(), ExporterTypeOTLP)
 		assert.NoError(t, err)
 		assert.NotNil(t, exporter)
 		assert.IsType(t, &otlptrace.Exporter{}, exporter)
@@ -44,7 +44,7 @@ func TestExporterSelection(t *testing.T) {
 
 	// Test case 2: OTEL_EXPORTER_TYPE is not set (defaults to stdout)
 	t.Run("stdout", func(t *testing.T) {
-		exporter, err := newSpanExporter(context.Background(), ExporterTypeStdout)
+		exporter, err := newSpanExporter(t.Context(), ExporterTypeStdout)
 		assert.NoError(t, err)
 		assert.NotNil(t, exporter)
 		assert.IsType(t, &stdouttrace.Exporter{}, exporter)
@@ -55,7 +55,7 @@ func TestExporterSelection(t *testing.T) {
 		os.Setenv("OTEL_EXPORTER_OTLP_HEADERS", "x-axiom-dataset=test-dataset,Authorization=Bearer token")
 		defer os.Unsetenv("OTEL_EXPORTER_OTLP_HEADERS")
 
-		exporter, err := newSpanExporter(context.Background(), ExporterTypeOTLP)
+		exporter, err := newSpanExporter(t.Context(), ExporterTypeOTLP)
 		assert.NoError(t, err)
 		assert.NotNil(t, exporter)
 		assert.IsType(t, &otlptrace.Exporter{}, exporter)
@@ -91,7 +91,7 @@ func TestOTLPHeadersParsing(t *testing.T) {
 	}()
 
 	// Create exporter
-	ctx := context.Background()
+	ctx := t.Context()
 	exporter, err := newSpanExporter(ctx, ExporterTypeOTLP)
 	assert.NoError(t, err)
 
@@ -145,7 +145,7 @@ func TestTracingMiddleware(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Force flush the exporter
-	err = tp.ForceFlush(context.Background())
+	err = tp.ForceFlush(t.Context())
 	assert.NoError(t, err)
 
 	// Check that a span was created
@@ -153,6 +153,6 @@ func TestTracingMiddleware(t *testing.T) {
 	assert.Len(t, spans, 1)
 
 	// Shut down the tracer provider
-	err = tp.Shutdown(context.Background())
+	err = tp.Shutdown(t.Context())
 	assert.NoError(t, err)
 }

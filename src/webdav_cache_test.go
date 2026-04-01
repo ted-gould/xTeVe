@@ -1,7 +1,6 @@
 package src
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -58,7 +57,7 @@ func TestWebDAVCacheRefresh(t *testing.T) {
 	}
 
 	fs := &WebDAVFS{}
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// 1. Access WebDAV groups to populate the Groups cache.
 	f, err := fs.OpenFile(ctx, "/"+hash+"/"+dirOnDemand, os.O_RDONLY, 0)

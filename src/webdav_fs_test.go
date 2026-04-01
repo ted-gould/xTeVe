@@ -107,7 +107,7 @@ func TestWebDAVFS(t *testing.T) {
 	}
 
 	fs := &WebDAVFS{}
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Test root listing
 	f, err := fs.OpenFile(ctx, "/", os.O_RDONLY, 0)
@@ -464,7 +464,7 @@ func TestWebDAVFS_NoSizeFallback(t *testing.T) {
 	}
 
 	fs := &WebDAVFS{}
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Path: /dav/<hash>/On Demand/No Size Group/Individual/
 	path := "/" + hash + "/" + dirOnDemand + "/No Size Group/" + dirIndividual
@@ -583,7 +583,7 @@ func TestWebDAVFS_FilenameSanitization(t *testing.T) {
 	}
 
 	fs := &WebDAVFS{}
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Case 1 Check
 	// /dav/<hash>/On Demand/AMAZON SERIES/Series/As We See It/Season 1

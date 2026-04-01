@@ -1,7 +1,6 @@
 package src
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -147,7 +146,7 @@ func TestWebDAVRetryLogic(t *testing.T) {
 	ClearWebDAVCache("")
 
 	fs := &WebDAVFS{}
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Open the file
 	// Path: /<hash>/On Demand/<Group>/Individual/<File>

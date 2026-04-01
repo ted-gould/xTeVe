@@ -1,7 +1,6 @@
 package src
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -28,7 +27,7 @@ func TestDownloadFileFromServer_Limit(t *testing.T) {
 	defer server.Close()
 
 	// Call downloadFileFromServer
-	_, _, err := downloadFileFromServer(context.Background(), server.URL)
+	_, _, err := downloadFileFromServer(t.Context(), server.URL)
 
 	if err == nil {
 		t.Error("Expected error due to size limit, got nil")
@@ -60,7 +59,7 @@ func TestDownloadFileFromServer_ContentLengthLimit(t *testing.T) {
 	defer server.Close()
 
 	// Call downloadFileFromServer
-	_, _, err := downloadFileFromServer(context.Background(), server.URL)
+	_, _, err := downloadFileFromServer(t.Context(), server.URL)
 
 	if err == nil {
 		t.Error("Expected error due to size limit, got nil")
@@ -97,7 +96,7 @@ func TestHandleHLSStream_Limit(t *testing.T) {
 	}
 
 	stream := ThisStream{}
-	_, err := handleHLSStream(context.Background(), resp, stream, 0, "test-playlist", "/tmp", nil, errorHandler, "http://localhost/playlist.m3u8", &BandwidthCalculation{})
+	_, err := handleHLSStream(t.Context(), resp, stream, 0, "test-playlist", "/tmp", nil, errorHandler, "http://localhost/playlist.m3u8", &BandwidthCalculation{})
 
 	if err == nil {
 		t.Error("Expected error due to size limit, got nil")

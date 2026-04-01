@@ -73,6 +73,8 @@ This file consolidates critical learnings, architectural decisions, security gui
     * **Sorting**: When sorting with pointers, allocate a new slice for the result; do not rebuild in-place.
 
 ## Testing
+* **Context**:
+    * Use `t.Context()` instead of `context.Background()` in tests.
 * **State Isolation**:
     * Use `t.Cleanup` to restore global state (`Settings`, `System`) after tests.
     * Explicitly reset singletons like `filecache.Reset()`.

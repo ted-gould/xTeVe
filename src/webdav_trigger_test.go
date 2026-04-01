@@ -1,7 +1,6 @@
 package src
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -59,7 +58,7 @@ func TestWebDAVFS_SizeFallback_Triggered(t *testing.T) {
 	defer ts.Close()
 
 	// Call fetchRemoteMetadataFunc directly
-	ctx := context.Background()
+	ctx := t.Context()
 	meta, err := fetchRemoteMetadataFunc(ctx, ts.URL)
 	if err != nil {
 		t.Fatalf("fetchRemoteMetadata failed: %v", err)
@@ -119,7 +118,7 @@ func TestWebDAVFS_SizeFallback_LastBytes(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	meta, err := fetchRemoteMetadataFunc(ctx, ts.URL)
 	if err != nil {
 		t.Fatalf("fetchRemoteMetadata failed: %v", err)
