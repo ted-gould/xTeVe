@@ -1056,10 +1056,12 @@ func handleTSStream(ctx context.Context, resp *http.Response, stream ThisStream,
 	packetBuf := make([]byte, mpegts.PacketSize)
 
 	defer resp.Body.Close()
+	var lastBufferingFile string
 	for {
-		if fileSize == 0 {
+		if fileSize == 0 && tmpFile != lastBufferingFile {
 			debug = fmt.Sprintf("Buffer Status:Buffering (%s)", tmpFile)
 			showDebug(debug, 2)
+			lastBufferingFile = tmpFile
 		}
 
 		n, err := resp.Body.Read(buffer)
