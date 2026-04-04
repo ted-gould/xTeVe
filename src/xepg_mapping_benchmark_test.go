@@ -2,7 +2,6 @@ package src
 
 import (
 	"fmt"
-	"strings"
 	"testing"
 )
 
@@ -125,7 +124,7 @@ func BenchmarkPerformAutomaticChannelMapping_WithIndex(b *testing.B) {
 		for _, channel := range xmltvChannels {
 			for _, dn := range channel.DisplayNames {
 				// Normalize: remove all spaces and lowercase
-				solid := strings.ToLower(strings.ReplaceAll(dn.Value, " ", ""))
+				solid := toLowerReplaceSpace(dn.Value)
 				nameIndex[solid] = xmltvNameMatch{
 					XmltvFile: file,
 					XMapping:  channel.ID,

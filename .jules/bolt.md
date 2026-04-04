@@ -13,3 +13,7 @@
 ## 2026-03-07 - UTF-8 Case Folding in Custom String Functions
 **Learning:** When optimizing string comparisons in Go (e.g., ignoring spaces without allocating new strings), simple ASCII case-folding logic will break on international characters (like EPG channel names containing 'Ö', 'É', etc.). EPG data frequently contains non-ASCII characters.
 **Action:** Always use `utf8.DecodeRuneInString` and `unicode.SimpleFold` (or `unicode.ToLower`) to implement custom case-insensitive matching that accurately mirrors `strings.EqualFold()`, ensuring both correctness and zero-allocation performance.
+
+## 2024-04-04 - [Single-Pass String Operations]
+**Learning:** In performance-critical paths (like XEPG channel mapping), chaining standard library string operations (e.g., `strings.ToLower(strings.ReplaceAll(...))`) causes unnecessary intermediate string allocations.
+**Action:** Use single-pass helper functions with `strings.Builder` (like `toLowerReplaceSpace`) or allocation-free comparison functions (like `equalFoldNoSpaces`) for string manipulation in hot loops.
