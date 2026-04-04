@@ -3,7 +3,6 @@ package src
 import (
 	"fmt" // Added for fmt.Sprintf in panic
 	"os"
-	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -265,7 +264,7 @@ func TestPerformAutomaticChannelMapping(t *testing.T) {
 				for file, xmltvChannels := range Data.XMLTV.Mapping {
 					for _, channel := range xmltvChannels {
 						for _, dn := range channel.DisplayNames {
-							solid := strings.ToLower(strings.ReplaceAll(dn.Value, " ", ""))
+							solid := toLowerReplaceSpace(dn.Value)
 							nameIndex[solid] = xmltvNameMatch{
 								XmltvFile: file,
 								XMapping:  channel.ID,

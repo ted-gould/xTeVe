@@ -26,6 +26,19 @@ import (
 	"xteve/src/internal/imgcache"
 )
 
+// toLowerReplaceSpace converts a string to lowercase and removes spaces in a single pass
+// to minimize allocations. It correctly handles unicode characters.
+func toLowerReplaceSpace(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		if r != ' ' {
+			b.WriteRune(unicode.ToLower(r))
+		}
+	}
+	return b.String()
+}
+
 // equalFoldNoSpaces compares two strings case-insensitively, ignoring spaces, without allocating.
 // It correctly handles international characters using unicode.SimpleFold.
 func equalFoldNoSpaces(s, t string) bool {
@@ -657,7 +670,7 @@ func mapping() (err error) {
 			for _, channel := range xmltvChannels {
 				for _, dn := range channel.DisplayNames {
 					// Normalize: remove all spaces and lowercase
-					solid := strings.ToLower(strings.ReplaceAll(dn.Value, " ", ""))
+					solid := toLowerReplaceSpace(dn.Value)
 					nameIndex[solid] = xmltvNameMatch{
 						XmltvFile: file,
 						XMapping:  channel.ID,
@@ -722,7 +735,7 @@ func performAutomaticChannelMapping(xepgChannel XEPGChannelStruct, _ string, nam
 		// Phase 2: Check for Name match
 		// Optimization: Use index if available (O(1))
 		if len(nameIndex) > 0 {
-			xepgNameSolid := strings.ToLower(strings.ReplaceAll(xepgChannel.Name, " ", ""))
+			xepgNameSolid := toLowerReplaceSpace(xepgChannel.Name)
 			if match, ok := nameIndex[xepgNameSolid]; ok {
 				xepgChannel.XmltvFile = match.XmltvFile
 				xepgChannel.XMapping = match.XMapping
