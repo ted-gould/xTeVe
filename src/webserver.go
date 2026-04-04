@@ -1054,6 +1054,12 @@ func Web(w http.ResponseWriter, r *http.Request) {
 		requestFile = file
 	}
 
+	// Security: Prevent path traversal in dev mode or embedded FS
+	if strings.Contains(requestFile, "..") {
+		httpStatusError(w, r, http.StatusBadRequest)
+		return
+	}
+
 	if System.Dev {
 		contentBytes, err = os.ReadFile("src/" + requestFile)
 		if err != nil {
