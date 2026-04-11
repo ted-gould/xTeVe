@@ -281,7 +281,7 @@ func Index(w http.ResponseWriter, r *http.Request) {
 
 // Stream : Web Server /stream/
 func Stream(w http.ResponseWriter, r *http.Request) {
-	var path = strings.Replace(r.RequestURI, "/stream/", "", 1)
+	var path = strings.TrimPrefix(r.RequestURI, "/stream/")
 	//var stream = strings.SplitN(path, "-", 2)
 
 	streamInfo, err := getStreamInfo(path)
@@ -339,7 +339,7 @@ func Stream(w http.ResponseWriter, r *http.Request) {
 
 // Auto : HDHR routing (is currently not used)
 func Auto(w http.ResponseWriter, r *http.Request) {
-	var channelID = strings.Replace(r.RequestURI, "/auto/v", "", 1)
+	var channelID = strings.TrimPrefix(r.RequestURI, "/auto/v")
 	_ = channelID
 
 	/*
