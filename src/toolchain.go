@@ -136,7 +136,7 @@ func getDefaultTempDir() string {
 func getValidTempDir(path string) string {
 	if runtime.GOOS == "windows" {
 		if strings.HasPrefix(path, "/tmp") {
-			path = strings.Replace(path, "/tmp", os.TempDir(), 1)
+			path = os.TempDir() + strings.TrimPrefix(path, "/tmp")
 		}
 	}
 	path = filepath.Clean(path)
