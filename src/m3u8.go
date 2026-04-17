@@ -190,35 +190,42 @@ func ParseM3U8(stream *ThisStream) (err error) {
 			}
 		}
 
-		for _, s := range m3u8Segments {
-			segment = s
+		var newSegments []Segment
 
+		for _, s := range m3u8Segments {
 			if !stream.Status {
 				noNewSegment = false
-				stream.LastSequence = segment.Sequence
+				stream.LastSequence = s.Sequence
+				segment = s
 
 				// Stream is of type VOD. The first segment of the M3U8 playlist must be used.
-				if strings.ToUpper(segment.PlaylistType) == "VOD" {
+				if strings.ToUpper(s.PlaylistType) == "VOD" {
+					newSegments = append(newSegments, s)
 					break
 				}
 			} else {
-				if segment.Sequence > stream.LastSequence {
-					stream.LastSequence = segment.Sequence
+				if s.Sequence > stream.LastSequence {
+					stream.LastSequence = s.Sequence
 					noNewSegment = false
-					break
+					segment = s
+					newSegments = append(newSegments, s)
 				}
 			}
 		}
-	}
 
-	if !noNewSegment {
-		if stream.DynamicBandwidth {
-			err = switchBandwidth(stream) // Check and assign error
-			if err != nil {
-				return err // Propagate error
+		if !stream.Status && !noNewSegment && len(newSegments) == 0 {
+			newSegments = append(newSegments, segment)
+		}
+
+		if !noNewSegment {
+			if stream.DynamicBandwidth {
+				err = switchBandwidth(stream) // Check and assign error
+				if err != nil {
+					return err // Propagate error
+				}
+			} else {
+				stream.Segment = append(stream.Segment, newSegments...)
 			}
-		} else {
-			stream.Segment = append(stream.Segment, segment)
 		}
 	}
 
