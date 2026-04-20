@@ -17,3 +17,6 @@
 ## 2024-04-04 - [Single-Pass String Operations]
 **Learning:** In performance-critical paths (like XEPG channel mapping), chaining standard library string operations (e.g., `strings.ToLower(strings.ReplaceAll(...))`) causes unnecessary intermediate string allocations.
 **Action:** Use single-pass helper functions with `strings.Builder` (like `toLowerReplaceSpace`) or allocation-free comparison functions (like `equalFoldNoSpaces`) for string manipulation in hot loops.
+## 2024-04-18 - Avoid strings.Replace for Prefix Stripping in HTTP Handlers
+**Learning:** In Go, using `strings.Replace(url, prefix, "", 1)` to strip a prefix path in HTTP routing (like removing `/stream/` from a `RequestURI`) unnecessarily allocates a new string.
+**Action:** Always use `strings.TrimPrefix(url, prefix)` which returns a sub-slice of the original string (O(1) with 0 allocations), significantly reducing garbage collection pressure on hot paths like stream routers.
