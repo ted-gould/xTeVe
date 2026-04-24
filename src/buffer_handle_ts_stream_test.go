@@ -84,7 +84,7 @@ func TestHandleTSStream(t *testing.T) {
 	}
 
 	// 3. Call the function
-	_, err = handleTSStream(t.Context(), resp, &stream, streamID, playlistID, tmpFolder, &tmpSegment, addErrorToStream, buffer, &bandwidth, retries)
+	_, err = stream.handleTSStream(t.Context(), resp, streamID, playlistID, tmpFolder, &tmpSegment, addErrorToStream, buffer, &bandwidth, retries)
 	if err != nil {
 		t.Fatalf("handleTSStream returned an error: %v", err)
 	}
@@ -200,7 +200,7 @@ func TestHandleTSStream_Corrupted(t *testing.T) {
 	}
 
 	// 3. Call the function
-	_, err = handleTSStream(t.Context(), resp, &stream, streamID, playlistID, tmpFolder, &tmpSegment, addErrorToStream, buffer, &bandwidth, retries)
+	_, err = stream.handleTSStream(t.Context(), resp, streamID, playlistID, tmpFolder, &tmpSegment, addErrorToStream, buffer, &bandwidth, retries)
 	if err != nil {
 		t.Fatalf("handleTSStream returned an error: %v", err)
 	}
@@ -318,7 +318,7 @@ func TestHandleTSStream_EOFRetriesWhenEnabled(t *testing.T) {
 		t.Fatalf("Failed to make request: %v", err)
 	}
 
-	isRedirect, err := handleTSStream(t.Context(), resp, &stream, streamID, playlistID, tmpFolder, &tmpSegment, addErrorToStream, buffer, &bandwidth, 0)
+	isRedirect, err := stream.handleTSStream(t.Context(), resp, streamID, playlistID, tmpFolder, &tmpSegment, addErrorToStream, buffer, &bandwidth, 0)
 	if !isRedirect {
 		t.Fatalf("Expected isRedirect to be true for EOF retry. err=%v", err)
 	}
@@ -402,7 +402,7 @@ func TestHandleTSStream_EOFNoRetryWhenDisabled(t *testing.T) {
 		t.Fatalf("Failed to make request: %v", err)
 	}
 
-	_, err = handleTSStream(t.Context(), resp, &stream, streamID, playlistID, tmpFolder, &tmpSegment, addErrorToStream, buffer, &bandwidth, 0)
+	_, err = stream.handleTSStream(t.Context(), resp, streamID, playlistID, tmpFolder, &tmpSegment, addErrorToStream, buffer, &bandwidth, 0)
 	if err != nil {
 		t.Fatalf("handleTSStream returned unexpected error: %v", err)
 	}

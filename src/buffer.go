@@ -757,7 +757,7 @@ func processStreamingServerResponse(ctx context.Context, stream *ThisStream, cur
 	// M3U8 Playlist
 	case "application/x-mpegurl", "application/vnd.apple.mpegurl", "audio/mpegurl", "audio/x-mpegurl":
 		var err error
-		err = handleHLSStream(ctx, resp, stream, streamID, playlistID, tmpFolder, tmpSegment, addErrorToStream, currentURL, bandwidth)
+		err = stream.handleHLSStream(ctx, resp, streamID, playlistID, tmpFolder, tmpSegment, addErrorToStream, currentURL, bandwidth)
 		if err != nil {
 			// handleHLSStream logs and adds errors, so we just need to return
 			return false, err
@@ -766,7 +766,7 @@ func processStreamingServerResponse(ctx context.Context, stream *ThisStream, cur
 	case "video/mpeg", "video/mp4", "video/mp2t", "video/m2ts", "application/octet-stream", "binary/octet-stream", "application/mp2t", "video/x-matroska":
 		var err error
 		var isRedirect bool
-		isRedirect, err = handleTSStream(ctx, resp, stream, streamID, playlistID, tmpFolder, tmpSegment, addErrorToStream, buffer, bandwidth, retries)
+		isRedirect, err = stream.handleTSStream(ctx, resp, streamID, playlistID, tmpFolder, tmpSegment, addErrorToStream, buffer, bandwidth, retries)
 		if isRedirect {
 			return true, nil
 		}
@@ -792,7 +792,7 @@ func processStreamingServerResponse(ctx context.Context, stream *ThisStream, cur
 // Limit the playlist download size to 32MB to prevent DoS
 var maxPlaylistDownloadSize int64 = 33554432
 
-func handleHLSStream(ctx context.Context, resp *http.Response, stream *ThisStream, streamID int, playlistID, tmpFolder string, tmpSegment *int, addErrorToStream func(err error), currentURL string, bandwidth *BandwidthCalculation) error {
+func (stream *ThisStream) handleHLSStream(ctx context.Context, resp *http.Response, streamID int, playlistID, tmpFolder string, tmpSegment *int, addErrorToStream func(err error), currentURL string, bandwidth *BandwidthCalculation) error {
 	tracer := otel.Tracer("xteve/buffer")
 	ctx, span := tracer.Start(ctx, "handleHLSStream")
 	defer span.End()
@@ -1033,7 +1033,7 @@ func handleTSStreamError(err error, bufferFile avfs.File, fileSize int, retries 
 	return *stream, false, err
 }
 
-func handleTSStream(ctx context.Context, resp *http.Response, stream *ThisStream, streamID int, playlistID, tmpFolder string, tmpSegment *int, addErrorToStream func(err error), buffer []byte, bandwidth *BandwidthCalculation, retries int) (bool, error) {
+func (stream *ThisStream) handleTSStream(ctx context.Context, resp *http.Response, streamID int, playlistID, tmpFolder string, tmpSegment *int, addErrorToStream func(err error), buffer []byte, bandwidth *BandwidthCalculation, retries int) (bool, error) {
 	tracer := otel.Tracer("xteve/buffer")
 	_, span := tracer.Start(ctx, "handleTSStream")
 	defer span.End()
