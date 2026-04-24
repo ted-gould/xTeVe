@@ -96,7 +96,7 @@ func TestHandleHLSStream_Limit(t *testing.T) {
 	}
 
 	stream := ThisStream{}
-	_, err := handleHLSStream(t.Context(), resp, stream, 0, "test-playlist", "/tmp", nil, errorHandler, "http://localhost/playlist.m3u8", &BandwidthCalculation{})
+	err := handleHLSStream(t.Context(), resp, &stream, 0, "test-playlist", "/tmp", nil, errorHandler, "http://localhost/playlist.m3u8", &BandwidthCalculation{})
 
 	if err == nil {
 		t.Error("Expected error due to size limit, got nil")

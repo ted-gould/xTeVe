@@ -84,17 +84,17 @@ func TestHandleTSStream(t *testing.T) {
 	}
 
 	// 3. Call the function
-	modifiedStream, _, err := handleTSStream(t.Context(), resp, stream, streamID, playlistID, tmpFolder, &tmpSegment, addErrorToStream, buffer, &bandwidth, retries)
+	_, err = handleTSStream(t.Context(), resp, &stream, streamID, playlistID, tmpFolder, &tmpSegment, addErrorToStream, buffer, &bandwidth, retries)
 	if err != nil {
 		t.Fatalf("handleTSStream returned an error: %v", err)
 	}
 
 	// 4. Verify the results
-	if !modifiedStream.Status {
+	if !stream.Status {
 		t.Errorf("Expected stream status to be true, but it was false")
 	}
 
-	if !modifiedStream.StreamFinished {
+	if !stream.StreamFinished {
 		t.Errorf("Expected stream to be finished, but it was not")
 	}
 
@@ -200,7 +200,7 @@ func TestHandleTSStream_Corrupted(t *testing.T) {
 	}
 
 	// 3. Call the function
-	_, _, err = handleTSStream(t.Context(), resp, stream, streamID, playlistID, tmpFolder, &tmpSegment, addErrorToStream, buffer, &bandwidth, retries)
+	_, err = handleTSStream(t.Context(), resp, &stream, streamID, playlistID, tmpFolder, &tmpSegment, addErrorToStream, buffer, &bandwidth, retries)
 	if err != nil {
 		t.Fatalf("handleTSStream returned an error: %v", err)
 	}
@@ -318,13 +318,13 @@ func TestHandleTSStream_EOFRetriesWhenEnabled(t *testing.T) {
 		t.Fatalf("Failed to make request: %v", err)
 	}
 
-	resultStream, isRedirect, err := handleTSStream(t.Context(), resp, stream, streamID, playlistID, tmpFolder, &tmpSegment, addErrorToStream, buffer, &bandwidth, 0)
+	isRedirect, err := handleTSStream(t.Context(), resp, &stream, streamID, playlistID, tmpFolder, &tmpSegment, addErrorToStream, buffer, &bandwidth, 0)
 	if !isRedirect {
 		t.Fatalf("Expected isRedirect to be true for EOF retry. err=%v", err)
 	}
 
 	// Stream should NOT be marked as finished since we're retrying
-	if resultStream.StreamFinished {
+	if stream.StreamFinished {
 		t.Errorf("Stream should not be marked as finished when retrying on EOF")
 	}
 
@@ -402,16 +402,16 @@ func TestHandleTSStream_EOFNoRetryWhenDisabled(t *testing.T) {
 		t.Fatalf("Failed to make request: %v", err)
 	}
 
-	resultStream, _, err := handleTSStream(t.Context(), resp, stream, streamID, playlistID, tmpFolder, &tmpSegment, addErrorToStream, buffer, &bandwidth, 0)
+	_, err = handleTSStream(t.Context(), resp, &stream, streamID, playlistID, tmpFolder, &tmpSegment, addErrorToStream, buffer, &bandwidth, 0)
 	if err != nil {
 		t.Fatalf("handleTSStream returned unexpected error: %v", err)
 	}
 
-	if !resultStream.StreamFinished {
+	if !stream.StreamFinished {
 		t.Errorf("Expected stream to be finished when retry is disabled")
 	}
 
-	if !resultStream.Status {
+	if !stream.Status {
 		t.Errorf("Expected stream status to be true")
 	}
 

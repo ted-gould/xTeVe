@@ -72,13 +72,13 @@ func TestHandleHLSStream(t *testing.T) {
 	}
 
 	// 3. Call the function
-	modifiedStream, err := handleHLSStream(t.Context(), resp, stream, 0, "test-playlist", tmpFolder, &tmpSegment, addErrorToStream, stream.URL, &BandwidthCalculation{})
+	err = handleHLSStream(t.Context(), resp, &stream, 0, "test-playlist", tmpFolder, &tmpSegment, addErrorToStream, stream.URL, &BandwidthCalculation{})
 	if err != nil {
 		t.Fatalf("handleHLSStream returned an error: %v", err)
 	}
 
 	// 4. Verify the results
-	if !modifiedStream.HLS {
+	if !stream.HLS {
 		t.Errorf("Expected stream to be marked as HLS, but it was not")
 	}
 
