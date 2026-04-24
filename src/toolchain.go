@@ -19,7 +19,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
-	"text/template"
+	"html/template"
 
 	"github.com/avfs/avfs"
 )
