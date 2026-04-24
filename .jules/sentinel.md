@@ -33,3 +33,7 @@
 **Vulnerability:** The API handler restricted access to `localhost` (`r.RemoteAddr`), assuming this provided security. However, when deployed behind a reverse proxy (common for xTeVe), all requests appear to come from `127.0.0.1`. If `Settings.AuthenticationAPI` was disabled (default), external attackers could bypass authentication by proxying through Nginx/Apache, as the application perceived them as local users.
 **Learning:** `r.RemoteAddr` is unreliable for access control when reverse proxies are involved. Relying on "localhost" checks for security is dangerous in modern deployment environments.
 **Prevention:** Authentication logic must take precedence over network location checks. If the application has a "Web Authentication" setting, it should enforce authentication on ALL sensitive endpoints (like API), regardless of the source IP, unless explicitly configured otherwise with full awareness of proxy risks.
+## 2024-05-24 - [Template Injection XSS Prevention]
+**Vulnerability:** Found `text/template` being used in `parseTemplate` instead of `html/template`. This poses an XSS risk since `text/template` doesn't automatically escape context.
+**Learning:** In Go, rendering HTML with `text/template` leaves applications vulnerable to Cross-Site Scripting (XSS).
+**Prevention:** Always use `html/template` when rendering content that is returned to the client as HTML or JavaScript to ensure proper contextual escaping.
