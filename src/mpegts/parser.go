@@ -59,6 +59,42 @@ func (p *Parser) Next() ([]byte, error) {
 	return packet, nil
 }
 
+// ExtractPCR extracts the Program Clock Reference value from an MPEG-TS
+// packet's adaptation field.  It returns (pcr, true) when the packet carries a
+// valid PCR, or (0, false) when it does not.
+//
+// The returned value is in 27 MHz units (PCR_base×300 + PCR_ext) and fits
+// comfortably in an int64.  Callers typically use it as a monotone stream-time
+// reference to detect backward-overlap on live-stream reconnects.
+func ExtractPCR(packet []byte) (pcr int64, ok bool) {
+	if len(packet) < PacketSize {
+		return 0, false
+	}
+	// Byte 3, bits 5-4: adaptation_field_control.
+	// 0b10 = adaptation field only; 0b11 = adaptation field + payload.
+	if packet[3]&0x30 < 0x20 {
+		return 0, false // no adaptation field
+	}
+	// Byte 4: adaptation_field_length – must be ≥ 7 to hold the flags byte
+	// plus the 6-byte PCR field.
+	if packet[4] < 7 {
+		return 0, false
+	}
+	// Byte 5 flags: bit 4 (0x10) is PCR_flag.
+	if packet[5]&0x10 == 0 {
+		return 0, false
+	}
+	// Bytes 6-11 encode the 42-bit PCR value:
+	//   33-bit base  (90 kHz) in bits [47:15]
+	//    6-bit reserved              in bits [14:9]
+	//    9-bit extension (27 MHz)    in bits [8:0]
+	b := packet[6:12]
+	base := int64(b[0])<<25 | int64(b[1])<<17 | int64(b[2])<<9 |
+		int64(b[3])<<1 | int64(b[4]>>7)
+	ext := int64(b[4]&0x01)<<8 | int64(b[5])
+	return base*300 + ext, true
+}
+
 // NextInto reads the next valid MPEG-TS packet into the provided buffer.
 // The buffer must have a length of at least PacketSize.
 // If no packet is available, it returns io.EOF.

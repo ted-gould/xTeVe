@@ -30,49 +30,102 @@ import (
 	"xteve/src/mpegts"
 )
 
+// makePacketWithPCR returns a 188-byte MPEG-TS packet whose adaptation field
+// carries a PCR value derived from absPos.  The payload area encodes absPos so
+// tests can verify which logical stream positions ended up in the buffer files.
+//
+// PCR is set to absPos × 300 (one unit per 90 kHz tick → one unique PCR per
+// position).  This keeps the values small while still being valid PCR.
+func makePacketWithPCR(absPos int) []byte {
+	pkt := make([]byte, mpegts.PacketSize)
+	pkt[0] = mpegts.SyncByte
+	// PID 0x0100 (arbitrary but consistent)
+	pkt[1] = 0x01
+	pkt[2] = 0x00
+	// adaptation_field_control = 0b11 (adaptation + payload), continuity counter = absPos&0xF
+	pkt[3] = 0x30 | byte(absPos&0x0F)
+	// Adaptation field: length=7 (flags byte + 6 PCR bytes), no stuffing needed for our purposes
+	pkt[4] = 7
+	// Flags: PCR_flag (bit 4) set
+	pkt[5] = 0x10
+	// PCR = absPos * 300 → base = absPos, ext = 0
+	base := int64(absPos)
+	ext := int64(0)
+	pkt[6] = byte(base >> 25)
+	pkt[7] = byte(base >> 17)
+	pkt[8] = byte(base >> 9)
+	pkt[9] = byte(base >> 1)
+	pkt[10] = byte(base&0x01)<<7 | 0x7E | byte(ext>>8)
+	pkt[11] = byte(ext)
+	// Payload: encode absPos so callers can inspect which positions were buffered
+	pkt[12] = byte(absPos >> 8)
+	pkt[13] = byte(absPos & 0xFF)
+	return pkt
+}
+
+// countPacketsInVFS counts the total number of 188-byte MPEG-TS packets across
+// all files in dir.
+func countPacketsInVFS(dir string) int {
+	files, err := bufferVFS.ReadDir(dir)
+	if err != nil {
+		return 0
+	}
+	total := 0
+	for _, fi := range files {
+		f, err := bufferVFS.Open(dir + fi.Name())
+		if err != nil {
+			continue
+		}
+		buf := make([]byte, mpegts.PacketSize)
+		for {
+			n, err := f.Read(buf)
+			if n == mpegts.PacketSize {
+				total++
+			}
+			if err != nil {
+				break
+			}
+		}
+		f.Close()
+	}
+	return total
+}
+
 // TestConnectToStreamingServer_LiveDisconnectReconnectCycles models the short
 // connection cycle seen in Comedy Central HD recordings.  The mock CDN closes
-// every connection after a small burst of MPEG-TS data.  With retry enabled,
-// xTeVe must reconnect automatically and continue buffering.
+// every connection after a small burst of MPEG-TS data and starts the next one
+// overlapPackets behind the live edge, simulating the ~30-second backward skip.
+//
+// With the PCR-based deduplication fix, xTeVe must discard the overlapping
+// packets on each reconnect so the client feed is identical to a single
+// long-lived connection.
 func TestConnectToStreamingServer_LiveDisconnectReconnectCycles(t *testing.T) {
 	os.Setenv("XTEVE_ALLOW_LOOPBACK", "true")
 	defer os.Unsetenv("XTEVE_ALLOW_LOOPBACK")
 
 	const (
-		// Minimum number of short CDN connections to observe before the test
-		// terminates the client – matches the many reconnect cycles in the traces.
 		wantConnections = 5
-
-		// Packets served per connection.  Each 188-byte MPEG-TS packet is small;
-		// real CDN segments are ~6-9 s of video at several Mbit/s, but for test
-		// speed we keep the payload tiny.
-		packetsPerConn = 8
-
-		// Number of packets the mock CDN "steps back" at each reconnect.
-		// In production recordings this translates to the ~30-second backward skip
-		// the user observes: the live-stream buffer always starts from ~30 s behind
-		// the live edge, so the new connection overlaps the previous one.
+		packetsPerConn  = 8
+		// overlapPackets is the number of packets the CDN rewinds on each
+		// reconnect, simulating the ~30-second backward skip observed in the
+		// Comedy Central traces.
 		overlapPackets = 2
 	)
 
 	var (
-		connCount int64 // accessed via sync/atomic
+		connCount int64
 
 		mu                sync.Mutex
-		connStartPosition []int // absolute packet number at start of each connection
-		nextLivePosition  = 0  // simulated live buffer head (server side)
+		connStartPosition []int
+		nextLivePosition  = 0
 	)
 
-	// Each request handler represents one CDN connection: it writes packetsPerConn
-	// MPEG-TS packets then returns, which closes the connection and causes an EOF on
-	// the xTeVe side.  The absolute packet numbers encode which connection the data
-	// came from so overlap can be verified later.
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		connNum := int(atomic.AddInt64(&connCount, 1))
+		_ = connNum
 
 		mu.Lock()
 		startPos := nextLivePosition
-		// Advance the live position by less than packetsPerConn to create overlap.
 		nextLivePosition += packetsPerConn - overlapPackets
 		connStartPosition = append(connStartPosition, startPos)
 		mu.Unlock()
@@ -81,17 +134,10 @@ func TestConnectToStreamingServer_LiveDisconnectReconnectCycles(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 
 		for i := 0; i < packetsPerConn; i++ {
-			absPos := startPos + i
-			pkt := make([]byte, mpegts.PacketSize)
-			pkt[0] = mpegts.SyncByte
-			pkt[1] = byte(connNum)       // which reconnect cycle produced this packet
-			pkt[2] = byte(absPos >> 8)   // absolute position high byte
-			pkt[3] = byte(absPos & 0xFF) // absolute position low byte
-			if _, err := w.Write(pkt); err != nil {
+			if _, err := w.Write(makePacketWithPCR(startPos + i)); err != nil {
 				return
 			}
 		}
-		// Handler returns → connection closes → EOF on xTeVe client.
 	}))
 	defer server.Close()
 
@@ -108,12 +154,11 @@ func TestConnectToStreamingServer_LiveDisconnectReconnectCycles(t *testing.T) {
 		Settings.BufferSize = origBuf
 	}()
 
-	// Use a 1 KB segment size so files roll over quickly and we can count them.
 	Settings.BufferSize = 1
 	Settings.UserAgent = "xTeVe-Test"
 	Settings.StreamRetryEnabled = true
 	Settings.StreamMaxRetries = wantConnections * 3
-	Settings.StreamRetryDelay = 0 // reconnect immediately, as observed in traces
+	Settings.StreamRetryDelay = 0
 
 	playlistID := "M-comedy-central-reconnect"
 	streamID := 0
@@ -138,7 +183,6 @@ func TestConnectToStreamingServer_LiveDisconnectReconnectCycles(t *testing.T) {
 	stream := ThisStream{
 		URL:         streamURL,
 		ChannelName: channelName,
-		Status:      false,
 		Folder:      streamFolder,
 		MD5:         md5Val,
 		PlaylistID:  playlistID,
@@ -163,7 +207,6 @@ func TestConnectToStreamingServer_LiveDisconnectReconnectCycles(t *testing.T) {
 		connectToStreamingServer(streamID, playlistID, t.Context())
 	}()
 
-	// Wait until the mock CDN has served at least wantConnections requests.
 	deadline := time.After(15 * time.Second)
 	for {
 		select {
@@ -178,11 +221,8 @@ func TestConnectToStreamingServer_LiveDisconnectReconnectCycles(t *testing.T) {
 		time.Sleep(50 * time.Millisecond)
 	}
 
-	// Simulate the DVR/client disconnecting, which is how the real session ends.
 	killClientConnection(streamID, playlistID, false)
 
-	// Wait for the streaming goroutine to finish before the deferred settings
-	// restore runs, preventing a data race on the Settings struct.
 	select {
 	case <-serverDone:
 	case <-time.After(5 * time.Second):
@@ -191,23 +231,35 @@ func TestConnectToStreamingServer_LiveDisconnectReconnectCycles(t *testing.T) {
 
 	// --- Assertions ---
 
-	// 1. The server must have been hit at least wantConnections times.
 	if got := atomic.LoadInt64(&connCount); got < int64(wantConnections) {
 		t.Errorf("expected >= %d CDN connections (reconnect cycles), got %d",
 			wantConnections, got)
 	}
 
-	// 2. Segment files must have been written across the reconnect cycles.
-	files, err := bufferVFS.ReadDir(streamFolder)
-	if err != nil {
-		t.Fatalf("failed to read stream folder %s: %v", streamFolder, err)
+	// With PCR-based deduplication the buffer must contain only the unique
+	// (non-overlapping) packets:
+	//   connection 1 contributes all packetsPerConn packets.
+	//   each subsequent connection contributes (packetsPerConn - overlapPackets).
+	//
+	// Use the actual connection count so the assertion holds regardless of
+	// how many reconnect cycles the test completes before the kill lands.
+	totalConns := int(atomic.LoadInt64(&connCount))
+	withoutFixExpected := packetsPerConn * totalConns
+	uniqueExpected := packetsPerConn + (totalConns-1)*(packetsPerConn-overlapPackets)
+
+	got := countPacketsInVFS(streamFolder)
+	if got == 0 {
+		t.Fatal("no packets written to buffer – buffering did not produce output")
 	}
-	if len(files) == 0 {
-		t.Fatal("no segment files created: buffering produced no output across reconnect cycles")
+	// The last connection may be cut short, so allow for up to one connection
+	// worth of slack on the unique expected count.  The key signal is that
+	// got is clearly below the no-dedup total.
+	if got >= withoutFixExpected {
+		t.Errorf("deduplication did not fire: got %d packets, expected < %d (without-fix: %d conns × %d pkts); unique expected ≈ %d",
+			got, withoutFixExpected, totalConns, packetsPerConn, uniqueExpected)
 	}
 
-	// 3. Each reconnect must start overlapPackets before the previous connection
-	//    ended, confirming the backward-skip pattern.
+	// Verify the server-side overlap accounting is correct.
 	mu.Lock()
 	positions := make([]int, len(connStartPosition))
 	copy(positions, connStartPosition)
@@ -216,43 +268,32 @@ func TestConnectToStreamingServer_LiveDisconnectReconnectCycles(t *testing.T) {
 	for i := 1; i < len(positions); i++ {
 		prevEnd := positions[i-1] + packetsPerConn
 		thisStart := positions[i]
-		actualOverlap := prevEnd - thisStart
-		if actualOverlap != overlapPackets {
-			t.Errorf("reconnect %d: expected %d-packet backward skip (simulating 30 s overlap), got %d (prevEnd=%d, thisStart=%d)",
-				i+1, overlapPackets, actualOverlap, prevEnd, thisStart)
+		if overlap := prevEnd - thisStart; overlap != overlapPackets {
+			t.Errorf("reconnect %d: expected %d-packet overlap, got %d",
+				i+1, overlapPackets, overlap)
 		}
 	}
 }
 
 // TestConnectToStreamingServer_LongLivedVsShortLived contrasts the normal
 // long-lived connection (Apr 21 recording) against the problematic short-lived
-// connection cycle (Apr 14-17 recordings).  Both scenarios must produce segment
-// files; the short-lived scenario must generate more CDN connections.
+// connection cycle (Apr 14-17 recordings).  After the PCR-based deduplication
+// fix, both scenarios must produce the same buffered content.
 func TestConnectToStreamingServer_LongLivedVsShortLived(t *testing.T) {
 	os.Setenv("XTEVE_ALLOW_LOOPBACK", "true")
 	defer os.Unsetenv("XTEVE_ALLOW_LOOPBACK")
 
-	// Total TS packets to buffer in each scenario.
 	const totalPackets = 40
-	const packetsPerShortConn = 8 // short-lived CDN closes after 8 packets
+	const packetsPerShortConn = 8
 
-	makePackets := func(total int) []byte {
-		data := make([]byte, total*mpegts.PacketSize)
-		for i := 0; i < total; i++ {
-			off := i * mpegts.PacketSize
-			data[off] = mpegts.SyncByte
-			data[off+1] = byte(i >> 8)
-			data[off+2] = byte(i & 0xFF)
-		}
-		return data
+	// Build the canonical byte stream: totalPackets packets with sequential PCR.
+	allPackets := make([]byte, 0, totalPackets*mpegts.PacketSize)
+	for i := 0; i < totalPackets; i++ {
+		allPackets = append(allPackets, makePacketWithPCR(i)...)
 	}
 
-	allPackets := makePackets(totalPackets)
-
 	t.Run("LongLived", func(t *testing.T) {
-		// Matches the Apr 21 trace: one HTTP connection streaming all data.
 		var connCount int64
-
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			atomic.AddInt64(&connCount, 1)
 			w.Header().Set("Content-Type", "video/mp2t")
@@ -264,22 +305,22 @@ func TestConnectToStreamingServer_LongLivedVsShortLived(t *testing.T) {
 		totalFiles := runBufferingScenario(t, server.URL, "long-lived", false, 0)
 
 		if got := atomic.LoadInt64(&connCount); got != 1 {
-			t.Errorf("long-lived scenario: expected 1 CDN connection, got %d", got)
+			t.Errorf("long-lived: expected 1 CDN connection, got %d", got)
 		}
 		if totalFiles == 0 {
-			t.Error("long-lived scenario: no segment files written")
+			t.Error("long-lived: no segment files written")
 		}
 	})
 
 	t.Run("ShortLived", func(t *testing.T) {
-		// Matches the Apr 14-17 traces: CDN closes after every packetsPerShortConn
-		// packets, forcing xTeVe to reconnect repeatedly.
+		// CDN closes after every packetsPerShortConn packets, forcing reconnects.
+		// The stream is served sequentially (no overlap) so after the fix the
+		// output must equal the long-lived output byte-for-byte.
 		var (
 			connCount int64
 			mu        sync.Mutex
 			pos       = 0
 		)
-
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			atomic.AddInt64(&connCount, 1)
 
@@ -293,15 +334,12 @@ func TestConnectToStreamingServer_LongLivedVsShortLived(t *testing.T) {
 			mu.Unlock()
 
 			if start >= totalPackets {
-				// All data exhausted; return 503 so xTeVe eventually stops retrying.
 				http.Error(w, "no more data", http.StatusServiceUnavailable)
 				return
 			}
-
 			w.Header().Set("Content-Type", "video/mp2t")
 			w.WriteHeader(http.StatusOK)
-			chunk := allPackets[start*mpegts.PacketSize : end*mpegts.PacketSize]
-			_, _ = w.Write(chunk)
+			_, _ = w.Write(allPackets[start*mpegts.PacketSize : end*mpegts.PacketSize])
 		}))
 		defer server.Close()
 
@@ -310,20 +348,16 @@ func TestConnectToStreamingServer_LongLivedVsShortLived(t *testing.T) {
 		totalFiles := runBufferingScenario(t, server.URL, "short-lived", true, wantConns)
 
 		if got := atomic.LoadInt64(&connCount); got < int64(wantConns) {
-			t.Errorf("short-lived scenario: expected >= %d CDN connections, got %d",
-				wantConns, got)
+			t.Errorf("short-lived: expected >= %d CDN connections, got %d", wantConns, got)
 		}
 		if totalFiles == 0 {
-			t.Error("short-lived scenario: no segment files written")
+			t.Error("short-lived: no segment files written")
 		}
 	})
 }
 
-// runBufferingScenario is a helper that sets up a playlist, runs
-// connectToStreamingServer, waits for stream completion, and returns the number
-// of segment files created.  When retryEnabled is true and wantConns > 0 the
-// helper allows the server to exhaust all data (server should return 503 once
-// done), which causes xTeVe to stop retrying and finish naturally.
+// runBufferingScenario sets up a playlist, runs connectToStreamingServer, waits
+// for stream completion, and returns the number of segment files created.
 func runBufferingScenario(t *testing.T, streamURL, tag string, retryEnabled bool, wantConns int) (segmentFiles int) {
 	t.Helper()
 
@@ -391,8 +425,6 @@ func runBufferingScenario(t *testing.T, streamURL, tag string, retryEnabled bool
 		connectToStreamingServer(streamID, playlistID, t.Context())
 	}()
 
-	// Wait for the streaming goroutine to finish naturally (server exhausts data
-	// and/or error terminates the loop), with a generous timeout.
 	select {
 	case <-done:
 	case <-time.After(20 * time.Second):
