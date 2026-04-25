@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/assert"
 )
 
 // Mock structures and setup for mapping tests
@@ -285,9 +285,7 @@ func TestPerformAutomaticChannelMapping(t *testing.T) {
 			// For example, if a field is `[]DisplayName` and it's empty, it could be nil or empty slice.
 			// cmp.Diff should handle this, but good to be aware.
 
-			if diff := cmp.Diff(tt.expectedChannel, resultChannel); diff != "" {
-				t.Errorf("performAutomaticChannelMapping channel mismatch (-want +got):\n%s", diff)
-			}
+			assert.Equal(t, tt.expectedChannel, resultChannel, "performAutomaticChannelMapping channel mismatch")
 		})
 	}
 }
@@ -451,9 +449,7 @@ func TestVerifyExistingChannelMappings(t *testing.T) {
 
 			resultChannel := verifyExistingChannelMappings(tt.initialChannel)
 
-			if diff := cmp.Diff(tt.expectedChannel, resultChannel); diff != "" {
-				t.Errorf("verifyExistingChannelMappings channel mismatch (-want +got):\n%s", diff)
-			}
+			assert.Equal(t, tt.expectedChannel, resultChannel, "verifyExistingChannelMappings channel mismatch")
 		})
 	}
 }
