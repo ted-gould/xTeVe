@@ -62,6 +62,13 @@ type ThisStream struct {
 
 	// Stream Status
 	StreamFinished bool
+
+	// LastPCR is the most recent Program Clock Reference value (in 27 MHz
+	// units) seen before a live-stream reconnect.  A value > 0 tells the next
+	// connection to discard incoming packets until their PCR exceeds this
+	// threshold, eliminating the ~30-second backward overlap that CDN
+	// connection rotation can produce.
+	LastPCR int64
 }
 
 // SegmentInfo : Holds buffer segment information
