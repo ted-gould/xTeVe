@@ -8,7 +8,7 @@ import (
 	"testing"
 	"xteve/src/internal/imgcache"
 
-	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/assert"
 )
 
 // --- Test Setup ---
@@ -229,9 +229,7 @@ func TestCreateChannelElements(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := createChannelElements(tt.xepgChannel, tt.imgc)
-			if diff := cmp.Diff(tt.expected, got); diff != "" {
-				t.Errorf("createChannelElements() mismatch (-want +got):\n%s", diff)
-			}
+			assert.Equal(t, tt.expected, got, "createChannelElements() mismatch")
 		})
 	}
 }
