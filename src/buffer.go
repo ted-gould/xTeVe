@@ -683,6 +683,9 @@ func processStreamingServerResponse(ctx context.Context, stream *ThisStream, cur
 	req.Header.Set("User-Agent", Settings.UserAgent)
 	req.Header.Set("Connection", "close")
 	req.Header.Set("Accept", "*/*")
+	if stream.TotalBytesDownloaded > 0 {
+		req.Header.Set("Range", fmt.Sprintf("bytes=%d-", stream.TotalBytesDownloaded))
+	}
 	debugRequest(req)
 
 	client := NewHTTPClient()
@@ -696,6 +699,21 @@ func processStreamingServerResponse(ctx context.Context, stream *ThisStream, cur
 			resp.Body.Close()
 		}
 		return false, err
+	}
+
+	// If we requested a Range but the server ignored it (sent 200 instead of 206),
+	// and we know it's a file of known length, we must manually skip bytes to avoid overlap.
+	if resp.StatusCode == http.StatusOK && stream.TotalBytesDownloaded > 0 && resp.ContentLength > 0 {
+		showInfo(fmt.Sprintf("Server ignored Range request, manually skipping %d bytes", stream.TotalBytesDownloaded))
+		_, err = io.CopyN(io.Discard, resp.Body, stream.TotalBytesDownloaded)
+		if err != nil {
+			ShowError(err, 0)
+			addErrorToStream(err)
+			if resp != nil {
+				resp.Body.Close()
+			}
+			return false, err
+		}
 	}
 
 	// Check HTTP Status, in case of errors the stream is terminated
@@ -739,7 +757,7 @@ func processStreamingServerResponse(ctx context.Context, stream *ThisStream, cur
 	// M3U8 Playlist
 	case "application/x-mpegurl", "application/vnd.apple.mpegurl", "audio/mpegurl", "audio/x-mpegurl":
 		var err error
-		*stream, err = handleHLSStream(ctx, resp, *stream, streamID, playlistID, tmpFolder, tmpSegment, addErrorToStream, currentURL, bandwidth)
+		err = stream.handleHLSStream(ctx, resp, streamID, playlistID, tmpFolder, tmpSegment, addErrorToStream, currentURL, bandwidth)
 		if err != nil {
 			// handleHLSStream logs and adds errors, so we just need to return
 			return false, err
@@ -748,7 +766,7 @@ func processStreamingServerResponse(ctx context.Context, stream *ThisStream, cur
 	case "video/mpeg", "video/mp4", "video/mp2t", "video/m2ts", "application/octet-stream", "binary/octet-stream", "application/mp2t", "video/x-matroska":
 		var err error
 		var isRedirect bool
-		*stream, isRedirect, err = handleTSStream(ctx, resp, *stream, streamID, playlistID, tmpFolder, tmpSegment, addErrorToStream, buffer, bandwidth, retries)
+		isRedirect, err = stream.handleTSStream(ctx, resp, streamID, playlistID, tmpFolder, tmpSegment, addErrorToStream, buffer, bandwidth, retries)
 		if isRedirect {
 			return true, nil
 		}
@@ -774,7 +792,7 @@ func processStreamingServerResponse(ctx context.Context, stream *ThisStream, cur
 // Limit the playlist download size to 32MB to prevent DoS
 var maxPlaylistDownloadSize int64 = 33554432
 
-func handleHLSStream(ctx context.Context, resp *http.Response, stream ThisStream, streamID int, playlistID, tmpFolder string, tmpSegment *int, addErrorToStream func(err error), currentURL string, bandwidth *BandwidthCalculation) (ThisStream, error) {
+func (stream *ThisStream) handleHLSStream(ctx context.Context, resp *http.Response, streamID int, playlistID, tmpFolder string, tmpSegment *int, addErrorToStream func(err error), currentURL string, bandwidth *BandwidthCalculation) error {
 	tracer := otel.Tracer("xteve/buffer")
 	ctx, span := tracer.Start(ctx, "handleHLSStream")
 	defer span.End()
@@ -790,7 +808,7 @@ func handleHLSStream(ctx context.Context, resp *http.Response, stream ThisStream
 		err := fmt.Errorf("playlist too large: %d bytes (max: %d)", resp.ContentLength, maxPlaylistDownloadSize)
 		ShowError(err, 4050)
 		addErrorToStream(err)
-		return stream, err
+		return err
 	}
 
 	// Security: Use LimitReader to enforce the size limit
@@ -799,25 +817,25 @@ func handleHLSStream(ctx context.Context, resp *http.Response, stream ThisStream
 	if err != nil {
 		ShowError(err, 0)
 		addErrorToStream(err)
-		return stream, err
+		return err
 	}
 
 	if int64(len(body)) > maxPlaylistDownloadSize {
 		err := fmt.Errorf("playlist too large: exceeds %d bytes", maxPlaylistDownloadSize)
 		ShowError(err, 4050)
 		addErrorToStream(err)
-		return stream, err
+		return err
 	}
 
 	stream.Body = string(body)
 	stream.HLS = true
 	stream.M3U8URL = currentURL
 
-	err = ParseM3U8(&stream)
+	err = ParseM3U8(stream)
 	if err != nil {
 		ShowError(err, 4050)
 		addErrorToStream(err)
-		return stream, err
+		return err
 	}
 
 	if stream.HLS {
@@ -864,22 +882,22 @@ func handleHLSStream(ctx context.Context, resp *http.Response, stream ThisStream
 				if bufferFile != nil {
 					bufferFile.Close()
 				}
-				return stream, err
+				return err
 			}
 
 			if _, err := bufferFile.Write(body); err != nil {
 				ShowError(err, 0)
 				addErrorToStream(err)
 				bufferFile.Close()
-				return stream, err
+				return err
 			}
 			bufferFile.Close()
-			completeTSsegment(playlistID, streamID, &stream, bandwidth, len(body), tmpFile, *tmpSegment)
+			completeTSsegment(playlistID, streamID, stream, bandwidth, len(body), tmpFile, *tmpSegment)
 			*tmpSegment++
 		}
 	}
 
-	return stream, nil
+	return nil
 }
 
 func processTSStreamPacketsVFS(parser *mpegts.Parser, packetBuf []byte, bufferFile avfs.File, fileSize *int, tmpFileSize int, playlistID string, streamID int, stream *ThisStream, bandwidth *BandwidthCalculation, tmpFile *string, tmpFolder string, tmpSegment *int, addErrorToStream func(err error), state *tsStreamState) (avfs.File, error) {
@@ -968,7 +986,7 @@ type tsStreamState struct {
 // skip the retry sleep so the reconnect happens immediately.
 const shortLivedConnThreshold = 60 * time.Second
 
-func handleTSStreamError(err error, bufferFile avfs.File, fileSize int, retries *int, tmpFile string, tmpSegment *int, stream *ThisStream, playlistID string, streamID int, bandwidth *BandwidthCalculation, addErrorToStream func(err error), connectedAt time.Time) (ThisStream, bool, error) {
+func handleTSStreamError(err error, bufferFile avfs.File, fileSize int, retries *int, tmpFile string, tmpSegment *int, stream *ThisStream, playlistID string, streamID int, bandwidth *BandwidthCalculation, addErrorToStream func(err error), connectedAt time.Time) bool {
 	if err != io.EOF {
 		if Settings.StreamRetryEnabled && *retries < Settings.StreamMaxRetries {
 			*retries++
@@ -977,7 +995,7 @@ func handleTSStreamError(err error, bufferFile avfs.File, fileSize int, retries 
 			if bufferFile != nil {
 				bufferFile.Close()
 			}
-			return *stream, true, nil
+			return true
 		}
 		ShowError(err, 0)
 		addErrorToStream(err)
@@ -1006,7 +1024,7 @@ func handleTSStreamError(err error, bufferFile avfs.File, fileSize int, retries 
 			if bufferFile != nil {
 				bufferFile.Close()
 			}
-			return *stream, true, nil
+			return true
 		}
 
 		// No retries left or retries disabled - treat as normal end of stream
@@ -1041,14 +1059,14 @@ func handleTSStreamError(err error, bufferFile avfs.File, fileSize int, retries 
 				s.StreamFinished = true
 				playlist.Streams[streamID] = s
 				BufferInformation.Store(playlistID, playlist)
-				*stream = s
 			}
 		}
 	}
-	return *stream, false, err
+
+	return false
 }
 
-func handleTSStream(ctx context.Context, resp *http.Response, stream ThisStream, streamID int, playlistID, tmpFolder string, tmpSegment *int, addErrorToStream func(err error), buffer []byte, bandwidth *BandwidthCalculation, retries int) (ThisStream, bool, error) {
+func (stream *ThisStream) handleTSStream(ctx context.Context, resp *http.Response, streamID int, playlistID, tmpFolder string, tmpSegment *int, addErrorToStream func(err error), buffer []byte, bandwidth *BandwidthCalculation, retries int) (bool, error) {
 	tracer := otel.Tracer("xteve/buffer")
 	_, span := tracer.Start(ctx, "handleTSStream")
 	defer span.End()
@@ -1077,9 +1095,9 @@ func handleTSStream(ctx context.Context, resp *http.Response, stream ThisStream,
 
 	var tmpFile = fmt.Sprintf("%s%d.ts", tmpFolder, *tmpSegment)
 
-	if !clientConnection(stream) {
+	if !clientConnection(*stream) {
 		resp.Body.Close()
-		return stream, false, nil
+		return false, nil
 	}
 
 	bufferFile, err := bufferVFS.Create(tmpFile)
@@ -1087,7 +1105,7 @@ func handleTSStream(ctx context.Context, resp *http.Response, stream ThisStream,
 		addErrorToStream(err)
 		bufferFile.Close()
 		resp.Body.Close()
-		return stream, false, err
+		return false, err
 	}
 
 	parser := mpegts.NewParser()
@@ -1104,16 +1122,17 @@ func handleTSStream(ctx context.Context, resp *http.Response, stream ThisStream,
 
 		n, err := resp.Body.Read(buffer)
 		if n > 0 {
+			stream.TotalBytesDownloaded += int64(n)
 			if _, err := parser.Write(buffer[:n]); err != nil {
 				ShowError(err, 0)
 				addErrorToStream(err)
 				bufferFile.Close()
-				return stream, false, err
+				return false, err
 			}
 
-			bufferFile, err = processTSStreamPacketsVFS(parser, packetBuf, bufferFile, &fileSize, tmpFileSize, playlistID, streamID, &stream, bandwidth, &tmpFile, tmpFolder, tmpSegment, addErrorToStream, state)
+			bufferFile, err = processTSStreamPacketsVFS(parser, packetBuf, bufferFile, &fileSize, tmpFileSize, playlistID, streamID, stream, bandwidth, &tmpFile, tmpFolder, tmpSegment, addErrorToStream, state)
 			if err != nil {
-				return stream, false, err
+				return false, err
 			}
 		}
 
@@ -1123,19 +1142,18 @@ func handleTSStream(ctx context.Context, resp *http.Response, stream ThisStream,
 			if state.lastPCR > 0 {
 				stream.LastPCR = state.lastPCR
 			}
-			stream, isRedirect, _ := handleTSStreamError(err, bufferFile, fileSize, &retries, tmpFile, tmpSegment, &stream, playlistID, streamID, bandwidth, addErrorToStream, connectedAt)
-			return stream, isRedirect, nil // error is handled inside
+			return handleTSStreamError(err, bufferFile, fileSize, &retries, tmpFile, tmpSegment, stream, playlistID, streamID, bandwidth, addErrorToStream, connectedAt), nil // error is handled inside
 		}
 		retries = 0
 
-		if !clientConnection(stream) {
+		if !clientConnection(*stream) {
 			bufferFile.Close()
-			return stream, false, nil
+			return false, nil
 		}
 	}
 }
 
-func switchBandwidth(stream *ThisStream) (err error) {
+func (stream *ThisStream) switchBandwidth() (err error) {
 	var dynamicStream DynamicStream
 	var segment Segment
 

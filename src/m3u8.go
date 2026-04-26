@@ -219,7 +219,7 @@ func ParseM3U8(stream *ThisStream) (err error) {
 
 		if !noNewSegment {
 			if stream.DynamicBandwidth {
-				err = switchBandwidth(stream) // Check and assign error
+				err = stream.switchBandwidth() // Check and assign error
 				if err != nil {
 					return err // Propagate error
 				}

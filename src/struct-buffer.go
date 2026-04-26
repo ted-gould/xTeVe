@@ -49,9 +49,10 @@ type ThisStream struct {
 	LastSequence     int64
 	M3U8URL          string
 	Sequence         int64
-	TimeDiff         float64
-	TimeEnd          time.Time
-	TimeStart        time.Time
+	TimeDiff             float64
+	TimeEnd              time.Time
+	TimeStart            time.Time
+	TotalBytesDownloaded int64
 
 	DynamicStream map[int]DynamicStream
 
