@@ -483,7 +483,12 @@ func resolveFileMetadata(ctx context.Context, hash string, stream map[string]str
 	}
 
 	// Step 3 & 4: Remote Request (HEAD / GET)
-	if finalModTime.IsZero() {
+	// Skip if the JSON cache has a CachedAt but no ModTime: that means a prior fetch
+	// already confirmed the server doesn't return Last-Modified for this URL, so trying
+	// again only wastes a network round-trip.
+	serverKnownNoLastModified := foundInCache && metaFromCache != nil &&
+		!metaFromCache.CachedAt.IsZero() && metaFromCache.ModTime.IsZero()
+	if finalModTime.IsZero() && !serverKnownNoLastModified {
 		remoteMeta, err := resolveMetadataFromRemote(ctx, hash, targetURL)
 		if err == nil {
 			if !remoteMeta.ModTime.IsZero() {
@@ -543,6 +548,7 @@ func resolveFileMetadata(ctx context.Context, hash string, stream map[string]str
 		if shouldWrite {
 			if err := fc.WriteMetadata(targetURL, newMeta); err != nil {
 				span.RecordError(err)
+				span.SetAttributes(attribute.Bool("metadata.write_failed", true))
 			}
 		}
 
@@ -1392,12 +1398,27 @@ type seasonFileKey struct {
 	Season string
 }
 
-// ClearWebDAVCache clears the WebDAV cache for a specific hash or all if empty
+// ClearWebDAVCache clears the structural WebDAV cache for a specific hash or all if empty.
+// When clearing all hashes (post-scan rebuild), FileMetadata is preserved because file sizes
+// and mod times are stable and expensive to re-fetch (requires network calls for servers
+// that lack Last-Modified). Per-hash clears wipe everything for a full reset.
 func ClearWebDAVCache(hash string) {
 	webdavCacheMutex.Lock()
 	defer webdavCacheMutex.Unlock()
 	if hash == "" {
-		webdavCache = make(map[string]*HashCache)
+		newCache := make(map[string]*HashCache, len(webdavCache))
+		for h, hc := range webdavCache {
+			if hc != nil && len(hc.FileMetadata) > 0 {
+				newCache[h] = &HashCache{
+					Series:          make(map[string][]string),
+					Seasons:         make(map[seasonKey][]string),
+					SeasonFiles:     make(map[seasonFileKey][]FileStreamInfo),
+					IndividualFiles: make(map[string][]FileStreamInfo),
+					FileMetadata:    hc.FileMetadata,
+				}
+			}
+		}
+		webdavCache = newCache
 	} else {
 		delete(webdavCache, hash)
 	}
