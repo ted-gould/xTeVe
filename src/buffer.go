@@ -986,7 +986,7 @@ type tsStreamState struct {
 // skip the retry sleep so the reconnect happens immediately.
 const shortLivedConnThreshold = 60 * time.Second
 
-func handleTSStreamError(err error, bufferFile avfs.File, fileSize int, retries *int, tmpFile string, tmpSegment *int, stream *ThisStream, playlistID string, streamID int, bandwidth *BandwidthCalculation, addErrorToStream func(err error), connectedAt time.Time) (ThisStream, bool, error) {
+func handleTSStreamError(err error, bufferFile avfs.File, fileSize int, retries *int, tmpFile string, tmpSegment *int, stream *ThisStream, playlistID string, streamID int, bandwidth *BandwidthCalculation, addErrorToStream func(err error), connectedAt time.Time) bool {
 	if err != io.EOF {
 		if Settings.StreamRetryEnabled && *retries < Settings.StreamMaxRetries {
 			*retries++
@@ -995,7 +995,7 @@ func handleTSStreamError(err error, bufferFile avfs.File, fileSize int, retries 
 			if bufferFile != nil {
 				bufferFile.Close()
 			}
-			return *stream, true, nil
+			return true
 		}
 		ShowError(err, 0)
 		addErrorToStream(err)
@@ -1024,7 +1024,7 @@ func handleTSStreamError(err error, bufferFile avfs.File, fileSize int, retries 
 			if bufferFile != nil {
 				bufferFile.Close()
 			}
-			return *stream, true, nil
+			return true
 		}
 
 		// No retries left or retries disabled - treat as normal end of stream
@@ -1059,11 +1059,11 @@ func handleTSStreamError(err error, bufferFile avfs.File, fileSize int, retries 
 				s.StreamFinished = true
 				playlist.Streams[streamID] = s
 				BufferInformation.Store(playlistID, playlist)
-				*stream = s
 			}
 		}
 	}
-	return *stream, false, err
+
+	return false
 }
 
 func (stream *ThisStream) handleTSStream(ctx context.Context, resp *http.Response, streamID int, playlistID, tmpFolder string, tmpSegment *int, addErrorToStream func(err error), buffer []byte, bandwidth *BandwidthCalculation, retries int) (bool, error) {
@@ -1142,8 +1142,7 @@ func (stream *ThisStream) handleTSStream(ctx context.Context, resp *http.Respons
 			if state.lastPCR > 0 {
 				stream.LastPCR = state.lastPCR
 			}
-			_, isRedirect, _ := handleTSStreamError(err, bufferFile, fileSize, &retries, tmpFile, tmpSegment, stream, playlistID, streamID, bandwidth, addErrorToStream, connectedAt)
-			return isRedirect, nil // error is handled inside
+			return handleTSStreamError(err, bufferFile, fileSize, &retries, tmpFile, tmpSegment, stream, playlistID, streamID, bandwidth, addErrorToStream, connectedAt), nil // error is handled inside
 		}
 		retries = 0
 
@@ -1154,7 +1153,7 @@ func (stream *ThisStream) handleTSStream(ctx context.Context, resp *http.Respons
 	}
 }
 
-func switchBandwidth(stream *ThisStream) (err error) {
+func (stream *ThisStream) switchBandwidth() (err error) {
 	var dynamicStream DynamicStream
 	var segment Segment
 
