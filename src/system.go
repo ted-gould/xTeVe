@@ -97,6 +97,7 @@ func loadSettings() (settings SettingsStruct, err error) {
 	defaults["backup.path"] = System.Folder.Backup
 	defaults["buffer.size.kb"] = 1024
 	defaults["buffer.timeout"] = 500
+	defaults["buffer.segments"] = 3
 	defaults["buffer.client.timeout"] = 60000
 	defaults["buffer"] = "-"
 	defaults["cache.images"] = false
@@ -181,6 +182,10 @@ func saveSettings(settings SettingsStruct) (err error) {
 
 	if settings.BufferTimeout < 0 {
 		settings.BufferTimeout = 0
+	}
+
+	if settings.BufferSegments < 1 {
+		settings.BufferSegments = 1
 	}
 
 	if System.Dev {

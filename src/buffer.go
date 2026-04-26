@@ -233,7 +233,7 @@ func bufferingStream(playlistID, streamingURL, channelName string, w http.Respon
 			}
 
 			if stream, ok := playlist.Streams[streamID]; ok {
-				if !stream.Status {
+				if !stream.StreamFinished && len(stream.CompletedSegments) < max(Settings.BufferSegments, 1) {
 					timeOut++
 
 					time.Sleep(time.Duration(100) * time.Millisecond)
