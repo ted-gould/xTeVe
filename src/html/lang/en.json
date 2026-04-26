@@ -403,6 +403,11 @@
       "title": "Store buffer in RAM",
       "description": "If checked, write buffer to RAM instead of writing to disk"
     },
+    "bufferSegments": {
+      "title": "Pre-buffer segments",
+      "description": "Number of segments xTeVe must download before streaming begins. A higher value reduces player stutter when the upstream IPTV source has variable latency, at the cost of a slightly longer channel start delay.",
+      "placeholder": "3"
+    },
     "bufferTimeout": {
       "title": "Timeout for new client connections",
       "description": "The xTeVe buffer waits until new client connections are established. Helpful for fast channel switching. Value in milliseconds.",

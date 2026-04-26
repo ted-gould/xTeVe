@@ -29,6 +29,7 @@ type RequestStruct struct {
 		BackupPath               *string   `json:"backup.path,omitempty"`
 		Buffer                   *string   `json:"buffer,omitempty"`
 		BufferSize               *int      `json:"buffer.size.kb,omitempty"`
+		BufferSegments           *int      `json:"buffer.segments,omitempty"`
 		BufferTimeout            *float64  `json:"buffer.timeout,omitempty"`
 		CacheImages              *bool     `json:"cache.images,omitempty"`
 		ClearXMLTVCache          *bool     `json:"clearXMLTVCache,omitempty"`
