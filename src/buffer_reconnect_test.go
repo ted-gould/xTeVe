@@ -33,12 +33,12 @@ func TestProcessStreamingServerResponse_RangeHeader(t *testing.T) {
 		if reqCount == 2 {
 			w.WriteHeader(http.StatusPartialContent)
 			// Return some dummy data to complete
-			w.Write([]byte("some rest of TS data"))
+			_, _ = w.Write([]byte("some rest of TS data"))
 			return
 		}
 
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("dummy initial data"))
+		_, _ = w.Write([]byte("dummy initial data"))
 	}))
 	defer server.Close()
 
@@ -95,7 +95,7 @@ func TestProcessStreamingServerResponse_RangeIgnoredSkip(t *testing.T) {
 		w.Header().Set("Content-Length", "10")
 
 		w.WriteHeader(http.StatusOK)
-		w.Write(fullData)
+		_, _ = w.Write(fullData)
 	}))
 	defer server.Close()
 
