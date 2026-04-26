@@ -7,7 +7,9 @@ import (
 	"net"
 	"net/http"
 	"net/http/cookiejar"
+	"net/url"
 	"os"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -38,6 +40,7 @@ func getXTeVeTransport() *http.Transport {
 				IdleConnTimeout:       90 * time.Second,
 				TLSHandshakeTimeout:   10 * time.Second,
 				ExpectContinueTimeout: 1 * time.Second,
+				ResponseHeaderTimeout: 1 * time.Second,
 			}
 		}
 		xTeVeTransport.DialContext = dialContextWithRetry
@@ -131,6 +134,14 @@ func NewHTTPClient() *http.Client {
 	}
 }
 
+// isResponseHeaderTimeout reports whether err is a net/http ResponseHeaderTimeout.
+// otelhttp records all *url.Error values under the same error type, so we detect
+// this specifically and add a custom span attribute to keep it queryable in traces.
+func isResponseHeaderTimeout(err error) bool {
+	var urlErr *url.Error
+	return errors.As(err, &urlErr) && strings.Contains(urlErr.Error(), "timeout awaiting response headers")
+}
+
 func ConnectWithRetry(client *http.Client, req *http.Request) (*http.Response, error) {
 	var resp *http.Response
 	var err error
@@ -142,6 +153,11 @@ func ConnectWithRetry(client *http.Client, req *http.Request) (*http.Response, e
 		if err != nil {
 			if resp != nil {
 				debugResponse(resp)
+			}
+			if isResponseHeaderTimeout(err) {
+				span := trace.SpanFromContext(req.Context())
+				span.SetAttributes(attribute.Bool("stream.response_header_timeout", true))
+				span.RecordError(err)
 			}
 			if Settings.StreamRetryEnabled && retries < Settings.StreamMaxRetries {
 				retries++
