@@ -132,6 +132,26 @@ class SettingsCategory {
         setting.appendChild(tdRight);
         break;
 
+      case "buffer.segments":
+        var tdLeft = document.createElement("TD");
+        tdLeft.innerHTML = "{{.settings.bufferSegments.title}}" + ":";
+
+        var tdRight = document.createElement("TD");
+        var input = content.createInput("text", "buffer.segments", data);
+        input.setAttribute(
+          "placeholder",
+          "{{.settings.bufferSegments.placeholder}}",
+        );
+        input.setAttribute(
+          "onchange",
+          "javascript: this.className = 'changed'",
+        );
+        tdRight.appendChild(input);
+
+        setting.appendChild(tdLeft);
+        setting.appendChild(tdRight);
+        break;
+
       case "buffer.timeout":
         var tdLeft = document.createElement("TD");
         tdLeft.innerHTML = "{{.settings.bufferTimeout.title}}" + ":";
@@ -683,6 +703,10 @@ class SettingsCategory {
         text = "{{.settings.storeBufferInRAM.description}}";
         break;
 
+      case "buffer.segments":
+        text = "{{.settings.bufferSegments.description}}";
+        break;
+
       case "buffer.timeout":
         text = "{{.settings.bufferTimeout.description}}";
         break;
@@ -840,7 +864,7 @@ settingsCategory.push(
 settingsCategory.push(
   new SettingsCategoryItem(
     "{{.settings.streaming.title}}",
-    "buffer,buffer.size.kb,storeBufferInRAM,buffer.timeout,stream.retry.enabled,stream.max.retries,stream.retry.delay,user.agent,udpxy",
+    "buffer,buffer.size.kb,storeBufferInRAM,buffer.segments,buffer.timeout,stream.retry.enabled,stream.max.retries,stream.retry.delay,user.agent,udpxy",
   ),
 );
 settingsCategory.push(
@@ -898,6 +922,10 @@ function saveSettings() {
                 value = value.filter(function (e: any) {
                   return e;
                 });
+                break;
+
+              case "buffer.segments":
+                value = parseInt(value);
                 break;
 
               case "buffer.timeout":

@@ -279,6 +279,7 @@ type SettingsStruct struct {
 	Buffer                string   `json:"buffer"`
 	BufferSize            int      `json:"buffer.size.kb"`
 	BufferTimeout         float64  `json:"buffer.timeout"`
+	BufferSegments        int      `json:"buffer.segments"`
 	BufferClientTimeout   float64  `json:"buffer.client.timeout"`
 	StreamRetryEnabled    bool     `json:"stream.retry.enabled"`
 	StreamMaxRetries      int      `json:"stream.max.retries"`

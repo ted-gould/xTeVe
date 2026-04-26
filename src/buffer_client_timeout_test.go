@@ -86,6 +86,7 @@ func TestBufferClientTimeout(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.Equal(t, 50.0, Settings.BufferClientTimeout, "BufferClientTimeout should be 50 from env var")
+	Settings.BufferSegments = 1 // test only pre-populates 1 segment; pre-buffer depth is not under test here
 
 	// Mock a playlist and stream
 	// Use unique ID to avoid global state pollution from previous runs

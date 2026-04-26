@@ -96,7 +96,7 @@ settingsCategory.push(
 settingsCategory.push(
   new SettingsCategoryItem(
     "{{.settings.category.streaming}}",
-    "buffer,udpxy,buffer.size.kb,storeBufferInRAM,buffer.timeout,user.agent",
+    "buffer,udpxy,buffer.size.kb,storeBufferInRAM,buffer.segments,buffer.timeout,user.agent",
   ),
 );
 settingsCategory.push(
