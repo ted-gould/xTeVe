@@ -1,5 +1,3 @@
-github.com/CAFxX/bytespool v0.0.1 h1:YboszqePWXNBizolxI9QYVxDnLfEofp06u2L1bahvzY=
-github.com/CAFxX/bytespool v0.0.1/go.mod h1:UeJjDzzuJ8/iiOivEKVutUOD1HNiAnPBEgR6xnAoFqE=
 github.com/avfs/avfs v0.35.0 h1:dc0noSyEoVDtAUQlhHX0uRYBfI2aFbI8nF0XPtV/Ozw=
 github.com/avfs/avfs v0.35.0/go.mod h1:LnzrUO5acMU5NCkohHcUN15YrnkxiJ/lRLQOZSp39ow=
 github.com/canonical/go-snapctl v1.0.0-beta.6 h1:+i4IiTM0DaK/cZ8a5ojJLpUM25MeCaB6JemC0NOaHdg=
@@ -139,8 +137,8 @@ modernc.org/opt v0.1.4 h1:2kNGMRiUjrp4LcaPuLY2PzUfqM/w9N23quVwhKt5Qm8=
 modernc.org/opt v0.1.4/go.mod h1:03fq9lsNfvkYSfxrfUhZCWPk1lm4cq4N+Bh//bEtgns=
 modernc.org/sortutil v1.2.1 h1:+xyoGf15mM3NMlPDnFqrteY07klSFxLElE2PVuWIJ7w=
 modernc.org/sortutil v1.2.1/go.mod h1:7ZI3a3REbai7gzCLcotuw9AC4VZVpYMjDzETGsSMqJE=
-modernc.org/sqlite v1.49.1 h1:dYGHTKcX1sJ+EQDnUzvz4TJ5GbuvhNJa8Fg6ElGx73U=
-modernc.org/sqlite v1.49.1/go.mod h1:m0w8xhwYUVY3H6pSDwc3gkJ/irZT/0YEXwBlhaxQEew=
+modernc.org/sqlite v1.50.0 h1:eMowQSWLK0MeiQTdmz3lqoF5dqclujdlIKeJA11+7oM=
+modernc.org/sqlite v1.50.0/go.mod h1:m0w8xhwYUVY3H6pSDwc3gkJ/irZT/0YEXwBlhaxQEew=
 modernc.org/strutil v1.2.1 h1:UneZBkQA+DX2Rp35KcM69cSsNES9ly8mQWD71HKlOA0=
 modernc.org/strutil v1.2.1/go.mod h1:EHkiggD70koQxjVdSBM3JKM7k6L0FbGE5eymy9i3B9A=
 modernc.org/token v1.1.0 h1:Xl7Ap9dKaEs5kLoOQeQmPWevfnk/DM5qcLcYlA8ys6Y=
