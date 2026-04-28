@@ -414,18 +414,16 @@ func TestConnectToStreamingServer_SparsePCRWithReconnect(t *testing.T) {
 
 	var (
 		connCount int64
-		mu                sync.Mutex
-		connStartPosition []int
+		mu         sync.Mutex
 		nextLivePosition  = 0
 	)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		connNum := int(atomic.AddInt64(&connCount, 1))
+		_ = int(atomic.AddInt64(&connCount, 1))
 
 		mu.Lock()
 		startPos := nextLivePosition
 		nextLivePosition += packetsPerConn - overlapPackets
-		connStartPosition = append(connStartPosition, startPos)
 		mu.Unlock()
 
 		w.Header().Set("Content-Type", "video/mp2t")
@@ -547,7 +545,6 @@ func TestConnectToStreamingServer_SparsePCRWithReconnect(t *testing.T) {
 	//
 	// Total: 12 + 9 = 21 packets
 
-	totalConns := int(atomic.LoadInt64(&connCount))
 	// Connection 1: all 12 packets
 	// Connection 2: packets from PCR=11 onwards = 19 - 11 + 1 = 9 packets
 	expectedPackets := 12 + 9
