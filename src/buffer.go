@@ -913,22 +913,47 @@ func processTSStreamPacketsVFS(parser *mpegts.Parser, packetBuf []byte, bufferFi
 			return nil, err
 		}
 
-		// PCR tracking: update lastPCR on every PCR-carrying packet, and
-		// discard packets that fall within the backward-overlap window that
-		// CDN connection rotation can produce on live streams.
-		if pcr, hasPCR := mpegts.ExtractPCR(packetBuf); hasPCR {
-			state.lastPCR = pcr
-			if state.skipUntilPCR > 0 && pcr > state.skipUntilPCR {
-				state.skipUntilPCR = 0 // caught up with the previous connection
-			}
-		}
-		// Also honour the MPEG-TS discontinuity indicator: if the encoder
-		// signals a deliberate break, stop skipping so we don't stall forever.
+		// Check for MPEG-TS discontinuity indicator first, before any buffering/decision.
+		// This ensures we can recover from skip mode even if subsequent packets lack PCR.
 		if packetBuf[3]&0x30 >= 0x20 && packetBuf[4] > 0 && packetBuf[5]&0x80 != 0 {
+			// Flush any pending packets on discontinuity
+			for _, bufPkt := range state.pendingPackets {
+				if _, err := bufferFile.Write(bufPkt); err != nil {
+					ShowError(err, 0)
+					addErrorToStream(err)
+					bufferFile.Close()
+					return nil, err
+				}
+				*fileSize += len(bufPkt)
+			}
+			state.pendingPackets = state.pendingPackets[:0]
 			state.skipUntilPCR = 0
 		}
-		if state.skipUntilPCR > 0 {
-			continue // still in the overlap window – discard packet
+
+		// PCR tracking: buffer packets until we see a PCR-carrying packet to
+		// determine whether we're still in the overlap region.
+		if pcr, hasPCR := mpegts.ExtractPCR(packetBuf); hasPCR {
+			// This is a PCR packet. Decide what to do with buffered and current packets.
+			if state.skipUntilPCR > 0 && pcr >= state.skipUntilPCR {
+				// We've caught up to the new stream. Discard any buffered packets
+				// (they were from before the catch-up point, possibly in overlap)
+				// and resume writing from the current packet.
+				state.pendingPackets = state.pendingPackets[:0] // clear buffer
+				state.skipUntilPCR = 0                             // caught up
+				// Fall through to write the current packet
+			} else if state.skipUntilPCR > 0 {
+				// Still in overlap region. Discard buffered packets and current one.
+				state.pendingPackets = state.pendingPackets[:0] // clear buffer
+				continue
+			}
+			state.lastPCR = pcr
+		} else if state.skipUntilPCR > 0 {
+			// No PCR in this packet but we're still in overlap region.
+			// Buffer it until we can decide.
+			buf := make([]byte, len(packetBuf))
+			copy(buf, packetBuf)
+			state.pendingPackets = append(state.pendingPackets, buf)
+			continue
 		}
 
 		if _, err := bufferFile.Write(packetBuf); err != nil {
@@ -966,18 +991,22 @@ func processTSStreamPacketsVFS(parser *mpegts.Parser, packetBuf []byte, bufferFi
 }
 
 // tsStreamState carries per-connection PCR tracking data through the packet
-// writing loop.  Grouping the two values into a struct keeps the
+// writing loop.  Grouping the values into a struct keeps the
 // processTSStreamPacketsVFS signature from growing further.
 type tsStreamState struct {
 	// skipUntilPCR, when > 0, causes incoming packets to be discarded until a
-	// PCR-carrying packet is seen whose value strictly exceeds this threshold.
+	// PCR-carrying packet is seen whose value is at least this threshold.
 	// Set from stream.LastPCR at the start of each reconnect so that the
 	// backward-overlapping content served by the CDN is transparently removed.
+	// A PCR value >= skipUntilPCR means we've caught up to the new stream.
 	skipUntilPCR int64
 	// lastPCR is updated with every PCR-carrying packet.  At reconnect time
 	// its value is written into stream.LastPCR so the next connection knows
 	// where the previous one ended.
 	lastPCR int64
+	// pendingPackets buffers packets while waiting to see a PCR-carrying packet
+	// to decide whether we're still in the overlap region or have caught up.
+	pendingPackets [][]byte
 }
 
 // shortLivedConnThreshold is the maximum connection duration below which an
