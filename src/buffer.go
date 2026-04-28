@@ -765,10 +765,13 @@ func processStreamingServerResponse(ctx context.Context, stream *ThisStream, cur
 	// Video Stream (TS)
 	case "video/mpeg", "video/mp4", "video/mp2t", "video/m2ts", "application/octet-stream", "binary/octet-stream", "application/mp2t", "video/x-matroska":
 		var err error
-		var isRedirect bool
-		isRedirect, err = stream.handleTSStream(ctx, resp, streamID, playlistID, tmpFolder, tmpSegment, addErrorToStream, buffer, bandwidth, retries)
-		if isRedirect {
-			return true, nil
+		var isRetry bool
+		isRetry, err = stream.handleTSStream(ctx, resp, streamID, playlistID, tmpFolder, tmpSegment, addErrorToStream, buffer, bandwidth, retries)
+		if isRetry {
+			// Return false to indicate no redirect, but the retry was handled
+			// internally. The segment will be removed and the outer loop will
+			// create a new one.
+			return false, nil
 		}
 		if err != nil {
 			addErrorToStream(err)
