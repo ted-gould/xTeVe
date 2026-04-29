@@ -913,22 +913,40 @@ func processTSStreamPacketsVFS(parser *mpegts.Parser, packetBuf []byte, bufferFi
 			return nil, err
 		}
 
-		// PCR tracking: update lastPCR on every PCR-carrying packet, and
-		// discard packets that fall within the backward-overlap window that
-		// CDN connection rotation can produce on live streams.
-		if pcr, hasPCR := mpegts.ExtractPCR(packetBuf); hasPCR {
-			state.lastPCR = pcr
-			if state.skipUntilPCR > 0 && pcr > state.skipUntilPCR {
-				state.skipUntilPCR = 0 // caught up with the previous connection
+		// PCR tracking: eliminate the backward-overlap window that CDN
+		// connection rotation produces, then resume from exactly where the
+		// previous connection left off (not one PCR ahead of it).
+		pcr, hasPCR := mpegts.ExtractPCR(packetBuf)
+		if hasPCR {
+			if state.skipUntilPCR > 0 && pcr >= state.skipUntilPCR {
+				if pcr == state.skipUntilPCR {
+					// Exact match: this PCR packet was already written, and so
+					// were the non-PCR packets that followed it. Set a countdown
+					// to skip all of them (1 for the PCR packet itself).
+					state.skipPacketsAfterPCR = state.savedPacketsAfterLastPCR + 1
+				}
+				// pcr > skipUntilPCR: CDN resumed after our last PCR; this
+				// packet is new data — no extra skipping needed.
+				state.skipUntilPCR = 0
+			}
+			// Only update current-connection tracking once we are past the skip zone.
+			if state.skipUntilPCR == 0 && state.skipPacketsAfterPCR == 0 {
+				state.lastPCR = pcr
+				state.packetsAfterLastPCR = 0
 			}
 		}
-		// Also honour the MPEG-TS discontinuity indicator: if the encoder
-		// signals a deliberate break, stop skipping so we don't stall forever.
+		// Honour the MPEG-TS discontinuity indicator: stop skipping so we
+		// don't stall forever on an intentional encoder break.
 		if packetBuf[3]&0x30 >= 0x20 && packetBuf[4] > 0 && packetBuf[5]&0x80 != 0 {
 			state.skipUntilPCR = 0
+			state.skipPacketsAfterPCR = 0
 		}
 		if state.skipUntilPCR > 0 {
-			continue // still in the overlap window – discard packet
+			continue // still in the backward-overlap window
+		}
+		if state.skipPacketsAfterPCR > 0 {
+			state.skipPacketsAfterPCR--
+			continue // already-buffered tail of the previous connection
 		}
 
 		if _, err := bufferFile.Write(packetBuf); err != nil {
@@ -938,6 +956,9 @@ func processTSStreamPacketsVFS(parser *mpegts.Parser, packetBuf []byte, bufferFi
 			return nil, err
 		}
 		*fileSize += len(packetBuf)
+		if !hasPCR {
+			state.packetsAfterLastPCR++
+		}
 
 		if *fileSize >= tmpFileSize {
 			bufferFile.Close()
@@ -966,18 +987,33 @@ func processTSStreamPacketsVFS(parser *mpegts.Parser, packetBuf []byte, bufferFi
 }
 
 // tsStreamState carries per-connection PCR tracking data through the packet
-// writing loop.  Grouping the two values into a struct keeps the
+// writing loop.  Grouping the fields into a struct keeps the
 // processTSStreamPacketsVFS signature from growing further.
 type tsStreamState struct {
-	// skipUntilPCR, when > 0, causes incoming packets to be discarded until a
-	// PCR-carrying packet is seen whose value strictly exceeds this threshold.
-	// Set from stream.LastPCR at the start of each reconnect so that the
-	// backward-overlapping content served by the CDN is transparently removed.
+	// --- reconnect deduplication (initialised from the previous connection) ---
+
+	// skipUntilPCR, when > 0, causes packets to be discarded until a
+	// PCR-carrying packet is seen whose PCR value >= this threshold.
 	skipUntilPCR int64
-	// lastPCR is updated with every PCR-carrying packet.  At reconnect time
-	// its value is written into stream.LastPCR so the next connection knows
-	// where the previous one ended.
+	// savedPacketsAfterLastPCR is the PacketsAfterLastPCR value from the
+	// previous connection.  When an exact PCR match is found, this tells us
+	// how many additional non-PCR packets were already written after that PCR
+	// and must also be skipped on the new connection.
+	savedPacketsAfterLastPCR int
+	// skipPacketsAfterPCR is a countdown set when the last PCR is matched
+	// exactly: it covers the PCR packet itself (1) plus every non-PCR packet
+	// that followed it (savedPacketsAfterLastPCR).
+	skipPacketsAfterPCR int
+
+	// --- current-connection tracking (saved to stream at disconnect) ---
+
+	// lastPCR is the PCR value of the most recent PCR-carrying packet written
+	// to the buffer in this connection.
 	lastPCR int64
+	// packetsAfterLastPCR counts non-PCR packets written to the buffer since
+	// lastPCR was updated.  Saved at disconnect so the next connection can
+	// skip exactly those packets.
+	packetsAfterLastPCR int
 }
 
 // shortLivedConnThreshold is the maximum connection duration below which an
@@ -1082,10 +1118,13 @@ func (stream *ThisStream) handleTSStream(ctx context.Context, resp *http.Respons
 	var debug string
 	var connectedAt = time.Now()
 
-	// Initialise PCR tracking state.  skipUntilPCR is populated from
-	// stream.LastPCR so that packets belonging to the backward-overlap window
-	// produced by CDN connection rotation are silently discarded.
-	state := &tsStreamState{skipUntilPCR: stream.LastPCR}
+	// Initialise PCR tracking state from the previous connection so that the
+	// backward-overlap window produced by CDN connection rotation is removed
+	// and we resume from exactly where the last connection left off.
+	state := &tsStreamState{
+		skipUntilPCR:             stream.LastPCR,
+		savedPacketsAfterLastPCR: stream.PacketsAfterLastPCR,
+	}
 
 	debug = fmt.Sprintf("Buffer Size:%d KB [SERVER CONNECTION]", len(buffer)/1024)
 	showDebug(debug, 3)
@@ -1137,10 +1176,11 @@ func (stream *ThisStream) handleTSStream(ctx context.Context, resp *http.Respons
 		}
 
 		if err != nil {
-			// Persist the last PCR so the next connection can skip the
-			// backward-overlap window that CDN rotation produces.
+			// Persist the PCR position so the next connection can resume from
+			// exactly where this one ended rather than the next PCR boundary.
 			if state.lastPCR > 0 {
 				stream.LastPCR = state.lastPCR
+				stream.PacketsAfterLastPCR = state.packetsAfterLastPCR
 			}
 			return handleTSStreamError(err, bufferFile, fileSize, &retries, tmpFile, tmpSegment, stream, playlistID, streamID, bandwidth, addErrorToStream, connectedAt), nil // error is handled inside
 		}
@@ -1303,8 +1343,10 @@ func completeTSsegment(playlistID string, streamID int, stream *ThisStream, band
 				playlist.Streams[streamID] = s
 				BufferInformation.Store(playlistID, playlist)
 				prevLastPCR := stream.LastPCR
+				prevPacketsAfterLastPCR := stream.PacketsAfterLastPCR
 				*stream = s
-				stream.LastPCR = prevLastPCR // preserve PCR state for reconnect deduplication
+				stream.LastPCR = prevLastPCR
+				stream.PacketsAfterLastPCR = prevPacketsAfterLastPCR
 			}
 		}
 	}
