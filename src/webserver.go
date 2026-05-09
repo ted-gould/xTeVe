@@ -920,7 +920,8 @@ func Web(w http.ResponseWriter, r *http.Request) {
 	if path == "/web" {
 		path = "/web/"
 	}
-	var requestFile = strings.Replace(path, "/web", "html", -1)
+	// Optimization: Avoid strings.Replace which allocates; use strings.TrimPrefix
+	var requestFile = "html" + strings.TrimPrefix(path, "/web")
 	var content string
 	var contentBytes []byte
 	var contentType, file string

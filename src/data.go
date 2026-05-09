@@ -775,14 +775,11 @@ func createFilterRules() (err error) {
 
 			// Pre-parse include conditions
 			if len(dataFilter.CompiledInclude) > 0 {
-				inc := dataFilter.CompiledInclude
-				inc = strings.Replace(inc, ", ", ",", -1)
-				inc = strings.Replace(inc, " ,", ",", -1)
-				rawParts := strings.Split(inc, ",")
+				rawParts := strings.Split(dataFilter.CompiledInclude, ",")
 				// Pre-pad keywords to avoid allocation in hot loops
 				dataFilter.PreparsedInclude = make([]string, 0, len(rawParts))
 				for _, p := range rawParts {
-					if p != "" {
+					if p = strings.TrimSpace(p); p != "" {
 						dataFilter.PreparsedInclude = append(dataFilter.PreparsedInclude, p)
 					}
 				}
@@ -790,14 +787,11 @@ func createFilterRules() (err error) {
 
 			// Pre-parse exclude conditions
 			if len(dataFilter.CompiledExclude) > 0 {
-				exc := dataFilter.CompiledExclude
-				exc = strings.Replace(exc, ", ", ",", -1)
-				exc = strings.Replace(exc, " ,", ",", -1)
-				rawParts := strings.Split(exc, ",")
+				rawParts := strings.Split(dataFilter.CompiledExclude, ",")
 				// Pre-pad keywords to avoid allocation in hot loops
 				dataFilter.PreparsedExclude = make([]string, 0, len(rawParts))
 				for _, p := range rawParts {
-					if p != "" {
+					if p = strings.TrimSpace(p); p != "" {
 						dataFilter.PreparsedExclude = append(dataFilter.PreparsedExclude, p)
 					}
 				}

@@ -20,3 +20,6 @@
 ## 2024-04-18 - Avoid strings.Replace for Prefix Stripping in HTTP Handlers
 **Learning:** In Go, using `strings.Replace(url, prefix, "", 1)` to strip a prefix path in HTTP routing (like removing `/stream/` from a `RequestURI`) unnecessarily allocates a new string.
 **Action:** Always use `strings.TrimPrefix(url, prefix)` which returns a sub-slice of the original string (O(1) with 0 allocations), significantly reducing garbage collection pressure on hot paths like stream routers.
+## 2024-05-09 - Avoid strings.Replace to Trim Spaces around Split Delimiters
+**Learning:** Using `strings.Replace` or `strings.ReplaceAll` to clean up spacing around delimiters (e.g., removing spaces around commas before `strings.Split`) results in unnecessary string allocations and copies.
+**Action:** Always prefer splitting the string first and then using `strings.TrimSpace()` on the resulting items inside a loop to achieve 0 intermediate allocations.
