@@ -4,12 +4,11 @@ go 1.25.0
 
 require (
 	github.com/gorilla/websocket v1.5.3
-	github.com/koron/go-ssdp v0.1.0
+	github.com/koron/go-ssdp v0.9.0
 	github.com/stretchr/testify v1.11.1
 )
 
 require (
-	github.com/CAFxX/bytespool v0.0.1
 	github.com/avfs/avfs v0.35.0
 	github.com/canonical/go-snapctl v1.0.0-beta.6
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.68.0
