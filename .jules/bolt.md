@@ -23,3 +23,6 @@
 ## 2024-05-09 - Avoid strings.Replace to Trim Spaces around Split Delimiters
 **Learning:** Using `strings.Replace` or `strings.ReplaceAll` to clean up spacing around delimiters (e.g., removing spaces around commas before `strings.Split`) results in unnecessary string allocations and copies.
 **Action:** Always prefer splitting the string first and then using `strings.TrimSpace()` on the resulting items inside a loop to achieve 0 intermediate allocations.
+## $(date +%Y-%m-%d) - Avoid redundant MD5 hash calculations and string allocations in image cache
+**Learning:** In caching mechanisms like `src/internal/imgcache/cache.go`, redundant operations such as `strToMD5` hashes and `fmt.Sprintf` calls can occur sequentially when forming keys. This allocates unnecessary memory and burns CPU on every cache lookup.
+**Action:** Store the result of expensive operations (like `strToMD5` and string concatenations) in local variables before reusing them in map lookups or loops to eliminate redundant work.
