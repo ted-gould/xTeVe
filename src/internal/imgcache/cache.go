@@ -62,8 +62,9 @@ func New(path, chacheURL string, caching bool, client *http.Client) (c *Cache, e
 			return src
 		}
 
+		// Optimization: Avoid redundant MD5 calculation and string allocation
 		var filename = fmt.Sprintf("%s%s", strToMD5(src), filepath.Ext(u.Path))
-		if cacheURL, ok := c.images[fmt.Sprintf("%s%s", strToMD5(src), filepath.Ext(u.Path))]; ok {
+		if cacheURL, ok := c.images[filename]; ok {
 			return cacheURL
 		}
 
@@ -96,7 +97,10 @@ func New(path, chacheURL string, caching bool, client *http.Client) (c *Cache, e
 				continue
 			}
 
-			filename = fmt.Sprintf("%s%s%s%s", c.path, string(os.PathSeparator), strToMD5(src), filepath.Ext(src))
+			// Optimization: Compute MD5 hash once
+			md5Src := strToMD5(src)
+
+			filename = fmt.Sprintf("%s%s%s%s", c.path, string(os.PathSeparator), md5Src, filepath.Ext(src))
 
 			file, err := os.Create(filename)
 			if err != nil {
@@ -111,7 +115,7 @@ func New(path, chacheURL string, caching bool, client *http.Client) (c *Cache, e
 
 			u, err := url.Parse(src)
 			if err == nil {
-				c.images[fmt.Sprintf("%s%s", strToMD5(src), filepath.Ext(u.Path))] = c.cacheURL + filename
+				c.images[fmt.Sprintf("%s%s", md5Src, filepath.Ext(u.Path))] = c.cacheURL + filename
 			}
 			queue = append(queue, src)
 		}
