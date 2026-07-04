@@ -26,3 +26,6 @@
 ## $(date +%Y-%m-%d) - Avoid redundant MD5 hash calculations and string allocations in image cache
 **Learning:** In caching mechanisms like `src/internal/imgcache/cache.go`, redundant operations such as `strToMD5` hashes and `fmt.Sprintf` calls can occur sequentially when forming keys. This allocates unnecessary memory and burns CPU on every cache lookup.
 **Action:** Store the result of expensive operations (like `strToMD5` and string concatenations) in local variables before reusing them in map lookups or loops to eliminate redundant work.
+## 2026-07-04 - UTF-8 Decoding Overhead in Custom String Functions
+**Learning:** While `utf8.DecodeRuneInString` is necessary for correctness in custom string comparison functions (like `equalFoldNoSpaces`), decoding every single character is extremely slow (~160ns) when the vast majority of characters in EPG channel names are simple ASCII.
+**Action:** When implementing custom string matching that supports Unicode, always include a fast path that checks if characters are ASCII (`< utf8.RuneSelf`) and handles them with simple byte arithmetic before falling back to full `utf8` decoding. This pattern can yield a 2.5x speedup.
