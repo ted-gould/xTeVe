@@ -42,57 +42,46 @@ func toLowerReplaceSpace(s string) string {
 // equalFoldNoSpaces compares two strings case-insensitively, ignoring spaces, without allocating.
 // It correctly handles international characters using unicode.SimpleFold.
 func equalFoldNoSpaces(s, t string) bool {
+	i, j := 0, 0
+	lenS, lenT := len(s), len(t)
 	for {
-		var sr, tr rune
-		var sn, tn int
-
-		// Consume spaces in s
-		for {
-			if len(s) == 0 {
-				break
-			}
-			sr, sn = utf8.DecodeRuneInString(s)
-			if sr != ' ' {
-				break
-			}
-			s = s[sn:]
+		// Fast path for ASCII spaces
+		for i < lenS && s[i] == ' ' {
+			i++
+		}
+		for j < lenT && t[j] == ' ' {
+			j++
 		}
 
-		// Consume spaces in t
-		for {
-			if len(t) == 0 {
-				break
-			}
-			tr, tn = utf8.DecodeRuneInString(t)
-			if tr != ' ' {
-				break
-			}
-			t = t[tn:]
-		}
-
-		if len(s) == 0 && len(t) == 0 {
+		if i == lenS && j == lenT {
 			return true
 		}
-		if len(s) == 0 || len(t) == 0 {
+		if i == lenS || j == lenT {
 			return false
 		}
 
-		if sr != tr {
-			// Fast ASCII check if both are ASCII
-			if sr < utf8.RuneSelf && tr < utf8.RuneSelf {
-				srl := sr
-				if 'A' <= srl && srl <= 'Z' {
-					srl += 'a' - 'A'
-				}
-				trl := tr
-				if 'A' <= trl && trl <= 'Z' {
-					trl += 'a' - 'A'
-				}
-				if srl != trl {
-					return false
-				}
-			} else {
-				// Use Unicode fold for non-ASCII
+		// Try fast ASCII comparison first
+		c1 := s[i]
+		c2 := t[j]
+
+		if c1 < utf8.RuneSelf && c2 < utf8.RuneSelf {
+			if 'A' <= c1 && c1 <= 'Z' {
+				c1 += 'a' - 'A'
+			}
+			if 'A' <= c2 && c2 <= 'Z' {
+				c2 += 'a' - 'A'
+			}
+			if c1 != c2 {
+				return false
+			}
+			i++
+			j++
+		} else {
+			// Fallback to full UTF-8 decoding for non-ASCII characters
+			sr, sn := utf8.DecodeRuneInString(s[i:])
+			tr, tn := utf8.DecodeRuneInString(t[j:])
+
+			if sr != tr {
 				match := false
 				r := unicode.SimpleFold(sr)
 				for r != sr {
@@ -106,11 +95,9 @@ func equalFoldNoSpaces(s, t string) bool {
 					return false
 				}
 			}
+			i += sn
+			j += tn
 		}
-
-		// Advance past the compared runes
-		s = s[sn:]
-		t = t[tn:]
 	}
 }
 
