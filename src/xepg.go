@@ -28,12 +28,25 @@ import (
 
 // toLowerReplaceSpace converts a string to lowercase and removes spaces in a single pass
 // to minimize allocations. It correctly handles unicode characters.
+// It includes a fast path for ASCII characters to bypass expensive utf8.DecodeRuneInString calls.
 func toLowerReplaceSpace(s string) string {
 	var b strings.Builder
 	b.Grow(len(s))
-	for _, r := range s {
-		if r != ' ' {
+	for i := 0; i < len(s); {
+		c := s[i]
+		if c < utf8.RuneSelf {
+			if c != ' ' {
+				if 'A' <= c && c <= 'Z' {
+					c += 'a' - 'A'
+				}
+				b.WriteByte(c)
+			}
+			i++
+		} else {
+			r, size := utf8.DecodeRuneInString(s[i:])
+			// non-ASCII character, no need to check for ' ' (which is ASCII 32)
 			b.WriteRune(unicode.ToLower(r))
+			i += size
 		}
 	}
 	return b.String()
