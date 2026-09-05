@@ -31,9 +31,22 @@ import (
 func toLowerReplaceSpace(s string) string {
 	var b strings.Builder
 	b.Grow(len(s))
-	for _, r := range s {
-		if r != ' ' {
-			b.WriteRune(unicode.ToLower(r))
+	for i := 0; i < len(s); {
+		c := s[i]
+		if c < utf8.RuneSelf {
+			if c != ' ' {
+				if 'A' <= c && c <= 'Z' {
+					c += 'a' - 'A'
+				}
+				b.WriteByte(c)
+			}
+			i++
+		} else {
+			r, size := utf8.DecodeRuneInString(s[i:])
+			if r != ' ' { // While spaces are ASCII, being explicit here doesn't hurt, though rarely hit
+				b.WriteRune(unicode.ToLower(r))
+			}
+			i += size
 		}
 	}
 	return b.String()
