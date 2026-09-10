@@ -1,10 +1,11 @@
 {
   "compilerOptions": {
     "module": "commonjs",
-    "target": "es6",
+    "target": "es2015",
     "sourceMap": false,
     "outDir": "../src/html/js",
     "strict": true
+    ,"useDefineForClassFields": false
   },
   "include": [
     "*.ts"

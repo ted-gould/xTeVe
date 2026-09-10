@@ -339,7 +339,11 @@ func randomString(n int) (string, error) {
 	return string(randomBytes), nil
 }
 
-func parseTemplate(content string, tmpMap map[string]any) (result string) {
+func parseTemplate(content string, tmpMap map[string]any, isJS bool) (result string) {
+	if isJS {
+		content = "<script>\n" + content + "\n</script>"
+	}
+
 	t := template.Must(template.New("template").Parse(content))
 
 	var tpl bytes.Buffer
@@ -348,6 +352,11 @@ func parseTemplate(content string, tmpMap map[string]any) (result string) {
 		ShowError(err, 0)
 	}
 	result = tpl.String()
+
+	if isJS {
+		result = strings.TrimPrefix(result, "<script>\n")
+		result = strings.TrimSuffix(result, "\n</script>")
+	}
 	return
 }
 

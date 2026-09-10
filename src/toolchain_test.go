@@ -184,7 +184,7 @@ func TestParseTemplate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := parseTemplate(tt.content, tt.data)
+			got := parseTemplate(tt.content, tt.data, false)
 			if got != tt.want {
 				t.Errorf("parseTemplate() = %v, want %v", got, tt.want)
 			}

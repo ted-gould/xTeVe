@@ -1083,7 +1083,8 @@ func Web(w http.ResponseWriter, r *http.Request) {
 	mediaType, _, _ := mime.ParseMediaType(contentType)
 	if mediaType == "text/html" || mediaType == "application/javascript" {
 		content = string(contentBytes)
-		content = parseTemplate(content, lang)
+		isJS := mediaType == "application/javascript"
+		content = parseTemplate(content, lang, isJS)
 		contentBytes = []byte(content)
 	}
 
