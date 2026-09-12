@@ -29,3 +29,6 @@
 ## 2026-07-04 - UTF-8 Decoding Overhead in Custom String Functions
 **Learning:** While `utf8.DecodeRuneInString` is necessary for correctness in custom string comparison functions (like `equalFoldNoSpaces`), decoding every single character is extremely slow (~160ns) when the vast majority of characters in EPG channel names are simple ASCII.
 **Action:** When implementing custom string matching that supports Unicode, always include a fast path that checks if characters are ASCII (`< utf8.RuneSelf`) and handles them with simple byte arithmetic before falling back to full `utf8` decoding. This pattern can yield a 2.5x speedup.
+## 2026-09-12 - Optimize toLowerReplaceSpace with fast path
+**Learning:** In highly called string processing functions (like channel mapping), using `range s` implicitly decodes Unicode runes via `utf8.DecodeRuneInString`. This can be a bottleneck for strings that are primarily ASCII.
+**Action:** Use an index-based fast path for ASCII characters (`c < utf8.RuneSelf`) and fallback to full Unicode decoding only when encountering a non-ASCII character. This pattern is faster and allocation-free, providing measurable performance gains.

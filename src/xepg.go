@@ -26,14 +26,30 @@ import (
 	"xteve/src/internal/imgcache"
 )
 
-// toLowerReplaceSpace converts a string to lowercase and removes spaces in a single pass
-// to minimize allocations. It correctly handles unicode characters.
+// toLowerReplaceSpace converts a string to lowercase and removes spaces in a single pass.
+// It uses an index-based fast path for ASCII characters to bypass utf8.DecodeRuneInString overhead,
+// safely falling back to full Unicode handling for international characters.
 func toLowerReplaceSpace(s string) string {
 	var b strings.Builder
 	b.Grow(len(s))
-	for _, r := range s {
-		if r != ' ' {
-			b.WriteRune(unicode.ToLower(r))
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c == ' ' {
+			continue
+		}
+		if c < utf8.RuneSelf {
+			if 'A' <= c && c <= 'Z' {
+				c += 'a' - 'A'
+			}
+			b.WriteByte(c)
+		} else {
+			// Fallback to unicode processing for the remainder
+			for _, r := range s[i:] {
+				if r != ' ' {
+					b.WriteRune(unicode.ToLower(r))
+				}
+			}
+			break
 		}
 	}
 	return b.String()
