@@ -32,7 +32,15 @@ func toLowerReplaceSpace(s string) string {
 	var b strings.Builder
 	b.Grow(len(s))
 	for _, r := range s {
-		if r != ' ' {
+		if r == ' ' {
+			continue
+		}
+		if r < utf8.RuneSelf {
+			if 'A' <= r && r <= 'Z' {
+				r += 'a' - 'A'
+			}
+			b.WriteByte(byte(r))
+		} else {
 			b.WriteRune(unicode.ToLower(r))
 		}
 	}
