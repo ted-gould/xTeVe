@@ -29,3 +29,7 @@
 ## 2026-07-04 - UTF-8 Decoding Overhead in Custom String Functions
 **Learning:** While `utf8.DecodeRuneInString` is necessary for correctness in custom string comparison functions (like `equalFoldNoSpaces`), decoding every single character is extremely slow (~160ns) when the vast majority of characters in EPG channel names are simple ASCII.
 **Action:** When implementing custom string matching that supports Unicode, always include a fast path that checks if characters are ASCII (`< utf8.RuneSelf`) and handles them with simple byte arithmetic before falling back to full `utf8` decoding. This pattern can yield a 2.5x speedup.
+
+## 2024-05-18 - Optimize log array cleanup in WebScreenLog
+**Learning:** In Go, replacing an array of items with the latest N items using a manually-allocated slice and `append` loop causes $O(N)$ allocations. Furthermore, when `len(logs) > N`, a loop `for i := len(logs) - N; i < N; i++` may incorrectly omit newer logs if the bounds overlap unexpectedly.
+**Action:** Always use Go slice operations (`slice = slice[len(slice)-N:]`) which take $O(1)$ allocations and zero iteration time when keeping the tail of an array.
