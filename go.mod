@@ -9,7 +9,6 @@ require (
 )
 
 require (
-	github.com/CAFxX/bytespool v0.0.1
 	github.com/avfs/avfs v0.35.0
 	github.com/canonical/go-snapctl v1.0.0-beta.6
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.70.0
@@ -28,7 +27,7 @@ require (
 	go.opentelemetry.io/proto/otlp v1.11.0
 	golang.org/x/crypto v0.55.0
 	golang.org/x/net v0.58.0
-	google.golang.org/grpc v1.83.1
+	google.golang.org/grpc v1.83.2
 	modernc.org/sqlite v1.59.0
 )
 
