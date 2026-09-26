@@ -68,15 +68,9 @@ func GetInstance(baseDir string) (*FileCache, error) {
 		return nil, err
 	}
 
-	dbPath := filepath.Join(cacheDir, "cache.db")
+	dbPath := filepath.Join(cacheDir, "cache.db") + "?_pragma=journal_mode(WAL)"
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
-		return nil, err
-	}
-
-	// Enable WAL mode for better concurrency
-	if _, err := db.Exec("PRAGMA journal_mode=WAL;"); err != nil {
-		db.Close()
 		return nil, err
 	}
 
@@ -711,10 +705,8 @@ func (c *FileCache) RemoveAll() {
 	_ = os.MkdirAll(c.dir, 0755)
 
 	// Re-init DB
-	dbPath := filepath.Join(c.dir, "cache.db")
+	dbPath := filepath.Join(c.dir, "cache.db") + "?_pragma=journal_mode(WAL)"
 	db, _ := sql.Open("sqlite", dbPath)
-	// Check Exec error
-	_, _ = db.Exec("PRAGMA journal_mode=WAL;")
 	c.db = db
 
 	// Create tables again
