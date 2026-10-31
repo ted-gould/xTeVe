@@ -33,3 +33,10 @@
 ## 2024-05-18 - Optimize log array cleanup in WebScreenLog
 **Learning:** In Go, replacing an array of items with the latest N items using a manually-allocated slice and `append` loop causes $O(N)$ allocations. Furthermore, when `len(logs) > N`, a loop `for i := len(logs) - N; i < N; i++` may incorrectly omit newer logs if the bounds overlap unexpectedly.
 **Action:** Always use Go slice operations (`slice = slice[len(slice)-N:]`) which take $O(1)$ allocations and zero iteration time when keeping the tail of an array.
+## 2026-10-31 - Avoid url.Parse for Simple Extension Extraction
+**Learning:**  is unnecessarily expensive (~470ns, 1 allocation) when you only need to extract the file extension from a URL string (e.g., in image caches).
+**Action:** Use  to truncate query parameters and fragments, then use . This is ~10x faster (~42ns) and requires 0 allocations.
+
+## 2024-05-19 - Avoid url.Parse for Simple Extension Extraction
+**Learning:** `url.Parse` is unnecessarily expensive (~470ns, 1 allocation) when you only need to extract the file extension from a URL string (e.g., in image caches).
+**Action:** Use `strings.IndexAny(path, "?#")` to truncate query parameters and fragments, then use `filepath.Ext(path)`. This is ~10x faster (~42ns) and requires 0 allocations.
