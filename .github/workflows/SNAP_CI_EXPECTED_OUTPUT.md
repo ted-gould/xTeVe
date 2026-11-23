@@ -9,17 +9,17 @@ This document outlines the expected output for the key commands executed in the 
 Commands:
 ```
 sudo apt-get update
-sudo apt-get install -y qemu-kvm
+sudo apt-get install -y qemu-system-x86
 sudo snap install snapcraft --classic
 sudo snap install lxd
 ```
 
 Expected output:
-- Standard package installation messages from `apt-get` for `qemu-kvm`.
+- Standard package installation messages from `apt-get` for `qemu-system-x86`.
 - Successful installation messages from `snap` for `snapcraft` and `lxd`.
 - Example snippet (actual output will be much longer):
   ```
-  ... (apt output for qemu-kvm) ...
+  ... (apt output for qemu-system-x86) ...
   snap "snapcraft" installed
   snap "lxd" installed
   ```

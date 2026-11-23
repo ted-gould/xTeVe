@@ -78,7 +78,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y make ffmpeg qemu-kvm
+          sudo apt-get install -y make ffmpeg qemu-system-x86
           npm install
           sudo snap install snapcraft --classic
       - name: Build the snap
