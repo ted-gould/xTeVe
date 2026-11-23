@@ -66,6 +66,41 @@ Note: WebDAV support is read-only.
 
 [![Get it from the Snap Store](https://snapcraft.io/en/dark/install.svg)](https://snapcraft.io/xteve)
 
+## Snap Configuration
+
+When installed as a snap, xTeVe runs as a service on port `8080` and stores its configuration in `/var/snap/xteve/common/config`. The following settings can be changed with `snap set`:
+
+| Key | Description | Default |
+| --- | --- | --- |
+| `otel-exporter-type` | OpenTelemetry exporter to use: `stdout`, `otlp` (gRPC), or `otlp-http` (HTTP). Leave unset to disable telemetry export. | unset (disabled) |
+| `otel-exporter-otlp-endpoint` | Endpoint to send telemetry to when using the `otlp` or `otlp-http` exporter. | |
+| `otel-exporter-otlp-headers` | Comma-separated `key=value` headers sent with each OTLP export (e.g. authentication tokens). | |
+| `webdav-cache-size` | Maximum number of items kept in the WebDAV file cache. Values above `100000` are capped. | `100` |
+
+Example:
+
+```sh
+sudo snap set xteve webdav-cache-size=1000
+```
+
+Settings are read when the service starts, so restart it after changing them:
+
+```sh
+sudo snap restart xteve
+```
+
+To view the current settings, or clear one back to its default:
+
+```sh
+sudo snap get xteve
+sudo snap unset xteve webdav-cache-size
+```
+
+The snap also provides two helper commands:
+
+* `xteve.status` — prints the status of the running xTeVe service.
+* `xteve.inactive` — exits successfully if xTeVe has no active streams or other open connections. This is also used by the snap's pre-refresh hook to postpone automatic refreshes while streams are playing.
+
 ## Build from source code
 
 ### Requirements
@@ -114,9 +149,11 @@ The OpenTelemetry exporter can be configured using `snap set`:
 
 | Key | Description | Default |
 | --- | --- | --- |
-| `otel-exporter-type` | The type of exporter to use. Supported values are `stdout`, `otlp` (gRPC), and `otlp-http` (HTTP). | `stdout` |
+| `otel-exporter-type` | The type of exporter to use. Supported values are `stdout`, `otlp` (gRPC), and `otlp-http` (HTTP). Leave unset to disable. | unset (disabled) |
 | `otel-exporter-otlp-endpoint` | The endpoint to send traces to when using the `otlp` or `otlp-http` exporter. | |
-| `otel-exporter-otlp-headers` | Headers to send with each trace when using the `otlp` exporter. | |
+| `otel-exporter-otlp-headers` | Comma-separated `key=value` headers to send with each export when using the `otlp` or `otlp-http` exporter. | |
+
+See [Snap Configuration](#snap-configuration) for all snap settings. Restart the service (`sudo snap restart xteve`) after changing them.
 
 ### Example: Exporting to Axiom
 
