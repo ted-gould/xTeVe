@@ -105,7 +105,7 @@ The snap also provides two helper commands:
 
 ### Requirements
 
-* [Go](https://go.dev/dl/) (1.25 or newer)
+* [Go](https://go.dev/dl/) (1.26 or newer)
 * [Node.js](https://nodejs.org/en/download/) (which includes `npm`)
 
 ### Dependencies
