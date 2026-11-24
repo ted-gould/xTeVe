@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -57,13 +56,17 @@ func New(path, chacheURL string, caching bool, client *http.Client) (c *Cache, e
 			return src
 		}
 
-		u, err := url.Parse(src)
-		if err != nil || len(filepath.Ext(u.Path)) == 0 {
+		path := src
+		if idx := strings.IndexAny(path, "?#"); idx != -1 {
+			path = path[:idx]
+		}
+		ext := filepath.Ext(path)
+		if len(ext) == 0 {
 			return src
 		}
 
 		// Optimization: Avoid redundant MD5 calculation and string allocation
-		var filename = fmt.Sprintf("%s%s", strToMD5(src), filepath.Ext(u.Path))
+		var filename = fmt.Sprintf("%s%s", strToMD5(src), ext)
 		if cacheURL, ok := c.images[filename]; ok {
 			return cacheURL
 		}
@@ -113,10 +116,12 @@ func New(path, chacheURL string, caching bool, client *http.Client) (c *Cache, e
 				continue
 			}
 
-			u, err := url.Parse(src)
-			if err == nil {
-				c.images[fmt.Sprintf("%s%s", md5Src, filepath.Ext(u.Path))] = c.cacheURL + filename
+			path := src
+			if idx := strings.IndexAny(path, "?#"); idx != -1 {
+				path = path[:idx]
 			}
+			ext := filepath.Ext(path)
+			c.images[fmt.Sprintf("%s%s", md5Src, ext)] = c.cacheURL + filename
 			queue = append(queue, src)
 		}
 
